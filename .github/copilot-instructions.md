@@ -44,6 +44,13 @@ Sokone（底値）は、チラシ・Instagram・店頭写真から商品価格�
 - Git コミットメッセージは **日本語** で書く
 - ファイル名は **kebab-case**（例: `product-matcher.py`, `price-history.tsx`）
 
+### Git 操作
+
+- Git 操作は **`git` コマンド**および **`gh` CLI** を使用すること
+- GUI ツールや VS Code の Git 機能ではなく、ターミナルでコマンドを実行する
+- コミットメッセージは **日本語** で、変更内容が分かるように書く
+- ブランチ戦略: `main`（本番）/ `dev`（開発）/ `feature/*`（機能ブランチ）
+
 ### Python / FastAPI
 
 - **型ヒント必須** — すべての関数に引数・戻り値の型を明記
