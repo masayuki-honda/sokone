@@ -92,7 +92,7 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
   - `ProductCategory` — id, name, parent_id (自己参照FK), display_order
   - `Product` — id (UUID), name, normalized_name, category_id (FK), unit, volume, created_at
   - `ProductAlias` — id, product_id (FK), alias_name
-  - `PriceRecord` — id (UUID), product_id (FK), store_id (FK), user_id (FK), price, unit_price, tax_included (bool), source_type (enum: photo/flyer/instagram), source_image_id (FK), recorded_at, created_at
+  - `PriceRecord` — id (UUID), product_id (FK), store_id (FK), user_id (FK), price, unit_price, tax_included (bool), source_type (enum: photo/flyer/instagram/receipt), source_image_id (FK), recorded_at, created_at
   - `UploadedImage` — id (UUID), user_id (FK), store_id (FK, nullable), image_url, source_type, ocr_raw_text, ocr_result_json, status (enum: pending/processed/failed), created_at
   - `FavoriteProduct` — id (UUID), user_id (FK), product_id (FK), display_order (int), created_at
     - unique constraint: (user_id, product_id)
@@ -148,7 +148,7 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
   - 画像リサイズ（長辺 1600px 以下に。API送信用）
   - MVP ではローカルストレージに保存（`/uploads/`）
   - Phase 2 以降で Cloudflare R2 に移行
-  - `source_type` パラメータ: `photo`（店頭写真）/ `flyer`（チラシ）/ `instagram`（Instagramスクショ）
+  - `source_type` パラメータ: `photo`（店頭写真）/ `flyer`（チラシ）/ `instagram`（Instagramスクショ）/ `receipt`（レシート）
 - [ ] `POST /api/images/from-url` — URL指定で画像取得
   - URL からの画像ダウンロード
   - Content-Type 検証（画像であることを確認）
@@ -164,7 +164,7 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
   - 複数画像一括対応
   - アップロードプログレス表示
 - [ ] ソースタイプ選択UI
-  - 📷 店頭写真 / 📰 チラシ / 📱 Instagramスクショ の3タブ or セレクト
+  - 📷 店頭写真 / 📰 チラシ / 📱 Instagramスクショ / 🧾 レシート の4タブ or セレクト
   - チラシ選択時はURL入力フォームも表示
 - [ ] URL入力フォーム＋プレビュー表示（チラシURL取り込み用）
   - URL貼り付け → 画像プレビュー → 店舗選択 → OCR実行
@@ -217,6 +217,7 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
   - **チラシ（flyer）:** 「この画像はスーパーのチラシです。1枚の画像に複数商品が並んでいます。すべての商品を抽出してください。セール価格がある場合はセール価格を優先してください。」
   - **Instagram（instagram）:** 「この画像はスーパーのInstagram投稿のスクリーンショットです。Instagram UIの要素（いいね数、コメント欄、ユーザ名等）は無視し、投稿画像・テキスト内の商品名と価格情報のみを抽出してください。」
   - **店頭写真（photo）:** デフォルトプロンプト（補足なし）
+  - **レシート（receipt）:** 「この画像は買い物のレシートです。レシートに記載されているすべての商品の商品名と購入価格を抽出してください。値引き・割引がある場合は割引後の価格を使用してください。小計・合計・ポイントなどの合算行は除外してください。レシート上部に記載されている店舗名も抽出してください。」
 - [ ] エラーハンドリング（API 障害時のリトライ、レートリミット対策）
 
 ### 2-3. OCR 精度検証
@@ -378,6 +379,15 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 - [ ] 開発環境セットアップ手順を README に追記
 - [ ] `.env.example` の説明コメント
 
+### DB ストレージ監視
+
+- [ ] `GET /api/admin/db-storage` — Neon のストレージ使用量を取得する API
+  - Neon API（`https://console.neon.tech/api/v2/`）を使って使用量を取得
+  - 使用量 / 上限（0.5GB）の割合を返す
+- [ ] ダッシュボードにストレージ使用量インジケータを表示
+  - 80% 超過でアラートバナー（黄色: 「DBストレージが残り少なくなっています」）
+  - 90% 超過で警告バナー（赤: 「DBストレージの空きがほとんどありません」）
+
 ---
 
 ## API 一覧（Phase 1）
@@ -407,6 +417,7 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 | POST | `/api/favorites` | 4 | お気に入り登録 |
 | GET | `/api/favorites` | 4 | お気に入り一覧 |
 | DELETE | `/api/favorites/{product_id}` | 4 | お気に入り解除 |
+| GET | `/api/admin/db-storage` | 横断 | DB ストレージ使用量 |
 
 ---
 
@@ -850,7 +861,7 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
 | スクレイピング対象サイトの構造変更 | スクレイパーが動かなくなる | エラー監視 + 構造変更検知アラート |
 | スクレイピングが利用規約で禁止 | 法的リスク | robots.txt 準拠、公式サイトの利用規約を事前確認 |
 | Instagram Graph API 審査不通過 | 自動取得不可 | スクショアップロード方式を継続 |
-| バッチ処理のインフラコスト増 | Redis + Worker の追加コスト | Railway/Render の無料枠内で運用、必要に応じてスケール |
+| バッチ処理のインフラコスト増 | Redis + Worker の追加コスト | ホスティング先の無料枠・低コスト枠内で運用、必要に応じてスケール |
 
 ### 成功基準（Phase 4 完了条件）
 
