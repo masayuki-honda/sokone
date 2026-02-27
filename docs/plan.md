@@ -1,12 +1,15 @@
 # Sokone 全Phase 実装計画
 
 > 作成日: 2026-02-26
+> 最終更新: 2026-02-27
+>
+> **アーキテクチャ:** Next.js フルスタック + Prisma + Neon + Vercel
 
 ## 全体概要
 
 | Phase | テーマ | 期間目安 | 状態 |
 |---|---|---|---|
-| **Phase 1** | MVP — 全画像ソース（写真・チラシ・Instagram）→OCR→底値ダッシュボード | 4〜6週間 | 🔜 次 |
+| **Phase 1** | MVP — 全画像ソース（写真・チラシ・Instagram・レシート）→OCR→底値ダッシュボード | 4〜6週間 | 🔜 次 |
 | **Phase 2** | 高度チラシ機能 + 検索・フィルタ + UX改善 | 3〜4週間 | 未着手 |
 | **Phase 3** | 底値アラート + 特売通知 | 3〜4週間 | 未着手 |
 | **Phase 4** | 自動チラシ収集 + バッチ処理 + Instagram API検討 | 継続的 | 未着手 |
@@ -18,9 +21,11 @@
 
 ## 概要
 
-全画像ソース（店頭写真・チラシ・Instagramスクショ）のアップロード → AI による OCR＋構造化抽出＋画像識別 → 底値ダッシュボードの基本フローを構築する。
-チラシやInstagramのスクショット、店頭で撮影した写真など、あらゆる画像ソースから商品名と価格を自動読み取り、底値を蓄積・表示できる状態をゴールとする。
+全画像ソース（店頭写真・チラシ・Instagramスクショ・レシート）のアップロード → AI による OCR＋構造化抽出＋画像識別 → 底値ダッシュボードの基本フローを構築する。
+チラシやInstagramのスクショット、店頭で撮影した写真、レシートなど、あらゆる画像ソースから商品名と価格を自動読み取り、底値を蓄積・表示できる状態をゴールとする。
 チラシやInstagramは店に行かずともデータ収集・デバッグができるため、Phase 1 から全ソースに対応する。
+
+**アーキテクチャ:** Next.js フルスタック（API Routes + Prisma + Neon + Vercel）
 
 **期間目安:** 4〜6週間
 
@@ -36,49 +41,60 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 
 ### 0-1. 開発環境構築
 
-- [ ] `.gitignore` 作成（Node.js + Python + Docker + IDE）
+- [ ] `.gitignore` 作成（Node.js + Docker + IDE）
 - [ ] `docker-compose.yml` 作成
-  - PostgreSQL 16
-  - FastAPI バックエンド（Python 3.12）
-  - Next.js フロントエンド（Node.js 22）
-- [ ] `Dockerfile` 作成（backend / frontend 各々）
+  - PostgreSQL 16（ローカル開発用）
 - [ ] 環境変数テンプレート `.env.example` 作成
+  - DATABASE_URL, NEXTAUTH_SECRET, GOOGLE_CLIENT_ID/SECRET
+  - GEMINI_API_KEY
+  - R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME
 
-### 0-2. Backend 初期化（FastAPI）
+### 0-2. Next.js プロジェクト初期化
 
-- [ ] `backend/` ディレクトリ構成作成
-- [ ] FastAPI アプリケーション skeleton（`main.py`）
-- [ ] `requirements.txt` / `pyproject.toml` 作成
-- [ ] 依存パッケージ選定・記載
-  - fastapi, uvicorn, sqlalchemy, alembic, psycopg2-binary
-  - python-multipart（ファイルアップロード）
-  - google-generativeai（Gemini API）
-  - pydantic, pydantic-settings
-- [ ] Alembic 初期化
-- [ ] ヘルスチェックエンドポイント `GET /api/health`
-- [ ] CORS 設定
-
-### 0-3. Frontend 初期化（Next.js）
-
-- [ ] `npx create-next-app@latest` で Next.js 14+ プロジェクト作成
+- [ ] `npx create-next-app@latest` で Next.js 14+ プロジェクト作成（プロジェクトルートに直接配置）
   - App Router, TypeScript, Tailwind CSS, ESLint
 - [ ] shadcn/ui 初期セットアップ（`npx shadcn-ui@latest init`）
 - [ ] 基本レイアウト作成（ヘッダー、サイドバー、メインエリア）
-- [ ] NextAuth.js (Auth.js) インストール
+- [ ] NextAuth.js (Auth.js) インストール・設定
+- [ ] Prisma インストール・初期化
+  - `npx prisma init`
+  - `schema.prisma` に PostgreSQL 接続設定（Neon Serverless Driver 対応）
+  - `src/lib/prisma.ts` — Prisma Client シングルトン
+- [ ] Cloudflare R2 クライアント設定
+  - `@aws-sdk/client-s3` インストール
+  - `src/lib/r2.ts` — R2 S3Client 初期化
+- [ ] sharp インストール（画像リサイズ・HEIC変換用）
+- [ ] ヘルスチェックエンドポイント `GET /api/health`（Route Handler）
+- [ ] CORS 設定（Next.js の `next.config.js`）
+
+### 0-3. OCR 精度早期検証
+
+- [ ] Google AI Studio で Gemini 2.0 Flash の画像読み取りを手動テスト
+  - 値札写真 2〜3枚
+  - チラシ画像 2〜3枚
+  - レシート 2〜3枚
+  - 野菜等テキストなし商品 1〜2枚
+- [ ] 各ソースタイプでの抽出精度を記録（商品名/価格の正答率）
+- [ ] 精度に問題があれば代替案（Cloud Vision + Gemini 2段構成）を検討
+- [ ] プロンプトテンプレートのドラフト作成
 
 ### 0-4. CI/CD
 
 - [ ] `.github/workflows/ci.yml` 作成
-  - backend: lint (ruff) + test (pytest)
-  - frontend: lint (eslint) + type-check (tsc) + build
+  - lint (eslint) + type-check (tsc) + build
+  - Vitest テスト実行
 - [ ] PR テンプレート作成
 
 ### 完了条件
 
-- `docker compose up` で全サービスが起動する
+- `docker compose up` で PostgreSQL が起動する
+- `npm run dev` で Next.js アプリが起動する
 - `http://localhost:3000` でフロントエンドが表示される
-- `http://localhost:8000/api/health` が JSON レスポンスを返す
+- `http://localhost:3000/api/health` が JSON レスポンスを返す
+- Prisma で PostgreSQL に接続できる
+- R2 への画像アップロード・削除が動作する
 - CI が Green で通る
+- OCR 精度の初期評価が完了している
 
 ---
 
@@ -86,45 +102,44 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 
 ### 1-1. データベースモデル定義
 
-- [ ] SQLAlchemy モデル作成
+- [ ] Prisma スキーマ作成（`prisma/schema.prisma`）
   - `User` — id (UUID), email, name, image, google_id, created_at, updated_at
   - `Store` — id (UUID), name, address, latitude, longitude, user_id (FK), created_at, updated_at
   - `ProductCategory` — id, name, parent_id (自己参照FK), display_order
   - `Product` — id (UUID), name, normalized_name, category_id (FK), unit, volume, created_at
   - `ProductAlias` — id, product_id (FK), alias_name
-  - `PriceRecord` — id (UUID), product_id (FK), store_id (FK), user_id (FK), price, unit_price, tax_included (bool), source_type (enum: photo/flyer/instagram), source_image_id (FK), recorded_at, created_at
-  - `UploadedImage` — id (UUID), user_id (FK), store_id (FK, nullable), image_url, source_type, ocr_raw_text, ocr_result_json, status (enum: pending/processed/failed), created_at
+  - `PriceRecord` — id (UUID), product_id (FK), store_id (FK), user_id (FK), price, unit_price, tax_included (bool), source_type (enum: photo/flyer/instagram/receipt), source_image_id (FK), recorded_at, created_at
+  - `UploadedImage` — id (UUID), user_id (FK), store_id (FK, nullable), image_url, source_type, ocr_raw_text, ocr_result_json (Json), status (enum: pending/processed/failed), created_at
   - `FavoriteProduct` — id (UUID), user_id (FK), product_id (FK), display_order (int), created_at
-    - unique constraint: (user_id, product_id)
-- [ ] Alembic 初回マイグレーション作成・適用
-- [ ] 初期カテゴリデータの seed スクリプト作成
+    - @@unique([user_id, product_id])
+- [ ] Prisma マイグレーション作成・適用（`npx prisma migrate dev`）
+- [ ] 初期カテゴリデータの seed スクリプト作成（`prisma/seed.ts`）
   - 酒類、肉類、野菜類、魚介類、卵、乳製品、飲料
 
 ### 1-2. 認証（Google OAuth）
 
-**Backend:**
-- [ ] Google OAuth トークン検証エンドポイント
-- [ ] JWT トークン発行（アクセストークン + リフレッシュトークン）
-- [ ] 認証ミドルウェア（`get_current_user` 依存関数）
-- [ ] `POST /api/auth/google` — Google OAuth コールバック
-- [ ] `GET /api/auth/me` — 現在のユーザ情報取得
+**Server:**
+- [ ] NextAuth.js 設定（`src/lib/auth.ts`）
+  - Google Provider 設定
+  - Prisma Adapter でユーザ・セッションを DB 管理
+  - コールバック・セッション設定
+- [ ] NextAuth Route Handler（`src/app/api/auth/[...nextauth]/route.ts`）
+- [ ] 認証ミドルウェア（`middleware.ts`）— 未認証時のリダイレクト
 
-**Frontend:**
-- [ ] NextAuth.js 設定（Google Provider）
+**UI:**
 - [ ] ログインページ作成
 - [ ] ログイン/ログアウトボタン
-- [ ] 認証状態管理（Session Provider）
-- [ ] 未認証時のリダイレクト設定
+- [ ] 認証状態管理（SessionProvider）
 
 ### 1-3. 店舗管理 API + UI
 
-**Backend API:**
-- [ ] `GET    /api/stores` — ユーザの店舗一覧
+**API (Route Handlers):**
+- [ ] `GET    /api/stores` — ユーザの店舗一覧（`src/app/api/stores/route.ts`）
 - [ ] `POST   /api/stores` — 店舗追加
-- [ ] `PUT    /api/stores/{id}` — 店舗更新
+- [ ] `PUT    /api/stores/{id}` — 店舗更新（`src/app/api/stores/[id]/route.ts`）
 - [ ] `DELETE /api/stores/{id}` — 店舗削除
 
-**Frontend:**
+**UI:**
 - [ ] 店舗管理ページ（一覧 + 追加 + 編集 + 削除）
 - [ ] 店舗追加フォーム（店舗名、住所）
 - [ ] 店舗一覧カード/リスト表示
@@ -133,7 +148,7 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 
 - Google OAuth でログイン/ログアウトできる
 - 店舗の CRUD が動作する
-- DB マイグレーションが正常に適用される
+- Prisma マイグレーションが正常に適用される
 
 ---
 
@@ -141,30 +156,30 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 
 ### 2-1. 画像アップロード
 
-**Backend API:**
-- [ ] `POST /api/images/upload` — 画像アップロード（multipart/form-data）
+**API (Route Handlers):**
+- [ ] `POST /api/images/upload` — 画像アップロード（`src/app/api/images/upload/route.ts`）
   - JPEG, PNG, HEIC 対応
-  - HEIC → JPEG 変換（pillow-heif）
+  - HEIC → JPEG 変換（sharp）
   - 画像リサイズ（長辺 1600px 以下に。API送信用）
-  - MVP ではローカルストレージに保存（`/uploads/`）
-  - Phase 2 以降で Cloudflare R2 に移行
-  - `source_type` パラメータ: `photo`（店頭写真）/ `flyer`（チラシ）/ `instagram`（Instagramスクショ）
-- [ ] `POST /api/images/from-url` — URL指定で画像取得
+  - **Cloudflare R2 に保存**（`src/lib/r2.ts` 経由）
+  - `source_type` パラメータ: `photo`（店頭写真）/ `flyer`（チラシ）/ `instagram`（Instagramスクショ）/ `receipt`（レシート）
+- [ ] `POST /api/images/from-url` — URL指定で画像取得（`src/app/api/images/from-url/route.ts`）
   - URL からの画像ダウンロード
   - Content-Type 検証（画像であることを確認）
   - OGP画像のフォールバック取得
-  - ダウンロード後は通常のアップロードと同じフローに合流
+  - ダウンロード後は通常のアップロードと同じフローに合流（R2 保存）
   - セキュリティ対策: SSRF 防止（プライベートIPブロック）、ファイルサイズ上限（10MB）
 - [ ] `GET /api/images` — アップロード済み画像一覧
 - [ ] `GET /api/images/{id}` — 画像詳細（OCR結果含む）
+- [ ] R2 署名付きURL生成（画像の閲覧用）
 
-**Frontend:**
+**UI:**
 - [ ] 画像アップロードページ
   - ドラッグ & ドロップ + ファイル選択
   - 複数画像一括対応
   - アップロードプログレス表示
 - [ ] ソースタイプ選択UI
-  - 📷 店頭写真 / 📰 チラシ / 📱 Instagramスクショ の3タブ or セレクト
+  - 📷 店頭写真 / 📰 チラシ / 📱 Instagramスクショ / 🧾 レシート の4タブ or セレクト
   - チラシ選択時はURL入力フォームも表示
 - [ ] URL入力フォーム＋プレビュー表示（チラシURL取り込み用）
   - URL貼り付け → 画像プレビュー → 店舗選択 → OCR実行
@@ -176,17 +191,17 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 
 ### 2-2. Gemini 2.0 Flash OCR 連携
 
-**Backend:**
-- [ ] `app/services/ocr.py` — OCR サービス
-  - Gemini 2.0 Flash API クライアント実装
+**Server:**
+- [ ] `src/lib/ocr.ts` — OCR サービス
+  - `@google/generative-ai` SDK で Gemini 2.0 Flash API クライアント実装
   - 画像 → Base64 エンコード → API 送信
   - プロンプト設計: 商品名・価格・単位・容量を JSON で返すよう指示
   - ソースタイプ別のプロンプト切り替え
-  - レスポンスパース + バリデーション
-- [ ] `POST /api/images/{id}/analyze` — OCR 実行エンドポイント
+  - レスポンスパース + バリデーション（Zod）
+- [ ] `POST /api/images/{id}/analyze` — OCR 実行エンドポイント（`src/app/api/images/[id]/analyze/route.ts`）
   - 画像アップロード後に手動 or 自動で OCR 実行
   - source_type に応じたプロンプト選択
-  - 結果を `UploadedImage.ocr_result_json` に保存
+  - 結果を `UploadedImage.ocr_result_json` に保存（Prisma）
 - [ ] OCR プロンプトテンプレート（共通ベース）
   ```
   以下の画像はスーパーマーケットの商品価格が写っています。
@@ -217,6 +232,7 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
   - **チラシ（flyer）:** 「この画像はスーパーのチラシです。1枚の画像に複数商品が並んでいます。すべての商品を抽出してください。セール価格がある場合はセール価格を優先してください。」
   - **Instagram（instagram）:** 「この画像はスーパーのInstagram投稿のスクリーンショットです。Instagram UIの要素（いいね数、コメント欄、ユーザ名等）は無視し、投稿画像・テキスト内の商品名と価格情報のみを抽出してください。」
   - **店頭写真（photo）:** デフォルトプロンプト（補足なし）
+  - **レシート（receipt）:** 「この画像は買い物のレシートです。レシートに記載されているすべての商品の商品名と購入価格を抽出してください。値引き・割引がある場合は割引後の価格を使用してください。小計・合計・ポイントなどの合算行は除外してください。レシート上部に記載されている店舗名も抽出してください。」
 - [ ] エラーハンドリング（API 障害時のリトライ、レートリミット対策）
 
 ### 2-3. OCR 精度検証
@@ -232,7 +248,8 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 
 ### 完了条件
 
-- 画像をアップロードできる（3つのソースタイプを選択可能）
+- 画像をアップロードできる（4つのソースタイプを選択可能）
+- 画像が Cloudflare R2 に保存される
 - チラシURLを指定して画像を取り込める
 - アップロード画像に対して OCR が実行され、商品名・価格が JSON で返る
 - テキストラベルのない商品（野菜等）も画像認識で識別される
@@ -245,7 +262,7 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 
 ### 3-1. OCR 結果確認・修正 UI
 
-**Frontend:**
+**UI:**
 - [ ] OCR 結果表示ページ
   - 元画像とOCR抽出結果を並べて表示
   - 各商品の編集フォーム（商品名、価格、単位、カテゴリを修正可能）
@@ -257,10 +274,10 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 
 ### 3-2. 価格登録 API
 
-**Backend API:**
-- [ ] `POST /api/prices/bulk` — 価格一括登録
+**API (Route Handlers):**
+- [ ] `POST /api/prices/bulk` — 価格一括登録（`src/app/api/prices/bulk/route.ts`）
   - OCR 結果確認後、商品×価格のリストを一括登録
-  - 商品マスタに未登録の商品は自動作成
+  - 商品マスタに未登録の商品は自動作成（Prisma transaction）
   - PriceRecord に店舗・日時・ソース情報を記録
 - [ ] `GET /api/prices` — 価格記録一覧（フィルタ: 商品ID, 店舗ID, 期間）
 - [ ] `GET /api/products` — 商品マスタ一覧（検索・フィルタ対応）
@@ -268,8 +285,8 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 
 ### 3-3. 商品マスタ管理
 
-**Backend:**
-- [ ] `app/services/product_matcher.py` — 商品名寄せサービス
+**Server:**
+- [ ] `src/lib/product-matcher.ts` — 商品名寄せサービス
   - 完全一致 → 既存商品に紐付け
   - 部分一致・類似度（編集距離）→ 候補を提示
   - 新規商品 → 自動作成
@@ -290,22 +307,22 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 
 ### 4-1. 底値計算ロジック
 
-**Backend:**
-- [ ] 底値計算サービス
+**Server:**
+- [ ] 底値計算サービス（`src/lib/bottom-price.ts`）
   - 商品ごとの全店舗での最安値（= 底値）を算出
   - 商品×店舗ごとの最安値
   - 平均価格、最新価格
   - 底値記録日
-- [ ] 底値ビュー or マテリアライズドビュー
+- [ ] 底値ビュー or Prisma クエリ
   - `v_bottom_prices` — product_id, store_id, bottom_price, bottom_date, avg_price, latest_price, record_count
-- [ ] API エンドポイント
+- [ ] API エンドポイント（Route Handlers）
   - `GET /api/dashboard` — ダッシュボード概要データ
   - `GET /api/dashboard/products` — 商品別底値一覧（ページネーション、ソート、フィルタ）
   - `GET /api/products/{id}/price-history` — 商品の価格推移データ
 
 ### 4-2. ダッシュボード UI
 
-**Frontend:**
+**UI:**
 - [ ] ダッシュボードページ
   - **概要カード:** 登録商品数、登録店舗数、今月の登録件数、底値更新数
   - **お気に入り商品セクション:** ☆ピン留めした商品を最上部に優先表示（底値・最新価格・店舗名）
@@ -322,27 +339,27 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 
 ### 4-3. お気に入り商品機能
 
-**Backend API:**
-- [ ] `POST /api/favorites` — お気に入り登録
-  - body: `{ product_id }` → `FavoriteProduct` 作成
+**API (Route Handlers):**
+- [ ] `POST /api/favorites` — お気に入り登録（`src/app/api/favorites/route.ts`）
+  - body: `{ product_id }` → Prisma で `FavoriteProduct` 作成
 - [ ] `GET /api/favorites` — お気に入り一覧（底値情報付き）
-  - 商品情報 + 底値 + 最新価格 + 店舗名をjoinして返却
-- [ ] `DELETE /api/favorites/{product_id}` — お気に入り解除
+  - 商品情報 + 底値 + 最新価格 + 店舗名を Prisma で join して返却
+- [ ] `DELETE /api/favorites/{product_id}` — お気に入り解除（`src/app/api/favorites/[productId]/route.ts`）
 - [ ] `PUT /api/favorites/order` — 表示順序変更（任意）
 
-**Backend モデル:**
+**Prisma モデル:**
 - [ ] `FavoriteProduct` モデル — id (UUID), user_id (FK), product_id (FK), display_order (int), created_at
-  - unique constraint: (user_id, product_id)
+  - @@unique([user_id, product_id])
 
 ### 4-4. 簡易商品検索
 
-**Backend:**
+**API:**
 - [ ] `GET /api/products` に `q` クエリパラメータ追加
-  - 商品名の `ILIKE` 部分一致検索
+  - Prisma の `contains`（大文字小文字無視）で部分一致検索
   - `normalized_name` と `ProductAlias.alias_name` も検索対象
 - [ ] `GET /api/dashboard/products` にも `q` パラメータ追加
 
-**Frontend:**
+**UI:**
 - [ ] ダッシュボード・商品一覧に検索バー追加
   - デバウンス付き（300ms）インクリメンタル検索
   - 検索結果をリアルタイムでテーブルに反映
@@ -368,15 +385,24 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 
 ### テスト
 
-- [ ] Backend: pytest で API テスト（各エンドポイント）
-- [ ] Backend: OCR サービスのユニットテスト（モック使用）
-- [ ] Frontend: 主要コンポーネントの基本テスト
+- [ ] Vitest で API Route Handler テスト（各エンドポイント）
+- [ ] OCR サービスのユニットテスト（モック使用）
+- [ ] 主要コンポーネントの基本テスト（Testing Library）
 
 ### ドキュメント
 
-- [ ] API 仕様書（FastAPI 自動生成の Swagger + 補足）
+- [ ] API 仕様書（補足ドキュメント）
 - [ ] 開発環境セットアップ手順を README に追記
 - [ ] `.env.example` の説明コメント
+
+### DB ストレージ監視
+
+- [ ] `GET /api/admin/db-storage` — Neon のストレージ使用量を取得する API
+  - Neon API（`https://console.neon.tech/api/v2/`）を使って使用量を取得
+  - 使用量 / 上限（0.5GB）の割合を返す
+- [ ] ダッシュボードにストレージ使用量インジケータを表示
+  - 80% 超過でアラートバナー（黄色: 「DBストレージが残り少なくなっています」）
+  - 90% 超過で警告バナー（赤: 「DBストレージの空きがほとんどありません」）
 
 ---
 
@@ -385,8 +411,8 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 | Method | Path | Sprint | 説明 |
 |---|---|---|---|
 | GET | `/api/health` | 0 | ヘルスチェック |
-| POST | `/api/auth/google` | 1 | Google OAuth 認証 |
-| GET | `/api/auth/me` | 1 | 現在のユーザ情報 |
+| POST | `/api/auth/[...nextauth]` | 1 | NextAuth.js 認証 |
+| GET | `/api/auth/[...nextauth]` | 1 | NextAuth.js セッション |
 | GET | `/api/stores` | 1 | 店舗一覧 |
 | POST | `/api/stores` | 1 | 店舗追加 |
 | PUT | `/api/stores/{id}` | 1 | 店舗更新 |
@@ -407,6 +433,7 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 | POST | `/api/favorites` | 4 | お気に入り登録 |
 | GET | `/api/favorites` | 4 | お気に入り一覧 |
 | DELETE | `/api/favorites/{product_id}` | 4 | お気に入り解除 |
+| GET | `/api/admin/db-storage` | 横断 | DB ストレージ使用量 |
 
 ---
 
@@ -424,42 +451,45 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 ### 認証フロー
 
 ```
-Frontend (NextAuth.js)          Backend (FastAPI)
-    |                                |
-    |-- Google OAuth ログイン ------->|
-    |<-- Google ID Token ----------|
-    |-- POST /api/auth/google ---->|
-    |   (ID Token 送信)            |-- Google Token 検証
-    |                              |-- User 作成 or 取得
-    |<-- JWT (access + refresh) --|
-    |                              |
-    |-- API リクエスト ------------->|
-    |   (Authorization: Bearer)    |-- JWT 検証
-    |<-- レスポンス --------------|
+NextAuth.js (App Router)
+    |
+    |-- Google OAuth ログイン (NextAuth built-in)
+    |-- Google 認証完了
+    |-- Prisma Adapter で User/Session を DB に保存
+    |-- セッション Cookie 発行
+    |
+    |-- API Route Handler 内で:
+    |   const session = await getServerSession(authOptions)
+    |   // session.user.id でユーザ識別
+    |
+    |-- Server Component 内で:
+    |   const session = await getServerSession(authOptions)
+    |   // SSR 時に認証状態を取得
 ```
 
-### 画像保存方針（MVP）
+### 画像保存方針
 
-- Phase 1: サーバーローカルの `/uploads/` ディレクトリに保存
-- Docker volume でマウントして永続化
-- Phase 2 以降: Cloudflare R2 に移行（URLベースのアクセスに変更）
+- Phase 1 からCloudflare R2 に保存（`@aws-sdk/client-s3` で S3 互換API 経由）
+- R2 署名付きURL で画像を配信
+- テスト画像は不要になったら `DeleteObject` で削除可能
 
 ### 底値計算ロジック
 
-```sql
--- 商品ごとの底値（全店舗横断）
-SELECT
-  p.id AS product_id,
-  p.name,
-  MIN(pr.price) AS bottom_price,
-  AVG(pr.price) AS avg_price,
-  (SELECT pr2.price FROM price_records pr2
-   WHERE pr2.product_id = p.id
-   ORDER BY pr2.recorded_at DESC LIMIT 1) AS latest_price,
-  COUNT(pr.id) AS record_count
-FROM products p
-JOIN price_records pr ON pr.product_id = p.id
-GROUP BY p.id, p.name;
+```typescript
+// Prisma での底値計算例
+const bottomPrices = await prisma.priceRecord.groupBy({
+  by: ['productId'],
+  _min: { price: true },
+  _avg: { price: true },
+  _count: { id: true },
+});
+
+// 商品ごとの最新価格は別途クエリ
+const latestPrices = await prisma.priceRecord.findMany({
+  where: { productId: { in: productIds } },
+  orderBy: { recordedAt: 'desc' },
+  distinct: ['productId'],
+});
 ```
 
 ---
@@ -471,7 +501,7 @@ GROUP BY p.id, p.name;
 | Gemini Flash の OCR 精度が不十分 | 商品名・価格の誤認識 | Phase 1 で早期検証。Cloud Vision + Gemini の2段構成にフォールバック |
 | チラシ画像のレイアウトが複雑 | 1回のOCRで全商品を抽出できない | 画像を分割して送信 or ユーザに対象範囲を指定させる |
 | Gemini API レートリミット | 1分15リクエストの制限に達する | リトライ + キュー制御。複数画像は順次処理 |
-| HEIC 画像の扱い | ブラウザ非対応形式 | バックエンドで JPEG に変換。pillow-heif 利用 |
+| HEIC 画像の扱い | ブラウザ非対応形式 | sharp で JPEG に変換 |
 | Google OAuth 設定 | GCP コンソールでの設定ミス | セットアップ手順をドキュメント化 |
 
 ---
@@ -480,7 +510,7 @@ GROUP BY p.id, p.name;
 
 1. **ユーザが Google アカウントでログインできる**
 2. **店舗を登録・管理できる**
-3. **店頭写真・チラシ・Instagramスクショの3種類のソースをアップロードできる**
+3. **店頭写真・チラシ・Instagramスクショ・レシートの4種類のソースをアップロードできる**
 4. **チラシURLを指定して画像を取り込める**
 5. **アップロード画像から商品名と価格が自動抽出される（テキスト＋画像識別）**
 6. **抽出結果を確認・修正して価格を登録できる**
@@ -508,11 +538,11 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
 
 ## Sprint 構成
 
-### Sprint 5: チラシ高度機能＋画像ストレージ移行（〜1週間）
+### Sprint 5: チラシ高度機能（〜1週間）
 
 #### 5-1. チラシ画像の分割・複雑レイアウト対応
 
-**Backend:**
+**Server:**
 - [ ] 大きなチラシ画像の分割送信対応
   - 画像を4分割して個別にOCR → 結果をマージ
   - 重複商品の除去ロジック
@@ -521,25 +551,17 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
   - 1枚の画像から10〜30商品を抽出するケースの精度向上
   - セール価格 vs 通常価格の識別強化
 
-**Frontend:**
+**UI:**
 - [ ] チラシ抽出結果の一括編集UI改善
   - スプレッドシート風の一括編集
   - 画像上のハイライト表示（抽出位置の可視化）
-
-#### 5-2. 画像ストレージ移行（Cloudflare R2）
-
-**Backend:**
-- [ ] Cloudflare R2 クライアント実装（boto3 S3互換API）
-- [ ] 画像アップロード先を R2 に変更
-- [ ] 既存のローカル画像を R2 にマイグレーション（スクリプト）
-- [ ] 署名付きURL生成（画像の閲覧用）
 
 ### Sprint 6: 商品名寄せ改善＋カテゴリ管理（〜1週間）
 
 #### 6-1. 商品名寄せの改善
 
-**Backend:**
-- [ ] `app/services/product_matcher.py` の強化
+**Server:**
+- [ ] `src/lib/product-matcher.ts` の強化
   - ルールベースマッチング改善
     - 全角半角統一、スペース正規化
     - ブランド名 + 容量での正規化（「金麦350ml6缶パック」→「金麦 350ml×6」）
@@ -548,18 +570,18 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
     - 候補商品リストを提示して「同じ商品か？」を判定
     - 確信度が低い場合はユーザに確認を求める
 - [ ] 商品マージ機能
-  - `POST /api/products/{id}/merge` — 重複商品を統合
+  - `POST /api/products/{id}/merge` — 重複商品を統合（Prisma transaction）
   - 統合時に価格記録も移行
 
 #### 6-2. カテゴリ管理UI
 
-**Backend:**
+**API (Route Handlers):**
 - [ ] `GET /api/categories` — カテゴリツリー取得（既存の拡張）
 - [ ] `POST /api/categories` — カスタムカテゴリ追加
 - [ ] `PUT /api/categories/{id}` — カテゴリ編集
 - [ ] 商品のカテゴリ変更 API
 
-**Frontend:**
+**UI:**
 - [ ] カテゴリ管理ページ
   - ツリー構造での表示・編集
   - ドラッグ&ドロップでの並び替え
@@ -569,16 +591,16 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
 
 #### 7-1. 商品検索・フィルタ
 
-**Backend:**
+**API (Route Handlers):**
 - [ ] `GET /api/products` の拡張
-  - 全文検索（PostgreSQL の `ts_vector` / `ILIKE`）
+  - 全文検索（Prisma の `search` / `contains`）
   - カテゴリフィルタ、店舗フィルタ、価格帯フィルタ
   - ソート（底値順、最新価格順、名前順、更新日順）
   - ページネーション（カーソルベース）
 - [ ] `GET /api/dashboard/products` の拡張
   - 同様のフィルタ・ソート対応
 
-**Frontend:**
+**UI:**
 - [ ] 商品一覧ページの大幅改善
   - 検索バー（インクリメンタルサーチ）
   - カテゴリタブ / フィルタパネル
@@ -590,7 +612,7 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
 
 #### 7-2. UX 改善
 
-**Frontend:**
+**UI:**
 - [ ] ローディング表示の統一（Skeleton UI）
 - [ ] エラーハンドリングの統一（Toast通知）
 - [ ] 画像アップロード履歴ページ
@@ -610,8 +632,7 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
 1. **大きなチラシ画像を分割して高精度にOCRできる**
 2. **商品名の表記ブレが自動的に名寄せされる**
 3. **カテゴリ別・店舗別・価格帯で商品を検索できる**
-4. **画像が Cloudflare R2 に保存される**
-5. **スマホのホーム画面に追加できる（PWA）**
+4. **スマホのホーム画面に追加できる（PWA）**
 
 ---
 ---
@@ -634,9 +655,9 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
 
 #### 8-1. 通知基盤構築
 
-**Backend:**
+**Server:**
 - [ ] 通知サービス基盤
-  - `Notification` モデル — id, user_id, type (enum), title, body, data (JSON), is_read, created_at
+  - `Notification` モデル — id, user_id, type (enum), title, body, data (Json), is_read, created_at
   - `NotificationPreference` モデル — user_id, notification_type, enabled, channel (email/push/in_app)
 - [ ] メール送信基盤
   - メール送信サービス（SendGrid or Resend — 無料枠あり）
@@ -646,7 +667,7 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
   - `PUT /api/notifications/{id}/read` — 既読処理
   - `GET /api/notifications/unread-count` — 未読数
 
-**Frontend:**
+**UI:**
 - [ ] ヘッダーに通知ベルアイコン + 未読バッジ
 - [ ] 通知ドロップダウン（最新通知一覧）
 - [ ] 通知一覧ページ
@@ -656,7 +677,7 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
 
 #### 9-1. 底値アラート
 
-**Backend:**
+**Server:**
 - [ ] 底値ウォッチリスト
   - `PriceWatch` モデル — user_id, product_id, target_price (nullable), enabled
   - `POST /api/watches` — ウォッチ登録
@@ -669,14 +690,14 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
   - アプリ内通知 + メール（ユーザ設定に応じて）
   - 通知内容: 「{商品名}が{店舗名}で底値更新！ ¥{価格}（前回底値: ¥{旧価格}）」
 
-**Frontend:**
+**UI:**
 - [ ] 商品詳細ページに「ウォッチする」ボタン追加
 - [ ] ウォッチリスト管理ページ
 - [ ] 底値更新のハイライト表示（ダッシュボード上）
 
 #### 9-2. 特売情報通知
 
-**Backend:**
+**Server:**
 - [ ] 特売判定ロジック
   - 価格登録時に自動チェック: `新価格 <= 底値 × 1.10`（底値+10%以内）なら「お買い得」判定
   - 判定結果を PriceRecord に `is_deal` フラグとして保存
@@ -684,7 +705,7 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
 - [ ] `GET /api/deals` — 現在のお買い得商品一覧
   - 直近7日間の「お買い得」判定された価格記録
 
-**Frontend:**
+**UI:**
 - [ ] ダッシュボードに「今週のお買い得」セクション追加
 - [ ] お買い得商品一覧ページ
 - [ ] 価格登録時に「お買い得！」バッジ表示
@@ -693,7 +714,7 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
 
 #### 10-1. 価格推移グラフの充実
 
-**Frontend:**
+**UI:**
 - [ ] グラフ改善
   - 期間切り替え（1ヶ月 / 3ヶ月 / 6ヶ月 / 1年 / 全期間）
   - 底値ライン表示（水平線）
@@ -704,11 +725,11 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
 
 #### 10-2. 店舗間価格比較機能
 
-**Backend:**
+**Server:**
 - [ ] `GET /api/products/{id}/compare` — 店舗間価格比較データ
   - 各店舗の最新価格、底値、平均価格を一覧化
 
-**Frontend:**
+**UI:**
 - [ ] 商品詳細ページに店舗間比較テーブル追加
   - 店舗名、最新価格、底値、平均価格、記録数
   - 最安店舗のハイライト
@@ -758,17 +779,16 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
 
 #### 11-1. スクレイピング基盤
 
-**Backend:**
+**Server:**
 - [ ] スクレイパーインターフェース設計
-  ```python
-  class BaseScraper(ABC):
-      @abstractmethod
-      async def get_flyer_images(self, store_url: str) -> list[FlyerImage]
-      @abstractmethod
-      def supports(self, store_url: str) -> bool
+  ```typescript
+  interface BaseScraper {
+    getFlyerImages(storeUrl: string): Promise<FlyerImage[]>;
+    supports(storeUrl: string): boolean;
+  }
   ```
 - [ ] スクレイパーレジストリ（URLパターンから適切なスクレイパーを選択）
-- [ ] Playwright / httpx + BeautifulSoup でのスクレイピング実装
+- [ ] Playwright (Node.js) でのスクレイピング実装
 - [ ] robots.txt 準拠チェック
 - [ ] User-Agent 設定、リクエスト間隔制御（Polite scraping）
 - [ ] スクレイピング結果の保存
@@ -784,24 +804,24 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
 
 #### 11-3. バッチ実行基盤
 
-**Backend:**
-- [ ] タスクキュー導入（Celery + Redis or arq）
+**Server:**
+- [ ] タスクキュー導入（BullMQ + Redis or Vercel Cron Jobs）
   - チラシ取得ジョブ
   - OCR 実行ジョブ
   - 通知送信ジョブ
-- [ ] スケジューラー設定（Celery Beat or APScheduler）
+- [ ] スケジューラー設定（Vercel Cron or 外部スケジューラ）
   - チラシ自動取得: 毎日朝7時に実行
   - 週次サマリ通知: 毎週月曜朝8時
 - [ ] ジョブ管理 API
   - `GET /api/admin/jobs` — ジョブ一覧・実行状況
   - `POST /api/admin/jobs/{id}/retry` — 失敗ジョブのリトライ
-- [ ] Docker Compose にワーカー・Redis コンテナ追加
+- [ ] Docker Compose に Redis コンテナ追加（ローカル開発用）
 
 ### Sprint 12: 自動パイプライン＋Instagram API 検討（〜1.5週間）
 
 #### 12-1. 自動チラシ→OCR→登録パイプライン
 
-**Backend:**
+**Server:**
 - [ ] パイプラインオーケストレーション
   1. スクレイパーでチラシ画像取得
   2. 画像を R2 にアップロード
@@ -817,7 +837,7 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
 
 #### 12-2. 店舗のスクレイパー設定UI
 
-**Frontend:**
+**UI:**
 - [ ] 店舗詳細ページに「自動チラシ取得設定」追加
   - 公式サイトURL入力
   - 対応スクレイパーの自動検出表示
@@ -850,7 +870,7 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
 | スクレイピング対象サイトの構造変更 | スクレイパーが動かなくなる | エラー監視 + 構造変更検知アラート |
 | スクレイピングが利用規約で禁止 | 法的リスク | robots.txt 準拠、公式サイトの利用規約を事前確認 |
 | Instagram Graph API 審査不通過 | 自動取得不可 | スクショアップロード方式を継続 |
-| バッチ処理のインフラコスト増 | Redis + Worker の追加コスト | Railway/Render の無料枠内で運用、必要に応じてスケール |
+| バッチ処理のインフラコスト増 | Redis の追加コスト | ホスティング先の無料枠・低コスト枠内で運用、Vercel Cron Jobs 活用、必要に応じてスケール |
 
 ### 成功基準（Phase 4 完了条件）
 
@@ -965,7 +985,7 @@ Web 版の既存バックエンド API をそのまま利用し、モバイル�
 
 #### 16-1. Push通知
 
-**Backend:**
+**Server:**
 - [ ] FCM（Firebase Cloud Messaging）連携
 - [ ] デバイストークン登録 API
   - `POST /api/devices` — デバイストークン登録
@@ -1039,8 +1059,8 @@ sokone/
 | Phase | Method | Path | 説明 |
 |---|---|---|---|
 | 1 | GET | `/api/health` | ヘルスチェック |
-| 1 | POST | `/api/auth/google` | Google OAuth 認証 |
-| 1 | GET | `/api/auth/me` | 現在のユーザ情報 |
+| 1 | POST | `/api/auth/[...nextauth]` | NextAuth.js 認証 |
+| 1 | GET | `/api/auth/[...nextauth]` | NextAuth.js セッション |
 | 1 | GET | `/api/stores` | 店舗一覧 |
 | 1 | POST | `/api/stores` | 店舗追加 |
 | 1 | PUT | `/api/stores/{id}` | 店舗更新 |
