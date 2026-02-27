@@ -41,30 +41,30 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 
 ### 0-1. 開発環境構築
 
-- [ ] `.gitignore` 作成（Node.js + Docker + IDE）
-- [ ] `docker-compose.yml` 作成
+- [x] `.gitignore` 作成（Node.js + Docker + IDE）
+- [x] `docker-compose.yml` 作成
   - PostgreSQL 16（ローカル開発用）
-- [ ] 環境変数テンプレート `.env.example` 作成
+- [x] 環境変数テンプレート `.env.example` 作成
   - DATABASE_URL, NEXTAUTH_SECRET, GOOGLE_CLIENT_ID/SECRET
   - GEMINI_API_KEY
   - R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME
 
 ### 0-2. Next.js プロジェクト初期化
 
-- [ ] `npx create-next-app@latest` で Next.js 14+ プロジェクト作成（プロジェクトルートに直接配置）
+- [x] `npx create-next-app@latest` で Next.js 14+ プロジェクト作成（プロジェクトルートに直接配置）
   - App Router, TypeScript, Tailwind CSS, ESLint
 - [ ] shadcn/ui 初期セットアップ（`npx shadcn-ui@latest init`）
-- [ ] 基本レイアウト作成（ヘッダー、サイドバー、メインエリア）
-- [ ] NextAuth.js (Auth.js) インストール・設定
-- [ ] Prisma インストール・初期化
+- [x] 基本レイアウト作成（ヘッダー、サイドバー、メインエリア）
+- [x] NextAuth.js (Auth.js) インストール・設定
+- [x] Prisma インストール・初期化
   - `npx prisma init`
   - `schema.prisma` に PostgreSQL 接続設定（Neon Serverless Driver 対応）
   - `src/lib/prisma.ts` — Prisma Client シングルトン
-- [ ] Cloudflare R2 クライアント設定
+- [x] Cloudflare R2 クライアント設定
   - `@aws-sdk/client-s3` インストール
   - `src/lib/r2.ts` — R2 S3Client 初期化
-- [ ] sharp インストール（画像リサイズ・HEIC変換用）
-- [ ] ヘルスチェックエンドポイント `GET /api/health`（Route Handler）
+- [x] sharp インストール（画像リサイズ・HEIC変換用）
+- [x] ヘルスチェックエンドポイント `GET /api/health`（Route Handler）
 - [ ] CORS 設定（Next.js の `next.config.js`）
 
 ### 0-3. OCR 精度早期検証
@@ -80,10 +80,10 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 
 ### 0-4. CI/CD
 
-- [ ] `.github/workflows/ci.yml` 作成
+- [x] `.github/workflows/ci.yml` 作成
   - lint (eslint) + type-check (tsc) + build
   - Vitest テスト実行
-- [ ] PR テンプレート作成
+- [x] PR テンプレート作成
 
 ### 完了条件
 
