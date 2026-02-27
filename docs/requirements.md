@@ -1,6 +1,6 @@
 # Sokone（底値） - 要件定義書
 
-> 最終更新: 2026-02-26
+> 最終更新: 2026-02-27
 
 ## 1. プロジェクト概要
 
@@ -190,14 +190,16 @@
 
 | レイヤー | 技術 | 理由 |
 |---|---|---|
-| **Frontend** | **Next.js 14+ (React) + TypeScript** | SSR/SSG対応、将来React Native移行しやすい |
+| **フレームワーク** | **Next.js 14+ (App Router + Route Handlers) + TypeScript** | フルスタック。SSR/SSG対応、Vercelで無料ホスティング |
 | **UI** | **shadcn/ui + Tailwind CSS** | 軽量・カスタマイズ性高。Next.jsと相性抜群 |
-| **Backend** | **Python (FastAPI)** | OCR/AI処理との親和性が高い、非同期処理対応 |
-| **DB** | **PostgreSQL** | 価格履歴の構造化データ管理、全文検索対応 |
-| **ORM** | **SQLAlchemy + Alembic** | Python定番のDB操作＋マイグレーション |
-| **認証** | **NextAuth.js (Auth.js) + Google OAuth** | MVPはGoogle OAuthのみ。シンプルかつ安全 |
-| **開発環境** | **Docker Compose** | PostgreSQL含め一発で環境構築 |
-| **Python** | **3.12** | 安定版、パフォーマンス改善 |
+| **ORM** | **Prisma** | TypeScript型安全、自動マイグレーション、Neon対応 |
+| **DB** | **PostgreSQL 16 (Neon Free)** | 0.5GB無料、サーバーレス接続対応 |
+| **認証** | **NextAuth.js (Auth.js) + Google OAuth** | セッションベース認証。シンプルかつ安全 |
+| **OCR/AI** | **@google/generative-ai (Gemini 2.0 Flash)** | Node.js SDK。無料枠で運用 |
+| **画像処理** | **sharp** | 画像リサイズ・HEIC→JPEG変換 |
+| **画像ストレージ** | **Cloudflare R2** | S3互換、無料枠10GB/月。Phase 1から使用 |
+| **ホスティング** | **Vercel (Hobby)** | Next.js最適、無料（非商用個人利用） |
+| **開発環境** | **Docker Compose** | PostgreSQLのローカル起動用 |
 | **Node.js** | **22 LTS** | 最新LTS |
 
 ### 7.2 OCR/AI戦略（コスト最適化）
@@ -259,12 +261,12 @@ Gemini 2.0 Flash はマルチモーダルモデルであり、テキストの読
 
 | 項目 | 技術 | 費用 | 備考 |
 |---|---|---|---|
-| **フロントホスティング** | Vercel (Hobby) | **無料** | Next.js最適、非商用個人利用に限る |
-| **バックエンドホスティング** | 要検討（後述） | 未定 | Railway Hobby は月$5（無料ではない）。完全無料の選択肢を検討中 |
-| **画像ストレージ** | Cloudflare R2 | **無料枠あり** | 10GB/月 |
+| **ホスティング** | Vercel (Hobby) | **無料** | Next.js最適、非商用個人利用に限る |
+| **データベース** | Neon (Free) | **無料** | PostgreSQL 16、0.5GB、サーバーレス |
+| **画像ストレージ** | Cloudflare R2 | **無料枠あり** | 10GB/月、Phase 1から使用 |
 | **CI/CD** | GitHub Actions | **無料** | テスト・デプロイ自動化 |
 
-> **注意:** Railway Hobby プランは月額 $5 のサブスクリプション費が必ず発生する（$5 分のリソース使用クレジットを含むが、使用量ゼロでも $5 は課金される）。Render Free は無料だが 15 分無アクセスでスリープ（起動に約 30 秒）。Fly.io は無料枠があるが設定が複雑。完全無料かつ実用的な構成を別途検討する。
+> **月額コスト: $0（完全無料）** — Vercel (Hobby) + Neon (Free) + Cloudflare R2 (無料枠) + GitHub Actions (無料) の構成。バックエンドサーバー不要（Next.js Route Handlers で API を実装）。
 
 ---
 
@@ -272,7 +274,7 @@ Gemini 2.0 Flash はマルチモーダルモデルであり、テキストの読
 
 ```
 User（ユーザ）
-├── id, email, name, password_hash, created_at
+├── id, email, name, image, created_at
 
 Store（店舗）
 ├── id, name, address, area, user_id, created_at
@@ -287,7 +289,7 @@ Product（商品マスタ）
 PriceRecord（価格記録）
 ├── id, product_id, store_id, user_id
 ├── price, unit_price（100gあたり等）
-├── source_type（photo/flyer/instagram）
+├── source_type（photo/flyer/instagram/receipt）
 ├── source_image_url
 ├── recorded_at, created_at
 
@@ -316,9 +318,10 @@ FavoriteProduct（お気に入り商品）
 - [ ] ユーザ認証（Google OAuth）
 - [ ] 店舗登録・管理
 - [ ] 画像アップロード → 店舗選択（ハイブリッドUI）
-- [ ] ソースタイプ選択（店頭写真 / チラシ / Instagram スクショ）
+- [ ] ソースタイプ選択（店頭写真 / チラシ / Instagram スクショ / レシート）
 - [ ] チラシURL指定での画像取得
 - [ ] 画像 → Gemini 2.0 Flash でOCR＋構造化抽出＋画像による商品識別
+- [ ] 画像ストレージ（Cloudflare R2）
 - [ ] 抽出結果の確認・修正UI
 - [ ] 価格履歴の記録
 - [ ] 底値ダッシュボード（商品別底値一覧、簡易グラフ）
@@ -331,7 +334,7 @@ FavoriteProduct（お気に入り商品）
 - [ ] 商品名寄せの改善（ルールベース＋LLM）
 - [ ] 商品検索・フィルタ機能
 - [ ] カテゴリ管理UI
-- [ ] 画像ストレージ移行（Cloudflare R2）
+- [ ] PWA対応
 
 ### Phase 3: 底値アラート＋特売通知 〜3-4週間
 
@@ -360,29 +363,32 @@ FavoriteProduct（お気に入り商品）
 sokone/
 ├── README.md
 ├── docs/
-│   └── requirements.md          # 本ドキュメント
-├── frontend/                     # Next.js (TypeScript)
-│   ├── src/
-│   │   ├── app/                  # App Router
-│   │   ├── components/
-│   │   ├── lib/
-│   │   └── types/
-│   ├── package.json
-│   └── tsconfig.json
-├── backend/                      # FastAPI (Python)
-│   ├── app/
-│   │   ├── api/                  # APIエンドポイント
-│   │   ├── core/                 # 設定、認証
-│   │   ├── models/               # SQLAlchemyモデル
-│   │   ├── schemas/              # Pydanticスキーマ
-│   │   ├── services/             # ビジネスロジック
-│   │   │   ├── ocr.py           # OCR処理
-│   │   │   ├── price_extractor.py  # 価格抽出AI
-│   │   │   └── product_matcher.py  # 商品名寄せ
-│   │   └── main.py
-│   ├── requirements.txt
-│   └── alembic/                  # DBマイグレーション
-├── docker-compose.yml
+│   ├── requirements.md          # 本ドキュメント
+│   ├── plan.md                  # 実装計画
+│   └── hosting-review.md        # ホスティング調査結果
+├── src/                          # Next.js フルスタック
+│   ├── app/                     # App Router (pages + API Routes)
+│   │   ├── api/                 # Route Handlers
+│   │   ├── (auth)/              # 認証関連ページ
+│   │   ├── dashboard/           # ダッシュボード
+│   │   ├── stores/              # 店舗管理
+│   │   └── upload/              # アップロード
+│   ├── components/
+│   │   └── ui/                  # shadcn/ui
+│   ├── lib/                     # サービスロジック、ユーティリティ
+│   │   ├── prisma.ts            # Prisma client
+│   │   ├── auth.ts              # NextAuth 設定
+│   │   ├── ocr.ts               # OCR処理
+│   │   ├── r2.ts                # Cloudflare R2
+│   │   └── product-matcher.ts   # 商品名寄せ
+│   ├── hooks/                   # Custom hooks
+│   └── types/                   # TypeScript types
+├── prisma/
+│   └── schema.prisma            # DB スキーマ定義
+├── public/
+├── docker-compose.yml           # PostgreSQL（開発用）
+├── package.json
+├── tsconfig.json
 └── .github/
     └── workflows/
         └── ci.yml

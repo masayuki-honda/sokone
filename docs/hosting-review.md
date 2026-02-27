@@ -471,10 +471,12 @@ Vercel 自体は DB を持たないため、外部 DB サービスが必要。
 
 ---
 
-## 8. 未決定事項
+## 8. 決定事項（2026-02-27 確定）
 
-- [ ] アーキテクチャの最終決定（Python 分離 or Next.js フルスタック）
-- [ ] DB サービスの最終決定（Neon or CockroachDB）
-- [ ] requirements.md の全面改修（フルスタック化の場合）
-- [ ] plan.md の全面改修（フルスタック化の場合）
-- [ ] copilot-instructions.md の技術スタック更新
+- [x] アーキテクチャ: **Next.js フルスタック**（Plan F 採用）
+- [x] DB: **Neon Free**（PostgreSQL 16, 0.5GB）
+- [x] ホスティング: **Vercel Hobby**（$0/月）
+- [x] 画像ストレージ: **Cloudflare R2**（Phase 1 から使用）
+- [x] ORM: **Prisma**（Neon Serverless Driver 対応）
+- [x] 月額コスト: **$0（完全無料）**
+- [x] requirements.md, plan.md, copilot-instructions.md を全面改修済み
