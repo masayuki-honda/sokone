@@ -110,7 +110,7 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
   - `UploadedImage` — id (UUID), user_id (FK), store_id (FK, nullable), image_url, source_type, ocr_raw_text, ocr_result_json (Json), status (enum: pending/processed/failed), created_at
   - `FavoriteProduct` — id (UUID), user_id (FK), product_id (FK), display_order (int), created_at
     - @@unique([user_id, product_id])
-- [ ] Prisma マイグレーション作成・適用（`npx prisma migrate dev`）※ Neon接続後に実行
+- [x] Prisma マイグレーション作成・適用（Neon SQL Editor 経由で手動適用 ※ポート5432ブロック環境のため）
 - [x] 初期カテゴリデータの seed スクリプト作成（`prisma/seed.ts`）
   - 酒類、肉類、野菜類、魚介類、卵、乳製品、飲料、調味料、冷凍食品、お菓子、日用品、その他
 
