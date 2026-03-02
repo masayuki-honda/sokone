@@ -1,0 +1,102 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+
+interface Params {
+  params: Promise<{ id: string }>;
+}
+
+// GET /api/stores/[id] — Get a single store
+export async function GET(_request: NextRequest, { params }: Params) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { id } = await params;
+
+  const store = await prisma.store.findFirst({
+    where: { id, userId: session.user.id },
+  });
+
+  if (!store) {
+    return NextResponse.json({ error: "店舗が見つかりません" }, { status: 404 });
+  }
+
+  return NextResponse.json(store);
+}
+
+// PUT /api/stores/[id] — Update a store
+export async function PUT(request: NextRequest, { params }: Params) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { id } = await params;
+
+  const existing = await prisma.store.findFirst({
+    where: { id, userId: session.user.id },
+  });
+
+  if (!existing) {
+    return NextResponse.json({ error: "店舗が見つかりません" }, { status: 404 });
+  }
+
+  const body = await request.json();
+  const { name, address, latitude, longitude } = body;
+
+  if (name !== undefined) {
+    if (typeof name !== "string" || name.trim().length === 0) {
+      return NextResponse.json(
+        { error: "店舗名は必須です" },
+        { status: 400 }
+      );
+    }
+    if (name.trim().length > 100) {
+      return NextResponse.json(
+        { error: "店舗名は100文字以内で入力してください" },
+        { status: 400 }
+      );
+    }
+  }
+
+  const store = await prisma.store.update({
+    where: { id },
+    data: {
+      ...(name !== undefined && { name: name.trim() }),
+      ...(address !== undefined && { address: address?.trim() || null }),
+      ...(latitude !== undefined && {
+        latitude: latitude != null ? Number(latitude) : null,
+      }),
+      ...(longitude !== undefined && {
+        longitude: longitude != null ? Number(longitude) : null,
+      }),
+    },
+  });
+
+  return NextResponse.json(store);
+}
+
+// DELETE /api/stores/[id] — Delete a store
+export async function DELETE(_request: NextRequest, { params }: Params) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { id } = await params;
+
+  const existing = await prisma.store.findFirst({
+    where: { id, userId: session.user.id },
+  });
+
+  if (!existing) {
+    return NextResponse.json({ error: "店舗が見つかりません" }, { status: 404 });
+  }
+
+  await prisma.store.delete({ where: { id } });
+
+  return NextResponse.json({ message: "店舗を削除しました" });
+}

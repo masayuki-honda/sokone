@@ -22,11 +22,16 @@
     "@google/generative-ai": "^0.24",
     "@next-auth/prisma-adapter": "^1",
     "@prisma/client": "^6",
+    "class-variance-authority": "^0.7",
+    "clsx": "^2",
+    "geist": "^1.7.0",
+    "lucide-react": "^0.511",
     "next": "16.1.6",
     "next-auth": "^4",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "sharp": "^0.33"
+    "sharp": "^0.33",
+    "tailwind-merge": "^3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
