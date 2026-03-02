@@ -1,0 +1,198 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// === NextAuth.js Models ===
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String  @map("user_id")
+  type              String
+  provider          String
+  providerAccountId String  @map("provider_account_id")
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique @map("session_token")
+  userId       String   @map("user_id")
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// === Application Models ===
+
+model User {
+  id            String    @id @default(uuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime? @map("email_verified")
+  image         String?
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  accounts         Account[]
+  sessions         Session[]
+  stores           Store[]
+  priceRecords     PriceRecord[]
+  uploadedImages   UploadedImage[]
+  favoriteProducts FavoriteProduct[]
+
+  @@map("users")
+}
+
+model Store {
+  id        String   @id @default(uuid())
+  name      String
+  address   String?
+  latitude  Float?
+  longitude Float?
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  priceRecords   PriceRecord[]
+  uploadedImages UploadedImage[]
+
+  @@map("stores")
+}
+
+model ProductCategory {
+  id           String  @id @default(uuid())
+  name         String
+  parentId     String? @map("parent_id")
+  displayOrder Int     @default(0) @map("display_order")
+
+  parent   ProductCategory?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children ProductCategory[] @relation("CategoryTree")
+  products Product[]
+
+  @@map("product_categories")
+}
+
+model Product {
+  id             String   @id @default(uuid())
+  name           String
+  normalizedName String   @map("normalized_name")
+  categoryId     String?  @map("category_id")
+  unit           String?
+  volume         String?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  category         ProductCategory?  @relation(fields: [categoryId], references: [id])
+  aliases          ProductAlias[]
+  priceRecords     PriceRecord[]
+  favoriteProducts FavoriteProduct[]
+
+  @@map("products")
+}
+
+model ProductAlias {
+  id        String @id @default(uuid())
+  productId String @map("product_id")
+  aliasName String @map("alias_name")
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("product_aliases")
+}
+
+enum SourceType {
+  photo
+  flyer
+  instagram
+  receipt
+}
+
+enum ImageStatus {
+  pending
+  processed
+  failed
+}
+
+model UploadedImage {
+  id             String      @id @default(uuid())
+  userId         String      @map("user_id")
+  storeId        String?     @map("store_id")
+  imageUrl       String      @map("image_url")
+  sourceType     SourceType  @map("source_type")
+  ocrRawText     String?     @map("ocr_raw_text") @db.Text
+  ocrResultJson  Json?       @map("ocr_result_json")
+  status         ImageStatus @default(pending)
+  createdAt      DateTime    @default(now()) @map("created_at")
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  store        Store?        @relation(fields: [storeId], references: [id])
+  priceRecords PriceRecord[]
+
+  @@map("uploaded_images")
+}
+
+model PriceRecord {
+  id            String     @id @default(uuid())
+  productId     String     @map("product_id")
+  storeId       String     @map("store_id")
+  userId        String     @map("user_id")
+  price         Int
+  unitPrice     Float?     @map("unit_price")
+  taxIncluded   Boolean    @default(true) @map("tax_included")
+  sourceType    SourceType @map("source_type")
+  sourceImageId String?    @map("source_image_id")
+  recordedAt    DateTime   @map("recorded_at")
+  createdAt     DateTime   @default(now()) @map("created_at")
+
+  product     Product        @relation(fields: [productId], references: [id])
+  store       Store          @relation(fields: [storeId], references: [id])
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceImage UploadedImage? @relation(fields: [sourceImageId], references: [id])
+
+  @@map("price_records")
+}
+
+model FavoriteProduct {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  productId    String   @map("product_id")
+  displayOrder Int      @default(0) @map("display_order")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@map("favorite_products")
+}

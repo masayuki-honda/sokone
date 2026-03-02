@@ -199,7 +199,7 @@
 | **画像処理** | **sharp** | 画像リサイズ・HEIC→JPEG変換 |
 | **画像ストレージ** | **Cloudflare R2** | S3互換、無料枠10GB/月。Phase 1から使用 |
 | **ホスティング** | **Vercel (Hobby)** | Next.js最適、無料（非商用個人利用） |
-| **開発環境** | **Docker Compose** | PostgreSQLのローカル起動用 |
+| **開発環境** | **Neon** | 開発・本番ともにNeonのクラウドPostgreSQLを使用。ローカルDB不要 |
 | **Node.js** | **22 LTS** | 最新LTS |
 
 ### 7.2 OCR/AI戦略（コスト最適化）
@@ -386,7 +386,6 @@ sokone/
 ├── prisma/
 │   └── schema.prisma            # DB スキーマ定義
 ├── public/
-├── docker-compose.yml           # PostgreSQL（開発用）
 ├── package.json
 ├── tsconfig.json
 └── .github/
@@ -402,7 +401,7 @@ sokone/
 |---|---|---|
 | 1 | 価格表示 | 税込に統一。税抜表示の場合は×1.08/1.10で換算 |
 | 2 | 認証方式 | Google OAuthのみ（MVP） |
-| 3 | 開発環境 | Docker Compose |
+| 3 | 開発環境 | Neon（クラウドPostgreSQL）を開発・本番共用 |
 | 4 | UIライブラリ | shadcn/ui + Tailwind CSS |
 | 5 | ライセンス | MIT |
 
