@@ -53,7 +53,7 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 
 - [x] `npx create-next-app@latest` で Next.js 14+ プロジェクト作成（プロジェクトルートに直接配置）
   - App Router, TypeScript, Tailwind CSS, ESLint
-- [ ] shadcn/ui 初期セットアップ（`npx shadcn-ui@latest init`）
+- [x] shadcn/ui 初期セットアップ（手動設定: `components.json`, `src/lib/utils.ts`, CSS変数）
 - [x] 基本レイアウト作成（ヘッダー、サイドバー、メインエリア）
 - [x] NextAuth.js (Auth.js) インストール・設定
 - [x] Prisma インストール・初期化
@@ -102,7 +102,7 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 
 ### 1-1. データベースモデル定義
 
-- [ ] Prisma スキーマ作成（`prisma/schema.prisma`）
+- [x] Prisma スキーマ作成（`prisma/schema.prisma`）
   - `User` — id (UUID), email, name, image, google_id, created_at, updated_at
   - `Store` — id (UUID), name, address, latitude, longitude, user_id (FK), created_at, updated_at
   - `ProductCategory` — id, name, parent_id (自己参照FK), display_order
@@ -112,37 +112,37 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
   - `UploadedImage` — id (UUID), user_id (FK), store_id (FK, nullable), image_url, source_type, ocr_raw_text, ocr_result_json (Json), status (enum: pending/processed/failed), created_at
   - `FavoriteProduct` — id (UUID), user_id (FK), product_id (FK), display_order (int), created_at
     - @@unique([user_id, product_id])
-- [ ] Prisma マイグレーション作成・適用（`npx prisma migrate dev`）
-- [ ] 初期カテゴリデータの seed スクリプト作成（`prisma/seed.ts`）
-  - 酒類、肉類、野菜類、魚介類、卵、乳製品、飲料
+- [ ] Prisma マイグレーション作成・適用（`npx prisma migrate dev`）※ Docker/DB未セットアップのためスキップ
+- [x] 初期カテゴリデータの seed スクリプト作成（`prisma/seed.ts`）
+  - 酒類、肉類、野菜類、魚介類、卵、乳製品、飲料、調味料、冷凍食品、お菓子、日用品、その他
 
 ### 1-2. 認証（Google OAuth）
 
 **Server:**
-- [ ] NextAuth.js 設定（`src/lib/auth.ts`）
+- [x] NextAuth.js 設定（`src/lib/auth.ts`）
   - Google Provider 設定
   - Prisma Adapter でユーザ・セッションを DB 管理
   - コールバック・セッション設定
-- [ ] NextAuth Route Handler（`src/app/api/auth/[...nextauth]/route.ts`）
-- [ ] 認証ミドルウェア（`middleware.ts`）— 未認証時のリダイレクト
+- [x] NextAuth Route Handler（`src/app/api/auth/[...nextauth]/route.ts`）
+- [x] 認証ミドルウェア（`middleware.ts`）— 未認証時のリダイレクト
 
 **UI:**
-- [ ] ログインページ作成
-- [ ] ログイン/ログアウトボタン
-- [ ] 認証状態管理（SessionProvider）
+- [x] ログインページ作成
+- [x] ログイン/ログアウトボタン
+- [x] 認証状態管理（SessionProvider）
 
 ### 1-3. 店舗管理 API + UI
 
 **API (Route Handlers):**
-- [ ] `GET    /api/stores` — ユーザの店舗一覧（`src/app/api/stores/route.ts`）
-- [ ] `POST   /api/stores` — 店舗追加
-- [ ] `PUT    /api/stores/{id}` — 店舗更新（`src/app/api/stores/[id]/route.ts`）
-- [ ] `DELETE /api/stores/{id}` — 店舗削除
+- [x] `GET    /api/stores` — ユーザの店舗一覧（`src/app/api/stores/route.ts`）
+- [x] `POST   /api/stores` — 店舗追加
+- [x] `PUT    /api/stores/{id}` — 店舗更新（`src/app/api/stores/[id]/route.ts`）
+- [x] `DELETE /api/stores/{id}` — 店舗削除
 
 **UI:**
-- [ ] 店舗管理ページ（一覧 + 追加 + 編集 + 削除）
-- [ ] 店舗追加フォーム（店舗名、住所）
-- [ ] 店舗一覧カード/リスト表示
+- [x] 店舗管理ページ（一覧 + 追加 + 編集 + 削除）
+- [x] 店舗追加フォーム（店舗名、住所）
+- [x] 店舗一覧カード/リスト表示
 
 ### 完了条件
 
