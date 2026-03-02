@@ -41,30 +41,29 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 
 ### 0-1. 開発環境構築
 
-- [ ] `.gitignore` 作成（Node.js + Docker + IDE）
-- [ ] `docker-compose.yml` 作成
-  - PostgreSQL 16（ローカル開発用）
-- [ ] 環境変数テンプレート `.env.example` 作成
+- [x] `.gitignore` 作成（Node.js + IDE）
+- [x] ~~`docker-compose.yml` 作成~~ → 開発・本番ともに **Neon（クラウドPostgreSQL）** を使用。ローカルDBは不要
+- [x] 環境変数テンプレート `.env.example` 作成
   - DATABASE_URL, NEXTAUTH_SECRET, GOOGLE_CLIENT_ID/SECRET
   - GEMINI_API_KEY
   - R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME
 
 ### 0-2. Next.js プロジェクト初期化
 
-- [ ] `npx create-next-app@latest` で Next.js 14+ プロジェクト作成（プロジェクトルートに直接配置）
+- [x] `npx create-next-app@latest` で Next.js 14+ プロジェクト作成（プロジェクトルートに直接配置）
   - App Router, TypeScript, Tailwind CSS, ESLint
-- [ ] shadcn/ui 初期セットアップ（`npx shadcn-ui@latest init`）
-- [ ] 基本レイアウト作成（ヘッダー、サイドバー、メインエリア）
-- [ ] NextAuth.js (Auth.js) インストール・設定
-- [ ] Prisma インストール・初期化
+- [x] shadcn/ui 初期セットアップ（手動設定: `components.json`, `src/lib/utils.ts`, CSS変数）
+- [x] 基本レイアウト作成（ヘッダー、サイドバー、メインエリア）
+- [x] NextAuth.js (Auth.js) インストール・設定
+- [x] Prisma インストール・初期化
   - `npx prisma init`
   - `schema.prisma` に PostgreSQL 接続設定（Neon Serverless Driver 対応）
   - `src/lib/prisma.ts` — Prisma Client シングルトン
-- [ ] Cloudflare R2 クライアント設定
+- [x] Cloudflare R2 クライアント設定
   - `@aws-sdk/client-s3` インストール
   - `src/lib/r2.ts` — R2 S3Client 初期化
-- [ ] sharp インストール（画像リサイズ・HEIC変換用）
-- [ ] ヘルスチェックエンドポイント `GET /api/health`（Route Handler）
+- [x] sharp インストール（画像リサイズ・HEIC変換用）
+- [x] ヘルスチェックエンドポイント `GET /api/health`（Route Handler）
 - [ ] CORS 設定（Next.js の `next.config.js`）
 
 ### 0-3. OCR 精度早期検証
@@ -80,18 +79,17 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 
 ### 0-4. CI/CD
 
-- [ ] `.github/workflows/ci.yml` 作成
+- [x] `.github/workflows/ci.yml` 作成
   - lint (eslint) + type-check (tsc) + build
   - Vitest テスト実行
-- [ ] PR テンプレート作成
+- [x] PR テンプレート作成
 
 ### 完了条件
 
-- `docker compose up` で PostgreSQL が起動する
 - `npm run dev` で Next.js アプリが起動する
 - `http://localhost:3000` でフロントエンドが表示される
 - `http://localhost:3000/api/health` が JSON レスポンスを返す
-- Prisma で PostgreSQL に接続できる
+- Prisma で Neon PostgreSQL に接続できる
 - R2 への画像アップロード・削除が動作する
 - CI が Green で通る
 - OCR 精度の初期評価が完了している
@@ -102,7 +100,7 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 
 ### 1-1. データベースモデル定義
 
-- [ ] Prisma スキーマ作成（`prisma/schema.prisma`）
+- [x] Prisma スキーマ作成（`prisma/schema.prisma`）
   - `User` — id (UUID), email, name, image, google_id, created_at, updated_at
   - `Store` — id (UUID), name, address, latitude, longitude, user_id (FK), created_at, updated_at
   - `ProductCategory` — id, name, parent_id (自己参照FK), display_order
@@ -112,37 +110,37 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
   - `UploadedImage` — id (UUID), user_id (FK), store_id (FK, nullable), image_url, source_type, ocr_raw_text, ocr_result_json (Json), status (enum: pending/processed/failed), created_at
   - `FavoriteProduct` — id (UUID), user_id (FK), product_id (FK), display_order (int), created_at
     - @@unique([user_id, product_id])
-- [ ] Prisma マイグレーション作成・適用（`npx prisma migrate dev`）
-- [ ] 初期カテゴリデータの seed スクリプト作成（`prisma/seed.ts`）
-  - 酒類、肉類、野菜類、魚介類、卵、乳製品、飲料
+- [x] Prisma マイグレーション作成・適用（Neon SQL Editor 経由で手動適用 ※ポート5432ブロック環境のため）
+- [x] 初期カテゴリデータの seed スクリプト作成（`prisma/seed.ts`）
+  - 酒類、肉類、野菜類、魚介類、卵、乳製品、飲料、調味料、冷凍食品、お菓子、日用品、その他
 
 ### 1-2. 認証（Google OAuth）
 
 **Server:**
-- [ ] NextAuth.js 設定（`src/lib/auth.ts`）
+- [x] NextAuth.js 設定（`src/lib/auth.ts`）
   - Google Provider 設定
   - Prisma Adapter でユーザ・セッションを DB 管理
   - コールバック・セッション設定
-- [ ] NextAuth Route Handler（`src/app/api/auth/[...nextauth]/route.ts`）
-- [ ] 認証ミドルウェア（`middleware.ts`）— 未認証時のリダイレクト
+- [x] NextAuth Route Handler（`src/app/api/auth/[...nextauth]/route.ts`）
+- [x] 認証ミドルウェア（`middleware.ts`）— 未認証時のリダイレクト
 
 **UI:**
-- [ ] ログインページ作成
-- [ ] ログイン/ログアウトボタン
-- [ ] 認証状態管理（SessionProvider）
+- [x] ログインページ作成
+- [x] ログイン/ログアウトボタン
+- [x] 認証状態管理（SessionProvider）
 
 ### 1-3. 店舗管理 API + UI
 
 **API (Route Handlers):**
-- [ ] `GET    /api/stores` — ユーザの店舗一覧（`src/app/api/stores/route.ts`）
-- [ ] `POST   /api/stores` — 店舗追加
-- [ ] `PUT    /api/stores/{id}` — 店舗更新（`src/app/api/stores/[id]/route.ts`）
-- [ ] `DELETE /api/stores/{id}` — 店舗削除
+- [x] `GET    /api/stores` — ユーザの店舗一覧（`src/app/api/stores/route.ts`）
+- [x] `POST   /api/stores` — 店舗追加
+- [x] `PUT    /api/stores/{id}` — 店舗更新（`src/app/api/stores/[id]/route.ts`）
+- [x] `DELETE /api/stores/{id}` — 店舗削除
 
 **UI:**
-- [ ] 店舗管理ページ（一覧 + 追加 + 編集 + 削除）
-- [ ] 店舗追加フォーム（店舗名、住所）
-- [ ] 店舗一覧カード/リスト表示
+- [x] 店舗管理ページ（一覧 + 追加 + 編集 + 削除）
+- [x] 店舗追加フォーム（店舗名、住所）
+- [x] 店舗一覧カード/リスト表示
 
 ### 完了条件
 
@@ -815,7 +813,7 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
 - [ ] ジョブ管理 API
   - `GET /api/admin/jobs` — ジョブ一覧・実行状況
   - `POST /api/admin/jobs/{id}/retry` — 失敗ジョブのリトライ
-- [ ] Docker Compose に Redis コンテナ追加（ローカル開発用）
+- [ ] Redis 導入検討（Upstash 等のサーバーレスRedis）
 
 ### Sprint 12: 自動パイプライン＋Instagram API 検討（〜1.5週間）
 
