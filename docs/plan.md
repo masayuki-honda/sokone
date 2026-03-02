@@ -86,13 +86,14 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 
 ### 完了条件
 
-- `npm run dev` で Next.js アプリが起動する
-- `http://localhost:3000` でフロントエンドが表示される
-- `http://localhost:3000/api/health` が JSON レスポンスを返す
-- Prisma で Neon PostgreSQL に接続できる
-- R2 への画像アップロード・削除が動作する
-- CI が Green で通る
-- OCR 精度の初期評価が完了している
+- [x] `npm run dev` で Next.js アプリが起動する
+- [x] `http://localhost:3000` でフロントエンドが表示される
+- [x] `http://localhost:3000/api/health` が JSON レスポンスを返す
+- [x] Prisma で Neon PostgreSQL に接続できる（マイグレーション適用済み）
+- [x] Vercel デプロイ完了（https://sokone-sigma.vercel.app）
+- [ ] R2 への画像アップロード・削除が動作する（Sprint 2 で実装）
+- [ ] CI が Green で通る
+- [ ] OCR 精度の初期評価が完了している（Sprint 2 で実施）
 
 ---
 
