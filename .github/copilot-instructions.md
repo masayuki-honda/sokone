@@ -41,9 +41,9 @@ Sokone（底値）は、チラシ・Instagram・店頭写真から商品価格�
 
 ### 開発環境
 
-- **Docker Compose** — PostgreSQL をローカル起動（開発用）
+- 開発・本番ともに **Neon**（クラウドPostgreSQL）を使用。ローカルDBは不要
 - Next.js は `npm run dev` でローカル起動
-- ローカルポート: App `3000`, PostgreSQL `5432`
+- ローカルポート: App `3000`
 
 ## コーディング規約
 
@@ -142,7 +142,6 @@ sokone/
 ├── prisma/
 │   └── schema.prisma          # DB スキーマ定義
 ├── public/
-├── docker-compose.yml         # PostgreSQL（開発用）
 ├── package.json
 ├── tsconfig.json
 └── .env.example

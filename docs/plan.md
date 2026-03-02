@@ -41,9 +41,8 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 
 ### 0-1. 開発環境構築
 
-- [x] `.gitignore` 作成（Node.js + Docker + IDE）
-- [x] `docker-compose.yml` 作成
-  - PostgreSQL 16（ローカル開発用）
+- [x] `.gitignore` 作成（Node.js + IDE）
+- [x] ~~`docker-compose.yml` 作成~~ → 開発・本番ともに **Neon（クラウドPostgreSQL）** を使用。ローカルDBは不要
 - [x] 環境変数テンプレート `.env.example` 作成
   - DATABASE_URL, NEXTAUTH_SECRET, GOOGLE_CLIENT_ID/SECRET
   - GEMINI_API_KEY
@@ -87,11 +86,10 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 
 ### 完了条件
 
-- `docker compose up` で PostgreSQL が起動する
 - `npm run dev` で Next.js アプリが起動する
 - `http://localhost:3000` でフロントエンドが表示される
 - `http://localhost:3000/api/health` が JSON レスポンスを返す
-- Prisma で PostgreSQL に接続できる
+- Prisma で Neon PostgreSQL に接続できる
 - R2 への画像アップロード・削除が動作する
 - CI が Green で通る
 - OCR 精度の初期評価が完了している
@@ -112,7 +110,7 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
   - `UploadedImage` — id (UUID), user_id (FK), store_id (FK, nullable), image_url, source_type, ocr_raw_text, ocr_result_json (Json), status (enum: pending/processed/failed), created_at
   - `FavoriteProduct` — id (UUID), user_id (FK), product_id (FK), display_order (int), created_at
     - @@unique([user_id, product_id])
-- [ ] Prisma マイグレーション作成・適用（`npx prisma migrate dev`）※ Docker/DB未セットアップのためスキップ
+- [ ] Prisma マイグレーション作成・適用（`npx prisma migrate dev`）※ Neon接続後に実行
 - [x] 初期カテゴリデータの seed スクリプト作成（`prisma/seed.ts`）
   - 酒類、肉類、野菜類、魚介類、卵、乳製品、飲料、調味料、冷凍食品、お菓子、日用品、その他
 
@@ -815,7 +813,7 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
 - [ ] ジョブ管理 API
   - `GET /api/admin/jobs` — ジョブ一覧・実行状況
   - `POST /api/admin/jobs/{id}/retry` — 失敗ジョブのリトライ
-- [ ] Docker Compose に Redis コンテナ追加（ローカル開発用）
+- [ ] Redis 導入検討（Upstash 等のサーバーレスRedis）
 
 ### Sprint 12: 自動パイプライン＋Instagram API 検討（〜1.5週間）
 
