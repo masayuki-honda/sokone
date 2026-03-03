@@ -206,22 +206,7 @@ export default function UploadPage() {
         const results: OcrResult[] = [];
         const ocrErrors: string[] = [];
 
-        // Free tier limit: 15 req/min. Ensure at least 4.5s between requests.
-        // (Most requests take 3-8s naturally, but hedge against fast responses)
-        const MIN_INTERVAL_MS = 4500;
-        let lastRequestStart = 0;
-
         for (const image of uploadData.uploaded) {
-          // Throttle: wait until MIN_INTERVAL_MS has passed since last request
-          if (lastRequestStart > 0) {
-            const elapsed = Date.now() - lastRequestStart;
-            if (elapsed < MIN_INTERVAL_MS) {
-              await new Promise((resolve) =>
-                setTimeout(resolve, MIN_INTERVAL_MS - elapsed),
-              );
-            }
-          }
-          lastRequestStart = Date.now();
           geminiUsage.recordCall();
           try {
             const analyzeRes = await fetch(
@@ -260,11 +245,11 @@ export default function UploadPage() {
               const rateLimitType = errorData.rateLimitType as string | null;
               if (rateLimitType === "per_minute") {
                 ocrErrors.push(
-                  "Gemini APIの1分あたりの制限（15回/分）に達しました。1分ほど待ってから再試行してください。"
+                  "Gemini APIの1分あたりの制限（1,000回/分）に達しました。少し待ってから再試行してください。"
                 );
               } else if (rateLimitType === "daily") {
                 ocrErrors.push(
-                  "Gemini APIの1日あたりの上限（1,500回/日）に達しました。翌日（日本時間17時頃）にリセットされます。"
+                  "Gemini APIの1日あたりの上限（10,000回/日）に達しました。翌日（日本時間9時頃）にリセットされます。"
                 );
               } else if (rateLimitType === "quota_zero") {
                 ocrErrors.push(
