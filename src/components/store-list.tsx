@@ -24,6 +24,9 @@ export function StoreList() {
   const [editingStore, setEditingStore] = useState<Store | null>(null);
   const [formName, setFormName] = useState("");
   const [formAddress, setFormAddress] = useState("");
+  const [formLatitude, setFormLatitude] = useState("");
+  const [formLongitude, setFormLongitude] = useState("");
+  const [gettingLocation, setGettingLocation] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const fetchStores = useCallback(async () => {
@@ -47,6 +50,8 @@ export function StoreList() {
     setEditingStore(null);
     setFormName("");
     setFormAddress("");
+    setFormLatitude("");
+    setFormLongitude("");
     setShowForm(true);
   };
 
@@ -54,6 +59,8 @@ export function StoreList() {
     setEditingStore(store);
     setFormName(store.name);
     setFormAddress(store.address || "");
+    setFormLatitude(store.latitude != null ? String(store.latitude) : "");
+    setFormLongitude(store.longitude != null ? String(store.longitude) : "");
     setShowForm(true);
   };
 
@@ -62,6 +69,28 @@ export function StoreList() {
     setEditingStore(null);
     setFormName("");
     setFormAddress("");
+    setFormLatitude("");
+    setFormLongitude("");
+  };
+
+  const handleGetCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      alert("このブラウザは位置情報に対応していません");
+      return;
+    }
+    setGettingLocation(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setFormLatitude(String(pos.coords.latitude));
+        setFormLongitude(String(pos.coords.longitude));
+        setGettingLocation(false);
+      },
+      () => {
+        alert("位置情報の取得に失敗しました。ブラウザの位置情報許可を確認してください。");
+        setGettingLocation(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -75,12 +104,17 @@ export function StoreList() {
         : "/api/stores";
       const method = editingStore ? "PUT" : "POST";
 
+      const parsedLat = formLatitude !== "" ? parseFloat(formLatitude) : null;
+      const parsedLng = formLongitude !== "" ? parseFloat(formLongitude) : null;
+
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: formName,
           address: formAddress || null,
+          latitude: parsedLat != null && isFinite(parsedLat) ? parsedLat : null,
+          longitude: parsedLng != null && isFinite(parsedLng) ? parsedLng : null,
         }),
       });
 
@@ -223,7 +257,50 @@ export function StoreList() {
                 className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-zinc-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800"
               />
               <p className="mt-1 text-xs text-zinc-500">
-                📍 住所を入力すると座標を自動取得し、写真のGPSから店舗を自動判別できるようになります。
+                住所を入力すると座標を自動取得します。うまくいかない場合は下の手動入力をご利用ください。
+              </p>
+            </div>
+            <div>
+              <div className="mb-1 flex items-center justify-between">
+                <label className="text-sm font-medium">GPS座標（手動入力）</label>
+                <button
+                  type="button"
+                  onClick={handleGetCurrentLocation}
+                  disabled={gettingLocation}
+                  className="rounded-md bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-200 disabled:opacity-50 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                >
+                  {gettingLocation ? "取得中..." : "📍 現在地を使う"}
+                </button>
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  value={formLatitude}
+                  onChange={(e) => setFormLatitude(e.target.value)}
+                  placeholder="緯度 例: 35.4478"
+                  step="any"
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-zinc-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800"
+                />
+                <input
+                  type="number"
+                  value={formLongitude}
+                  onChange={(e) => setFormLongitude(e.target.value)}
+                  placeholder="経度 例: 139.6425"
+                  step="any"
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-zinc-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800"
+                />
+              </div>
+              <p className="mt-1 text-xs text-zinc-500">
+                空欄にすると住所から自動取得します。座標は
+                <a
+                  href="https://maps.google.com"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline hover:no-underline"
+                >
+                  Google マップ
+                </a>
+                で右クリック→コピーでも確認できます。
               </p>
             </div>
           </div>
@@ -276,11 +353,11 @@ export function StoreList() {
                 <p className="mt-0.5 text-xs">
                   {store.latitude != null && store.longitude != null ? (
                     <span className="text-green-600 dark:text-green-400">
-                      📍 GPS対応済
+                      📍 GPS対応済（{store.latitude.toFixed(4)}, {store.longitude.toFixed(4)}）
                     </span>
                   ) : (
                     <span className="text-zinc-400">
-                      GPS座標未設定（住所を登録すると自動取得）
+                      GPS座標未設定
                     </span>
                   )}
                 </p>
@@ -292,13 +369,17 @@ export function StoreList() {
                 >
                   編集
                 </button>
-                {store.address && store.latitude == null && (
+                {store.address && (
                   <button
                     onClick={() => handleGeocode(store)}
                     disabled={geocodingId === store.id}
                     className="rounded-md px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 disabled:opacity-50 dark:text-blue-400 dark:hover:bg-blue-900/20"
                   >
-                    {geocodingId === store.id ? "GPS取得中..." : "📍 GPS取得"}
+                    {geocodingId === store.id
+                      ? "GPS取得中..."
+                      : store.latitude != null
+                        ? "📍 GPS再取得"
+                        : "📍 GPS取得"}
                   </button>
                 )}
                 <button
