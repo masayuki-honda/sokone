@@ -11,22 +11,17 @@
 - 📉 **底値トラッキング** — 商品×店舗ごとの価格履歴を記録し、底値を自動特定
 - ⭐ **お気に入り・検索** — よく買う商品をピン留めして優先表示、商品名で素早く検索
 - 🏪 **店舗管理** — 自分の生活圏のスーパーを登録して、パーソナライズされた価格比較
-- 🔔 **特売・底値アラート** — 登録商品がお買い得価格になったら通知
-
-## 対象商品カテゴリ
-
-酒類 / 肉類 / 野菜類 / 魚介類 / 卵 / 乳製品 / 飲料 / 調味料 / 冷凍食品 / 日用品
 
 ## 技術スタック
 
 | レイヤー | 技術 |
 |---|---|
-| Frontend | Next.js 14+ / TypeScript / shadcn/ui / Tailwind CSS |
-| Backend | Python 3.12 / FastAPI |
-| DB | PostgreSQL / SQLAlchemy / Alembic |
-| AI/OCR | Google Gemini 2.0 Flash（メイン）/ GPT-4o-mini（代替）/ Tesseract（フォールバック） |
+| フルスタック | Next.js 16 (App Router) / TypeScript / shadcn/ui / Tailwind CSS |
+| DB | PostgreSQL 16 (Neon Serverless) / Prisma ORM |
+| AI/OCR | Google Gemini 2.0 Flash (`@google/generative-ai`) |
 | 認証 | NextAuth.js (Auth.js) / Google OAuth |
-| インフラ | Docker Compose / Vercel / Cloudflare R2 |
+| 画像ストレージ | Cloudflare R2 (`@aws-sdk/client-s3`) |
+| ホスティング | Vercel (Hobby) |
 
 ## 開発ロードマップ
 
@@ -42,22 +37,85 @@
 
 ### 前提条件
 
-- Docker / Docker Compose
-- Node.js 22 LTS
-- Python 3.12
+- **Node.js 22 LTS**
+- **npm**（パッケージマネージャ）
+- Neon（クラウド PostgreSQL）のアカウント — ローカルDBは不要
+- Google Cloud Console で OAuth 2.0 クライアントIDを取得済み
+- Cloudflare R2 のバケット・APIキーを取得済み
+- Google AI Studio で Gemini API キーを取得済み
 
-### 起動方法
+### 環境変数
+
+`.env.example` を参考に `.env.local`（Next.js 用）と `.env`（Prisma CLI 用）を作成してください。
 
 ```bash
-# リポジトリをクローン
-git clone https://github.com/<your-username>/sokone.git
-cd sokone
+# .env / .env.local 共通
+DATABASE_URL="postgresql://..."     # Neon 接続文字列
+DIRECT_URL="postgresql://..."       # Neon Direct 接続（マイグレーション用）
 
-# Docker Compose で起動
-docker compose up -d
+# .env.local のみ
+NEXTAUTH_URL="http://localhost:3000"
+NEXTAUTH_SECRET="your-secret"
+GOOGLE_CLIENT_ID="..."
+GOOGLE_CLIENT_SECRET="..."
+GEMINI_API_KEY="..."
+R2_ACCOUNT_ID="..."
+R2_ACCESS_KEY_ID="..."
+R2_SECRET_ACCESS_KEY="..."
+R2_BUCKET_NAME="..."
 ```
 
-> 詳細なセットアップ手順は開発が進み次第追記します。
+### ローカル起動
+
+```bash
+# 依存パッケージをインストール
+npm install
+
+# Prisma クライアントを生成
+# ※ npm run db:generate（--no-engine 付き）ではなく、以下のコマンドを使用
+npx prisma generate
+
+# DB マイグレーション（初回のみ）
+npx prisma migrate dev
+
+# 開発サーバー起動（http://localhost:3000）
+npm run dev
+```
+
+### ローカルビルド
+
+```bash
+# 本番ビルド
+# ※ 事前に `npx prisma generate` を実行しておくこと
+#   `npm run db:generate`（--no-engine 付き）で生成されたクライアントだと
+#   ビルド時に PrismaClientValidationError が発生します
+npm run build
+
+# 本番モードで起動
+npm start
+```
+
+### npm scripts 一覧
+
+| コマンド | 用途 |
+|---|---|
+| `npm run dev` | 開発サーバー起動 |
+| `npm run build` | 本番ビルド |
+| `npm start` | 本番モード起動 |
+| `npm run lint` | ESLint 実行 |
+| `npm run type-check` | TypeScript 型チェック |
+| `npm run db:generate` | Prisma クライアント生成（`--no-engine`、WebSocket/Serverless用） |
+| `npm run db:migrate` | マイグレーション実行 |
+| `npm run db:push` | スキーマをDBに直接反映 |
+| `npm run db:seed` | シードデータ投入 |
+
+> **注意**: `npm run db:generate` は Neon Serverless Driver (WebSocket) 経由で接続するために `--no-engine` フラグ付きで Prisma クライアントを生成します。`npm run dev` はこれで動作しますが、`npm run build` を実行する場合はビルド前に `npx prisma generate`（フラグなし）を実行してください。
+
+### デプロイ
+
+- **ホスティング**: Vercel (Hobby)
+- **自動デプロイ**: GitHub リポジトリ連携により、`main` ブランチへの push で本番デプロイ、その他のブランチ（`dev` 等）への push でプレビューデプロイが実行される
+- Vercel 上では `@prisma/client` の postinstall フックが `prisma generate`（`--no-engine` なし）を自動実行するため、ビルドエラーは発生しない
 
 ## ドキュメント
 
