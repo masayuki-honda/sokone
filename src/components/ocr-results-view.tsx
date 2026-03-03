@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StoreSelect } from "@/components/store-select";
 
 interface OcrItem {
   name: string;
@@ -41,7 +42,9 @@ interface OcrResultsViewProps {
   results: OcrResult[];
   sourceType: string;
   storeId: string | null;
+  gpsSuggestedStore?: string | null;
   onBack: () => void;
+  onStoreChange?: (id: string | null) => void;
 }
 
 function ConfidenceBadge({ confidence }: { confidence: number }) {
@@ -296,9 +299,12 @@ export function OcrResultsView({
   results,
   sourceType,
   storeId,
+  gpsSuggestedStore,
   onBack,
+  onStoreChange,
 }: OcrResultsViewProps) {
   const router = useRouter();
+  const [localStoreId, setLocalStoreId] = useState<string | null>(storeId);
   const [editableResults, setEditableResults] = useState(results);
   const [isRegistering, setIsRegistering] = useState(false);
   const [registrationError, setRegistrationError] = useState<string | null>(
@@ -362,8 +368,8 @@ export function OcrResultsView({
 
   // Register prices via API
   async function handleRegisterPrices() {
-    if (!storeId) {
-      setRegistrationError("店舗を選択してください。戻って店舗を選択し直してください。");
+    if (!localStoreId) {
+      setRegistrationError("店舗を選択してください");
       return;
     }
 
@@ -413,7 +419,7 @@ export function OcrResultsView({
               category_hint: item.category_hint,
               is_tax_included: item.is_tax_included,
             })),
-            storeId,
+            storeId: localStoreId,
             sourceType,
             sourceImageId: result.imageId,
             recordedAt: result.takenAt || undefined,
@@ -493,6 +499,31 @@ export function OcrResultsView({
             </>
           )}
         </Button>
+      </div>
+
+      {/* Store selection — always shown on results screen */}
+      <div className={`rounded-lg border p-4 ${
+        registrationError === "店舗を選択してください"
+          ? "border-destructive bg-destructive/5"
+          : "bg-card"
+      }`}>
+        <StoreSelect
+          value={localStoreId}
+          onChange={(id, name) => {
+            setLocalStoreId(id);
+            onStoreChange?.(id);
+            if (registrationError === "店舗を選択してください") {
+              setRegistrationError(null);
+            }
+            // suppress gpsSuggestedStore display handled by parent
+            void name;
+          }}
+        />
+        {gpsSuggestedStore && localStoreId && (
+          <p className="mt-2 text-sm text-muted-foreground">
+            📍 写真の位置情報から「{gpsSuggestedStore}」を自動選択しました
+          </p>
+        )}
       </div>
 
       {/* Error/Success messages */}

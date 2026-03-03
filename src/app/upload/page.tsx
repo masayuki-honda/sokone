@@ -621,6 +621,8 @@ export default function UploadPage() {
               results={ocrResults}
               sourceType={sourceType}
               storeId={storeId}
+              gpsSuggestedStore={gpsSuggestedStore}
+              onStoreChange={(id) => setStoreId(id)}
               onBack={() => {
                 setOcrResults([]);
                 setFiles([]);

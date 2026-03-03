@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { geocodeAddress } from "@/lib/geocode";
 
 // GET /api/stores — List user's stores
 export async function GET() {
@@ -42,12 +43,23 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Auto-geocode: derive lat/lon from address if not explicitly provided
+  let resolvedLat: number | null = latitude != null ? Number(latitude) : null;
+  let resolvedLng: number | null = longitude != null ? Number(longitude) : null;
+  if (resolvedLat == null && resolvedLng == null && address?.trim()) {
+    const coords = await geocodeAddress(address.trim());
+    if (coords) {
+      resolvedLat = coords.latitude;
+      resolvedLng = coords.longitude;
+    }
+  }
+
   const store = await prisma.store.create({
     data: {
       name: name.trim(),
       address: address?.trim() || null,
-      latitude: latitude != null ? Number(latitude) : null,
-      longitude: longitude != null ? Number(longitude) : null,
+      latitude: resolvedLat,
+      longitude: resolvedLng,
       userId: session.user.id,
     },
   });
