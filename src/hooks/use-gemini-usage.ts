@@ -64,7 +64,18 @@ export interface GeminiUsage {
 }
 
 export function useGeminiUsage(): GeminiUsage {
-  const [usage, setUsage] = useState<UsageEntry>(() => loadUsage());
+  // Always start with zeros to avoid SSR/client hydration mismatch.
+  // localStorage is loaded after mount via useEffect.
+  const [usage, setUsage] = useState<UsageEntry>({
+    resetAt: "",
+    totalCalls: 0,
+    recentCallTimestamps: [],
+  });
+
+  // Load from localStorage after mount (client only)
+  useEffect(() => {
+    setUsage(loadUsage());
+  }, []);
 
   // Recompute stats once per second so per-minute count stays fresh
   useEffect(() => {
