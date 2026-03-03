@@ -5,6 +5,9 @@ import { prisma } from "@/lib/prisma";
 import { getR2SignedUrl } from "@/lib/r2";
 import { analyzeImage, OcrSourceType } from "@/lib/ocr";
 
+// Allow longer execution on Vercel (Gemini API + R2 fetch can take time)
+export const maxDuration = 30;
+
 interface Params {
   params: Promise<{ id: string }>;
 }
@@ -75,6 +78,7 @@ export async function POST(_request: NextRequest, { params }: Params) {
       status: updated.status,
       ocrResult,
       itemCount: ocrResult.items?.length ?? 0,
+      signedUrl,
     });
   } catch (error) {
     console.error("OCR analysis error:", error);

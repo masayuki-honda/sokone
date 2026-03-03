@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Camera, Newspaper, Instagram, Receipt, Link2, Loader2 } from "lucide-react";
+import { Camera, Newspaper, Instagram, Receipt, Link2, Loader2, AlertCircle, RotateCcw } from "lucide-react";
 import { Header } from "@/components/header";
 import { ImageDropzone } from "@/components/image-dropzone";
 import { StoreSelect } from "@/components/store-select";
@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 type SourceType = "photo" | "flyer" | "instagram" | "receipt";
 
@@ -84,6 +85,7 @@ export default function UploadPage() {
   const [urlInput, setUrlInput] = useState("");
   const [urlLoading, setUrlLoading] = useState(false);
   const [urlError, setUrlError] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   // Handle file selection
   const handleFilesSelected = useCallback((selectedFiles: File[]) => {
@@ -112,6 +114,7 @@ export default function UploadPage() {
     if (files.length === 0) return;
 
     setIsUploading(true);
+    setUploadError(null);
 
     // Step 1: Upload files
     const formData = new FormData();
@@ -138,13 +141,15 @@ export default function UploadPage() {
       const uploadData = await uploadRes.json();
 
       if (!uploadRes.ok) {
+        const errorMsg = uploadData.error || "アップロードに失敗しました";
         setFiles((prev) =>
           prev.map((f) => ({
             ...f,
             status: "error" as const,
-            error: uploadData.error || "アップロードに失敗しました",
+            error: errorMsg,
           })),
         );
+        setUploadError(errorMsg);
         setIsUploading(false);
         return;
       }
@@ -174,6 +179,7 @@ export default function UploadPage() {
       if (uploadData.uploaded.length > 0) {
         setIsAnalyzing(true);
         const results: OcrResult[] = [];
+        const ocrErrors: string[] = [];
 
         for (const image of uploadData.uploaded) {
           try {
@@ -185,24 +191,53 @@ export default function UploadPage() {
             if (analyzeRes.ok) {
               const analyzeData = await analyzeRes.json();
 
-              // Get signed URL for display
-              const imageDetailRes = await fetch(`/api/images/${image.id}`);
-              const imageDetail = await imageDetailRes.json();
+              // Use signed URL from analyze response
+              let signedUrl = analyzeData.signedUrl || "";
+
+              // Fallback: get signed URL from image detail API
+              if (!signedUrl) {
+                try {
+                  const imageDetailRes = await fetch(`/api/images/${image.id}`);
+                  if (imageDetailRes.ok) {
+                    const imageDetail = await imageDetailRes.json();
+                    signedUrl = imageDetail.signedUrl || "";
+                  }
+                } catch {
+                  // Proceed without signed URL - the result is still usable
+                }
+              }
 
               results.push({
                 imageId: image.id,
-                signedUrl: imageDetail.signedUrl,
+                signedUrl,
                 items: analyzeData.ocrResult?.items || [],
                 store_name: analyzeData.ocrResult?.store_name,
               });
+            } else {
+              const errorData = await analyzeRes.json().catch(() => ({}));
+              ocrErrors.push(
+                errorData.error || `画像 ${image.id} の解析に失敗しました`,
+              );
             }
           } catch (error) {
             console.error(`OCR failed for image ${image.id}:`, error);
+            ocrErrors.push(`画像の解析中にネットワークエラーが発生しました`);
           }
         }
 
         setOcrResults(results);
         setIsAnalyzing(false);
+
+        // Show error if OCR completely failed
+        if (results.length === 0 && ocrErrors.length > 0) {
+          setUploadError(
+            `AI解析に失敗しました: ${ocrErrors[0]}`,
+          );
+        } else if (ocrErrors.length > 0) {
+          setUploadError(
+            `${ocrErrors.length}件の画像の解析に失敗しました`,
+          );
+        }
       }
     } catch (error) {
       console.error("Upload error:", error);
@@ -213,6 +248,7 @@ export default function UploadPage() {
           error: "ネットワークエラー",
         })),
       );
+      setUploadError("ネットワークエラーが発生しました。通信環境を確認してください。");
       setIsUploading(false);
     }
   }
@@ -280,7 +316,21 @@ export default function UploadPage() {
 
   const hasResults = ocrResults.length > 0;
   const pendingFiles = files.filter((f) => f.status === "pending");
+  const hasFinishedFiles = files.some(
+    (f) => f.status === "success" || f.status === "error",
+  );
   const canUpload = pendingFiles.length > 0 && !isUploading && !isAnalyzing;
+  const canReset = hasFinishedFiles && !isUploading && !isAnalyzing;
+
+  // Reset to allow re-upload
+  function handleReset() {
+    files.forEach((f) => {
+      if (f.preview) URL.revokeObjectURL(f.preview);
+    });
+    setFiles([]);
+    setOcrResults([]);
+    setUploadError(null);
+  }
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
@@ -394,29 +444,52 @@ export default function UploadPage() {
 
             {/* Upload button */}
             {files.length > 0 && (
-              <div className="flex items-center justify-between">
-                <div className="text-sm text-muted-foreground">
-                  {files.length}枚の画像を選択中
+              <div className="space-y-3">
+                {/* Error message */}
+                {uploadError && (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>{uploadError}</AlertDescription>
+                  </Alert>
+                )}
+
+                <div className="flex items-center justify-between">
+                  <div className="text-sm text-muted-foreground">
+                    {files.length}枚の画像を選択中
+                  </div>
+                  <div className="flex gap-2">
+                    {/* Reset button — shown after upload attempt */}
+                    {canReset && (
+                      <Button
+                        onClick={handleReset}
+                        variant="outline"
+                        size="lg"
+                      >
+                        <RotateCcw className="mr-2 h-4 w-4" />
+                        やり直す
+                      </Button>
+                    )}
+                    <Button
+                      onClick={handleUploadAndAnalyze}
+                      disabled={!canUpload}
+                      size="lg"
+                    >
+                      {isUploading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          アップロード中...
+                        </>
+                      ) : isAnalyzing ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          AI解析中...
+                        </>
+                      ) : (
+                        <>アップロードして解析</>
+                      )}
+                    </Button>
+                  </div>
                 </div>
-                <Button
-                  onClick={handleUploadAndAnalyze}
-                  disabled={!canUpload}
-                  size="lg"
-                >
-                  {isUploading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      アップロード中...
-                    </>
-                  ) : isAnalyzing ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      AI解析中...
-                    </>
-                  ) : (
-                    <>アップロードして解析</>
-                  )}
-                </Button>
               </div>
             )}
 
