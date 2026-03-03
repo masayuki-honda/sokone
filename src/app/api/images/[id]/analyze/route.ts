@@ -92,16 +92,18 @@ export async function POST(_request: NextRequest, { params }: Params) {
 
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";
-    const isRateLimit =
+    const rateLimitType =
+      (error as Error & { rateLimitType?: string }).rateLimitType;
+    const isRateLimit = rateLimitType != null ||
       errorMessage.includes("429") ||
+      errorMessage.includes("RESOURCE_EXHAUSTED") ||
       errorMessage.includes("quota") ||
       errorMessage.includes("利用上限");
 
     return NextResponse.json(
       {
-        error: isRateLimit
-          ? "APIの利用上限に達しました。しばらく時間をおいてください。"
-          : "OCR解析に失敗しました",
+        error: isRateLimit ? errorMessage : "OCR解析に失敗しました",
+        rateLimitType: rateLimitType ?? null,
         details: errorMessage,
       },
       { status: isRateLimit ? 429 : 500 },
