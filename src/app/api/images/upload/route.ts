@@ -12,6 +12,9 @@ import { SourceType } from "@prisma/client";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
+// Allow longer execution on Vercel (sharp processing + R2 upload)
+export const maxDuration = 30;
+
 const VALID_SOURCE_TYPES: SourceType[] = ["photo", "flyer", "instagram", "receipt"];
 
 /**
