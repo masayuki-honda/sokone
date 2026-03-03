@@ -18,8 +18,13 @@ export const config = {
     "/dashboard/:path*",
     "/stores/:path*",
     "/upload/:path*",
+    "/products/:path*",
     "/api/stores/:path*",
     "/api/images/:path*",
     "/api/prices/:path*",
+    "/api/products/:path*",
+    "/api/categories/:path*",
+    "/api/dashboard/:path*",
+    "/api/favorites/:path*",
   ],
 };
