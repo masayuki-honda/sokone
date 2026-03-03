@@ -169,16 +169,21 @@ export async function analyzeImage(
     const msg = error.message ?? "";
     if (msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED") || msg.includes("quota")) {
       // Distinguish per-minute vs per-day quota
+      // Gemini API error messages use PascalCase quotaIds like:
+      //   GenerateRequestsPerMinutePerProjectPerModel-FreeTier
+      //   GenerateRequestsPerDayPerProjectPerModel-FreeTier
+      const msgLower = msg.toLowerCase();
       const isPerMinute =
-        msg.includes("per-minute") ||
-        msg.includes("per_minute") ||
-        msg.includes("requests-per-minute") ||
-        msg.includes("rateLimitExceeded");
+        msgLower.includes("perminute") ||
+        msgLower.includes("per-minute") ||
+        msgLower.includes("per_minute") ||
+        msgLower.includes("ratelimitexceeded");
       const isPerDay =
-        msg.includes("per-day") ||
-        msg.includes("per_day") ||
-        msg.includes("dailyLimit") ||
-        msg.includes("daily");
+        msgLower.includes("perday") ||
+        msgLower.includes("per-day") ||
+        msgLower.includes("per_day") ||
+        msgLower.includes("dailylimit") ||
+        (msgLower.includes("daily") && !isPerMinute);
 
       if (isPerDay) {
         const e = new Error(
