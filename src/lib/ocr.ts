@@ -146,7 +146,7 @@ export async function analyzeImage(
   sourceType: OcrSourceType,
 ): Promise<OcrResult> {
   const model = genAI.getGenerativeModel({
-    model: "gemini-2.0-flash",
+    model: "gemini-2.0-flash-001",
     generationConfig: {
       responseMimeType: "application/json",
       responseSchema: ocrResponseSchema,
@@ -167,6 +167,13 @@ export async function analyzeImage(
     },
   ]).catch((error: Error) => {
     const msg = error.message ?? "";
+
+    // Model not found / deprecated
+    if (msg.includes("404") || msg.includes("no longer available") || msg.includes("Not Found")) {
+      throw new Error(
+        `Geminiモデルが利用できません: ${msg.slice(0, 200)}`,
+      );
+    }
     if (msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED") || msg.includes("quota")) {
       // Log the full error for debugging
       console.error("Gemini API rate limit error (full message):", msg);
