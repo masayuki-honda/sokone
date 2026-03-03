@@ -166,11 +166,34 @@ export async function analyzeImage(
       },
     },
   ]).catch((error: Error) => {
-    // Detect rate limiting (429) and provide a user-friendly message
-    if (error.message?.includes("429") || error.message?.includes("quota")) {
-      throw new Error(
-        "Gemini APIの利用上限に達しました。しばらく時間をおいてから再試行してください。",
-      );
+    const msg = error.message ?? "";
+    if (msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED") || msg.includes("quota")) {
+      // Distinguish per-minute vs per-day quota
+      const isPerMinute =
+        msg.includes("per-minute") ||
+        msg.includes("per_minute") ||
+        msg.includes("requests-per-minute") ||
+        msg.includes("rateLimitExceeded");
+      const isPerDay =
+        msg.includes("per-day") ||
+        msg.includes("per_day") ||
+        msg.includes("dailyLimit") ||
+        msg.includes("daily");
+
+      if (isPerDay) {
+        const e = new Error(
+          "Gemini APIの1日あたりの上限（1,500回/日）に達しました。翌日（日本時間17時頃）にリセットされます。",
+        );
+        (e as Error & { rateLimitType: string }).rateLimitType = "daily";
+        throw e;
+      } else {
+        // Default to per-minute (most common case)
+        const e = new Error(
+          "Gemini APIの1分あたりのリクエスト上限（15回/分）に達しました。1分ほど待ってから再試行してください。",
+        );
+        (e as Error & { rateLimitType: string }).rateLimitType = "per_minute";
+        throw e;
+      }
     }
     throw error;
   });

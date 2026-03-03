@@ -242,9 +242,20 @@ export default function UploadPage() {
               });
             } else {
               const errorData = await analyzeRes.json().catch(() => ({}));
-              ocrErrors.push(
-                errorData.error || `画像 ${image.id} の解析に失敗しました`,
-              );
+              const rateLimitType = errorData.rateLimitType as string | null;
+              if (rateLimitType === "per_minute") {
+                ocrErrors.push(
+                  "Gemini APIの1分あたりの制限（15回/分）に達しました。1分ほど待ってから再試行してください。"
+                );
+              } else if (rateLimitType === "daily") {
+                ocrErrors.push(
+                  "Gemini APIの1日あたりの上限（1,500回/日）に達しました。翌日（日本時間17時頃）にリセットされます。"
+                );
+              } else {
+                ocrErrors.push(
+                  errorData.error || `画像 ${image.id} の解析に失敗しました`,
+                );
+              }
             }
           } catch (error) {
             console.error(`OCR failed for image ${image.id}:`, error);
@@ -257,8 +268,14 @@ export default function UploadPage() {
 
         // Show error if OCR completely failed
         if (results.length === 0 && ocrErrors.length > 0) {
+          // Rate limit messages are already user-friendly, don't prefix them
+          const firstError = ocrErrors[0];
+          const isRateLimit =
+            firstError.includes("制限") ||
+            firstError.includes("上限") ||
+            firstError.includes("リセット");
           setUploadError(
-            `AI解析に失敗しました: ${ocrErrors[0]}`,
+            isRateLimit ? firstError : `AI解析に失敗しました: ${firstError}`,
           );
         } else if (ocrErrors.length > 0) {
           setUploadError(
