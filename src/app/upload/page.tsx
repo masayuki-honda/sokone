@@ -2,7 +2,6 @@
 
 import { useState, useCallback } from "react";
 import { useGeminiUsage } from "@/hooks/use-gemini-usage";
-import { useRouter } from "next/navigation";
 import { Camera, Newspaper, Instagram, Receipt, Link2, Loader2, AlertCircle, RotateCcw } from "lucide-react";
 import { Header } from "@/components/header";
 import { ImageDropzone } from "@/components/image-dropzone";
@@ -13,7 +12,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 type SourceType = "photo" | "flyer" | "instagram" | "receipt";
@@ -77,7 +75,6 @@ const SOURCE_TYPES: {
 ];
 
 export default function UploadPage() {
-  const router = useRouter();
   const [sourceType, setSourceType] = useState<SourceType>("photo");
   const [storeId, setStoreId] = useState<string | null>(null);
   const [files, setFiles] = useState<UploadedFile[]>([]);

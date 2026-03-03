@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 /**
  * GET /api/favorites — List favorite products with bottom price info
  */
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

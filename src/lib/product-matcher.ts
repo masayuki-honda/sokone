@@ -90,7 +90,7 @@ export interface MatchResult {
  */
 export async function matchProduct(
   name: string,
-  userId?: string,
+  _userId?: string,
 ): Promise<MatchResult> {
   const normalized = normalizeProductName(name);
 

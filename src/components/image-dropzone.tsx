@@ -1,9 +1,8 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import { useDropzone } from "react-dropzone";
 import { Upload, X, Loader2, ImageIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 
@@ -91,6 +90,7 @@ export function ImageDropzone({
             >
               <div className="relative aspect-square">
                 {file.preview ? (
+                  // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={file.preview}
                     alt={file.file.name}
