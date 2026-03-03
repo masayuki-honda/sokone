@@ -165,7 +165,15 @@ export async function analyzeImage(
         data: base64Image,
       },
     },
-  ]);
+  ]).catch((error: Error) => {
+    // Detect rate limiting (429) and provide a user-friendly message
+    if (error.message?.includes("429") || error.message?.includes("quota")) {
+      throw new Error(
+        "Gemini APIの利用上限に達しました。しばらく時間をおいてから再試行してください。",
+      );
+    }
+    throw error;
+  });
 
   const response = result.response;
   const text = response.text();

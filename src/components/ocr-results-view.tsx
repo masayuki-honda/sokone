@@ -34,6 +34,7 @@ interface OcrResult {
   signedUrl: string;
   items: OcrItem[];
   store_name?: string | null;
+  takenAt?: string | null;
 }
 
 interface OcrResultsViewProps {
@@ -415,6 +416,7 @@ export function OcrResultsView({
             storeId,
             sourceType,
             sourceImageId: result.imageId,
+            recordedAt: result.takenAt || undefined,
           }),
         });
 

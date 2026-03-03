@@ -1,17 +1,77 @@
 import sharp from "sharp";
+import exifr from "exifr";
 
 const MAX_DIMENSION = 1600;
 const JPEG_QUALITY = 85;
+
+export interface ExifMetadata {
+  takenAt: Date | null;
+  gpsLatitude: number | null;
+  gpsLongitude: number | null;
+}
 
 export interface ProcessedImage {
   buffer: Buffer;
   contentType: string;
   width: number;
   height: number;
+  exif: ExifMetadata;
+}
+
+/**
+ * Extract EXIF metadata from an image buffer.
+ * Returns null values for screenshots or images without EXIF.
+ */
+export async function extractExifMetadata(
+  inputBuffer: Buffer,
+): Promise<ExifMetadata> {
+  const result: ExifMetadata = {
+    takenAt: null,
+    gpsLatitude: null,
+    gpsLongitude: null,
+  };
+
+  try {
+    const exifData = await exifr.parse(inputBuffer, {
+      pick: [
+        "DateTimeOriginal",
+        "CreateDate",
+        "ModifyDate",
+        "GPSLatitude",
+        "GPSLongitude",
+      ],
+      gps: true, // auto-convert GPS to decimal degrees
+    });
+
+    if (!exifData) return result;
+
+    // Prefer DateTimeOriginal (capture time), fallback to CreateDate, then ModifyDate
+    const dateValue =
+      exifData.DateTimeOriginal ?? exifData.CreateDate ?? exifData.ModifyDate;
+    if (dateValue instanceof Date && !isNaN(dateValue.getTime())) {
+      result.takenAt = dateValue;
+    }
+
+    // GPS coordinates (exifr auto-converts to decimal degrees with gps:true)
+    if (
+      typeof exifData.latitude === "number" &&
+      typeof exifData.longitude === "number" &&
+      isFinite(exifData.latitude) &&
+      isFinite(exifData.longitude)
+    ) {
+      result.gpsLatitude = exifData.latitude;
+      result.gpsLongitude = exifData.longitude;
+    }
+  } catch {
+    // EXIF parsing failure is non-critical (e.g. PNG screenshots have no EXIF)
+  }
+
+  return result;
 }
 
 /**
  * Process an uploaded image:
+ * - Extract EXIF metadata before any transformation
  * - Convert HEIC to JPEG
  * - Resize to max 1600px on longest side
  * - Output as JPEG
@@ -20,6 +80,9 @@ export async function processImage(
   inputBuffer: Buffer,
   mimeType: string,
 ): Promise<ProcessedImage> {
+  // Extract EXIF BEFORE sharp processing (sharp may strip EXIF during conversions)
+  const exif = await extractExifMetadata(inputBuffer);
+
   let pipeline = sharp(inputBuffer);
 
   // Get original metadata
@@ -53,6 +116,7 @@ export async function processImage(
     contentType: "image/jpeg",
     width: outputMetadata.width ?? 0,
     height: outputMetadata.height ?? 0,
+    exif,
   };
 }
 

@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
         const key = generateImageKey(session.user.id, file.name);
         await uploadToR2(key, processed.buffer, processed.contentType);
 
-        // Save to database
+        // Save to database (including EXIF metadata)
         const uploadedImage = await prisma.uploadedImage.create({
           data: {
             userId: session.user.id,
@@ -120,6 +120,9 @@ export async function POST(request: NextRequest) {
             imageUrl: key,
             sourceType: sourceType as SourceType,
             status: "pending",
+            takenAt: processed.exif.takenAt,
+            gpsLatitude: processed.exif.gpsLatitude,
+            gpsLongitude: processed.exif.gpsLongitude,
           },
         });
 
@@ -129,6 +132,9 @@ export async function POST(request: NextRequest) {
           sourceType: uploadedImage.sourceType,
           status: uploadedImage.status,
           createdAt: uploadedImage.createdAt,
+          takenAt: uploadedImage.takenAt,
+          gpsLatitude: uploadedImage.gpsLatitude,
+          gpsLongitude: uploadedImage.gpsLongitude,
         });
       } catch (fileError) {
         console.error(`Error processing file ${file.name}:`, fileError);
