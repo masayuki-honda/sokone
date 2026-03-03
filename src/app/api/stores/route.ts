@@ -4,6 +4,9 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { geocodeAddress } from "@/lib/geocode";
 
+// POST may trigger geocoding (Nominatim: up to ~5s with retries)
+export const maxDuration = 30;
+
 // GET /api/stores — List user's stores
 export async function GET() {
   const session = await getServerSession(authOptions);
