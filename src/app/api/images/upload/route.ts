@@ -126,6 +126,8 @@ export async function POST(request: NextRequest) {
           },
         });
 
+        console.log(`[Upload] image saved: id=${uploadedImage.id} gps=(${processed.exif.gpsLatitude}, ${processed.exif.gpsLongitude}) takenAt=${processed.exif.takenAt}`);
+
         results.push({
           id: uploadedImage.id,
           imageUrl: key,

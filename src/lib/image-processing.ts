@@ -38,9 +38,13 @@ export async function extractExifMetadata(
         "CreateDate",
         "ModifyDate",
         "GPSLatitude",
+        "GPSLatitudeRef",
         "GPSLongitude",
+        "GPSLongitudeRef",
+        "GPSAltitude",
+        "GPSAltitudeRef",
       ],
-      gps: true, // auto-convert GPS to decimal degrees
+      gps: true, // auto-convert GPS DMS to decimal degrees
     });
 
     if (!exifData) return result;
@@ -53,6 +57,7 @@ export async function extractExifMetadata(
     }
 
     // GPS coordinates (exifr auto-converts to decimal degrees with gps:true)
+    // exifr stores converted values as .latitude / .longitude (lowercase)
     if (
       typeof exifData.latitude === "number" &&
       typeof exifData.longitude === "number" &&
@@ -62,6 +67,13 @@ export async function extractExifMetadata(
       result.gpsLatitude = exifData.latitude;
       result.gpsLongitude = exifData.longitude;
     }
+
+    console.log("[EXIF] extracted:", {
+      takenAt: result.takenAt,
+      gpsLatitude: result.gpsLatitude,
+      gpsLongitude: result.gpsLongitude,
+      rawKeys: Object.keys(exifData),
+    });
   } catch {
     // EXIF parsing failure is non-critical (e.g. PNG screenshots have no EXIF)
   }
