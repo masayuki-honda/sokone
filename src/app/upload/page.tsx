@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { useGeminiUsage } from "@/hooks/use-gemini-usage";
 import { useRouter } from "next/navigation";
 import { Camera, Newspaper, Instagram, Receipt, Link2, Loader2, AlertCircle, RotateCcw } from "lucide-react";
 import { Header } from "@/components/header";
@@ -88,6 +89,7 @@ export default function UploadPage() {
   const [urlError, setUrlError] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [gpsSuggestedStore, setGpsSuggestedStore] = useState<string | null>(null);
+  const geminiUsage = useGeminiUsage();
 
   // Handle file selection
   const handleFilesSelected = useCallback((selectedFiles: File[]) => {
@@ -223,6 +225,7 @@ export default function UploadPage() {
             }
           }
           lastRequestStart = Date.now();
+          geminiUsage.recordCall();
           try {
             const analyzeRes = await fetch(
               `/api/images/${image.id}/analyze`,
@@ -340,6 +343,7 @@ export default function UploadPage() {
 
       // Run OCR on the imported image
       setIsAnalyzing(true);
+      geminiUsage.recordCall();
       const analyzeRes = await fetch(`/api/images/${data.id}/analyze`, {
         method: "POST",
       });
@@ -396,10 +400,42 @@ export default function UploadPage() {
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
       <Header />
       <main className="mx-auto max-w-4xl px-4 py-8">
-        <h1 className="text-2xl font-bold">画像アップロード</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          商品の画像をアップロードして、AIが価格を自動読み取りします
-        </p>
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h1 className="text-2xl font-bold">画像アップロード</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              商品の画像をアップロードして、AIが価格を自動読み取りします
+            </p>
+          </div>
+          {/* Gemini API usage counter for debugging */}
+          <div className="rounded-lg border bg-card px-3 py-2 text-xs text-muted-foreground">
+            <div className="font-medium text-foreground">Gemini API 使用状況</div>
+            <div className="mt-1 space-y-0.5">
+              <div className="flex items-center gap-2">
+                <span>本日:</span>
+                <span
+                  className={geminiUsage.totalCalls >= geminiUsage.dailyLimit * 0.9 ? "font-bold text-destructive" : geminiUsage.totalCalls >= geminiUsage.dailyLimit * 0.7 ? "font-bold text-yellow-600" : ""}
+                >
+                  {geminiUsage.totalCalls} / {geminiUsage.dailyLimit} 回
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span>直近1分:</span>
+                <span
+                  className={geminiUsage.callsLastMinute >= geminiUsage.perMinuteLimit ? "font-bold text-destructive" : geminiUsage.callsLastMinute >= geminiUsage.perMinuteLimit - 3 ? "font-bold text-yellow-600" : ""}
+                >
+                  {geminiUsage.callsLastMinute} / {geminiUsage.perMinuteLimit} 回
+                </span>
+              </div>
+              <button
+                onClick={geminiUsage.reset}
+                className="mt-1 text-[10px] underline hover:no-underline"
+              >
+                カウントリセット
+              </button>
+            </div>
+          </div>
+        </div>
 
         {!hasResults ? (
           <div className="mt-6 space-y-6">
