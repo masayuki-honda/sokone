@@ -16,6 +16,8 @@ export function StoreList() {
   const [stores, setStores] = useState<Store[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [geocodingId, setGeocodingId] = useState<string | null>(null);
+  const [geocodeError, setGeocodeError] = useState<string | null>(null);
 
   // Add/Edit form state
   const [showForm, setShowForm] = useState(false);
@@ -111,6 +113,26 @@ export function StoreList() {
     }
   };
 
+  const handleGeocode = async (store: Store) => {
+    setGeocodingId(store.id);
+    setGeocodeError(null);
+    try {
+      const res = await fetch(`/api/stores/${store.id}/geocode`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        setGeocodeError(`「${store.name}」: ${data.error}`);
+      } else {
+        setStores((prev) =>
+          prev.map((s) => (s.id === store.id ? data : s))
+        );
+      }
+    } catch {
+      setGeocodeError("通信エラーが発生しました");
+    } finally {
+      setGeocodingId(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -126,6 +148,18 @@ export function StoreList() {
           {error}
           <button
             onClick={() => setError(null)}
+            className="ml-2 underline hover:no-underline"
+          >
+            閉じる
+          </button>
+        </div>
+      )}
+
+      {geocodeError && (
+        <div className="rounded-lg bg-orange-50 p-3 text-sm text-orange-700 dark:bg-orange-900/20 dark:text-orange-300">
+          📍 GPS取得失敗: {geocodeError}
+          <button
+            onClick={() => setGeocodeError(null)}
             className="ml-2 underline hover:no-underline"
           >
             閉じる
@@ -258,6 +292,15 @@ export function StoreList() {
                 >
                   編集
                 </button>
+                {store.address && store.latitude == null && (
+                  <button
+                    onClick={() => handleGeocode(store)}
+                    disabled={geocodingId === store.id}
+                    className="rounded-md px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 disabled:opacity-50 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                  >
+                    {geocodingId === store.id ? "GPS取得中..." : "📍 GPS取得"}
+                  </button>
+                )}
                 <button
                   onClick={() => handleDelete(store)}
                   className="rounded-md px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"

@@ -8,6 +8,9 @@ interface Params {
   params: Promise<{ id: string }>;
 }
 
+// PUT may trigger geocoding (Nominatim: up to ~5s with retries)
+export const maxDuration = 30;
+
 // GET /api/stores/[id] — Get a single store
 export async function GET(_request: NextRequest, { params }: Params) {
   const session = await getServerSession(authOptions);
