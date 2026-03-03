@@ -173,17 +173,24 @@ export async function analyzeImage(
       //   GenerateRequestsPerMinutePerProjectPerModel-FreeTier
       //   GenerateRequestsPerDayPerProjectPerModel-FreeTier
       const msgLower = msg.toLowerCase();
+      // Per-minute check takes precedence: if retry delay is seconds (not hours),
+      // it's a per-minute limit. The Gemini API often reports BOTH PerMinute and
+      // PerDay violations in the same error when per-minute is the trigger.
       const isPerMinute =
         msgLower.includes("perminute") ||
         msgLower.includes("per-minute") ||
         msgLower.includes("per_minute") ||
-        msgLower.includes("ratelimitexceeded");
+        msgLower.includes("ratelimitexceeded") ||
+        // RetryInfo with seconds (e.g. "retrydelay\":\"43s") ⇒ per-minute
+        /retrydelay.*?"\d+s"/.test(msgLower);
+      // Only classify as per-day if there is NO per-minute signal at all
       const isPerDay =
-        msgLower.includes("perday") ||
-        msgLower.includes("per-day") ||
-        msgLower.includes("per_day") ||
-        msgLower.includes("dailylimit") ||
-        (msgLower.includes("daily") && !isPerMinute);
+        !isPerMinute &&
+        (msgLower.includes("perday") ||
+          msgLower.includes("per-day") ||
+          msgLower.includes("per_day") ||
+          msgLower.includes("dailylimit") ||
+          msgLower.includes("daily"));
 
       if (isPerDay) {
         const e = new Error(
@@ -192,7 +199,7 @@ export async function analyzeImage(
         (e as Error & { rateLimitType: string }).rateLimitType = "daily";
         throw e;
       } else {
-        // Default to per-minute (most common case)
+        // Default to per-minute (most common; also covers mixed PerMinute+PerDay messages)
         const e = new Error(
           "Gemini APIの1分あたりのリクエスト上限（15回/分）に達しました。1分ほど待ってから再試行してください。",
         );

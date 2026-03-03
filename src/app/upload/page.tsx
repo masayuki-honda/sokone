@@ -207,7 +207,22 @@ export default function UploadPage() {
         const results: OcrResult[] = [];
         const ocrErrors: string[] = [];
 
+        // Free tier limit: 15 req/min. Ensure at least 4.5s between requests.
+        // (Most requests take 3-8s naturally, but hedge against fast responses)
+        const MIN_INTERVAL_MS = 4500;
+        let lastRequestStart = 0;
+
         for (const image of uploadData.uploaded) {
+          // Throttle: wait until MIN_INTERVAL_MS has passed since last request
+          if (lastRequestStart > 0) {
+            const elapsed = Date.now() - lastRequestStart;
+            if (elapsed < MIN_INTERVAL_MS) {
+              await new Promise((resolve) =>
+                setTimeout(resolve, MIN_INTERVAL_MS - elapsed),
+              );
+            }
+          }
+          lastRequestStart = Date.now();
           try {
             const analyzeRes = await fetch(
               `/api/images/${image.id}/analyze`,
