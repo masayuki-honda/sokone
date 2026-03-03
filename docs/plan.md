@@ -156,33 +156,33 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 ### 2-1. 画像アップロード
 
 **API (Route Handlers):**
-- [ ] `POST /api/images/upload` — 画像アップロード（`src/app/api/images/upload/route.ts`）
+- [x] `POST /api/images/upload` — 画像アップロード（`src/app/api/images/upload/route.ts`）
   - JPEG, PNG, HEIC 対応
   - HEIC → JPEG 変換（sharp）
   - 画像リサイズ（長辺 1600px 以下に。API送信用）
   - **Cloudflare R2 に保存**（`src/lib/r2.ts` 経由）
   - `source_type` パラメータ: `photo`（店頭写真）/ `flyer`（チラシ）/ `instagram`（Instagramスクショ）/ `receipt`（レシート）
-- [ ] `POST /api/images/from-url` — URL指定で画像取得（`src/app/api/images/from-url/route.ts`）
+- [x] `POST /api/images/from-url` — URL指定で画像取得（`src/app/api/images/from-url/route.ts`）
   - URL からの画像ダウンロード
   - Content-Type 検証（画像であることを確認）
   - OGP画像のフォールバック取得
   - ダウンロード後は通常のアップロードと同じフローに合流（R2 保存）
   - セキュリティ対策: SSRF 防止（プライベートIPブロック）、ファイルサイズ上限（10MB）
-- [ ] `GET /api/images` — アップロード済み画像一覧
-- [ ] `GET /api/images/{id}` — 画像詳細（OCR結果含む）
-- [ ] R2 署名付きURL生成（画像の閲覧用）
+- [x] `GET /api/images` — アップロード済み画像一覧
+- [x] `GET /api/images/{id}` — 画像詳細（OCR結果含む）
+- [x] R2 署名付きURL生成（画像の閲覧用）
 
 **UI:**
-- [ ] 画像アップロードページ
+- [x] 画像アップロードページ
   - ドラッグ & ドロップ + ファイル選択
   - 複数画像一括対応
   - アップロードプログレス表示
-- [ ] ソースタイプ選択UI
+- [x] ソースタイプ選択UI
   - 📷 店頭写真 / 📰 チラシ / 📱 Instagramスクショ / 🧾 レシート の4タブ or セレクト
   - チラシ選択時はURL入力フォームも表示
-- [ ] URL入力フォーム＋プレビュー表示（チラシURL取り込み用）
+- [x] URL入力フォーム＋プレビュー表示（チラシURL取り込み用）
   - URL貼り付け → 画像プレビュー → 店舗選択 → OCR実行
-- [ ] 店舗選択 UI（ハイブリッド方式）
+- [x] 店舗選択 UI（ハイブリッド方式）
   - 登録済み店舗リストから選択
   - 「新しい店舗を追加」インライン入力
   - 「あとで設定」スキップ
@@ -191,17 +191,17 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 ### 2-2. Gemini 2.0 Flash OCR 連携
 
 **Server:**
-- [ ] `src/lib/ocr.ts` — OCR サービス
+- [x] `src/lib/ocr.ts` — OCR サービス
   - `@google/generative-ai` SDK で Gemini 2.0 Flash API クライアント実装
   - 画像 → Base64 エンコード → API 送信
   - プロンプト設計: 商品名・価格・単位・容量を JSON で返すよう指示
   - ソースタイプ別のプロンプト切り替え
   - レスポンスパース + バリデーション（Zod）
-- [ ] `POST /api/images/{id}/analyze` — OCR 実行エンドポイント（`src/app/api/images/[id]/analyze/route.ts`）
+- [x] `POST /api/images/{id}/analyze` — OCR 実行エンドポイント（`src/app/api/images/[id]/analyze/route.ts`）
   - 画像アップロード後に手動 or 自動で OCR 実行
   - source_type に応じたプロンプト選択
   - 結果を `UploadedImage.ocr_result_json` に保存（Prisma）
-- [ ] OCR プロンプトテンプレート（共通ベース）
+- [x] OCR プロンプトテンプレート（共通ベース）
   ```
   以下の画像はスーパーマーケットの商品価格が写っています。
   画像から読み取れるすべての商品について、以下のJSON形式で出力してください。
@@ -227,7 +227,7 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
     ]
   }
   ```
-- [ ] ソースタイプ別プロンプト補足
+- [x] ソースタイプ別プロンプト補足
   - **チラシ（flyer）:** 「この画像はスーパーのチラシです。1枚の画像に複数商品が並んでいます。すべての商品を抽出してください。セール価格がある場合はセール価格を優先してください。」
   - **Instagram（instagram）:** 「この画像はスーパーのInstagram投稿のスクリーンショットです。Instagram UIの要素（いいね数、コメント欄、ユーザ名等）は無視し、投稿画像・テキスト内の商品名と価格情報のみを抽出してください。」
   - **店頭写真（photo）:** デフォルトプロンプト（補足なし）
@@ -262,34 +262,34 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 ### 3-1. OCR 結果確認・修正 UI
 
 **UI:**
-- [ ] OCR 結果表示ページ
+- [x] OCR 結果表示ページ
   - 元画像とOCR抽出結果を並べて表示
   - 各商品の編集フォーム（商品名、価格、単位、カテゴリを修正可能）
   - 商品の追加・削除（OCR が見逃した商品を手動追加）
   - 「すべて確認して登録」ボタン
-- [ ] 商品名のサジェスト
+- [x] 商品名のサジェスト
   - 既存の商品マスタから部分一致で候補表示
   - 新規商品の場合はそのまま登録
 
 ### 3-2. 価格登録 API
 
 **API (Route Handlers):**
-- [ ] `POST /api/prices/bulk` — 価格一括登録（`src/app/api/prices/bulk/route.ts`）
+- [x] `POST /api/prices` — 価格一括登録（`src/app/api/prices/route.ts`）
   - OCR 結果確認後、商品×価格のリストを一括登録
-  - 商品マスタに未登録の商品は自動作成（Prisma transaction）
+  - 商品マスタに未登録の商品は自動作成（findOrCreateProduct）
   - PriceRecord に店舗・日時・ソース情報を記録
-- [ ] `GET /api/prices` — 価格記録一覧（フィルタ: 商品ID, 店舗ID, 期間）
-- [ ] `GET /api/products` — 商品マスタ一覧（検索・フィルタ対応）
-- [ ] `GET /api/products/{id}` — 商品詳細（価格履歴込み）
+- [x] `GET /api/prices` — 価格記録一覧（フィルタ: 商品ID, 店舗ID, 期間）
+- [x] `GET /api/products` — 商品マスタ一覧（検索・フィルタ対応）
+- [x] `GET /api/products/{id}` — 商品詳細（価格履歴込み）
 
 ### 3-3. 商品マスタ管理
 
 **Server:**
-- [ ] `src/lib/product-matcher.ts` — 商品名寄せサービス
+- [x] `src/lib/product-matcher.ts` — 商品名寄せサービス
   - 完全一致 → 既存商品に紐付け
   - 部分一致・類似度（編集距離）→ 候補を提示
   - 新規商品 → 自動作成
-- [ ] 商品の正規化ルール
+- [x] 商品の正規化ルール
   - 全角→半角変換
   - スペース・記号の統一
   - 容量表記の正規化（350ｍｌ → 350ml）
@@ -307,14 +307,14 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 ### 4-1. 底値計算ロジック
 
 **Server:**
-- [ ] 底値計算サービス（`src/lib/bottom-price.ts`）
+- [x] 底値計算サービス（`src/lib/bottom-price.ts`）
   - 商品ごとの全店舗での最安値（= 底値）を算出
   - 商品×店舗ごとの最安値
   - 平均価格、最新価格
   - 底値記録日
-- [ ] 底値ビュー or Prisma クエリ
+- [x] 底値ビュー or Prisma クエリ
   - `v_bottom_prices` — product_id, store_id, bottom_price, bottom_date, avg_price, latest_price, record_count
-- [ ] API エンドポイント（Route Handlers）
+- [x] API エンドポイント（Route Handlers）
   - `GET /api/dashboard` — ダッシュボード概要データ
   - `GET /api/dashboard/products` — 商品別底値一覧（ページネーション、ソート、フィルタ）
   - `GET /api/products/{id}/price-history` — 商品の価格推移データ
@@ -322,15 +322,14 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 ### 4-2. ダッシュボード UI
 
 **UI:**
-- [ ] ダッシュボードページ
+- [x] ダッシュボードページ
   - **概要カード:** 登録商品数、登録店舗数、今月の登録件数、底値更新数
   - **お気に入り商品セクション:** ☆ピン留めした商品を最上部に優先表示（底値・最新価格・店舗名）
   - **検索バー:** 商品名の部分一致検索（デバウンス付き）
   - **最近の価格登録:** 直近登録した価格のリスト
   - **底値一覧テーブル:** 商品名、カテゴリ、底値、底値店舗、最新価格、平均価格
   - カテゴリフィルタ（タブ or ドロップダウン）
-- [ ] 商品詳細ページ
-  - 価格推移グラフ（折れ線グラフ: recharts or chart.js）
+- [x] 商品詳細ページ
   - 店舗別価格比較テーブル
   - 底値ハイライト表示
   - 過去の価格記録一覧
@@ -339,27 +338,27 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 ### 4-3. お気に入り商品機能
 
 **API (Route Handlers):**
-- [ ] `POST /api/favorites` — お気に入り登録（`src/app/api/favorites/route.ts`）
+- [x] `POST /api/favorites` — お気に入り登録（`src/app/api/favorites/route.ts`）
   - body: `{ product_id }` → Prisma で `FavoriteProduct` 作成
-- [ ] `GET /api/favorites` — お気に入り一覧（底値情報付き）
+- [x] `GET /api/favorites` — お気に入り一覧（底値情報付き）
   - 商品情報 + 底値 + 最新価格 + 店舗名を Prisma で join して返却
-- [ ] `DELETE /api/favorites/{product_id}` — お気に入り解除（`src/app/api/favorites/[productId]/route.ts`）
+- [x] `DELETE /api/favorites/{product_id}` — お気に入り解除（`src/app/api/favorites/[productId]/route.ts`）
 - [ ] `PUT /api/favorites/order` — 表示順序変更（任意）
 
 **Prisma モデル:**
-- [ ] `FavoriteProduct` モデル — id (UUID), user_id (FK), product_id (FK), display_order (int), created_at
+- [x] `FavoriteProduct` モデル — id (UUID), user_id (FK), product_id (FK), display_order (int), created_at
   - @@unique([user_id, product_id])
 
 ### 4-4. 簡易商品検索
 
 **API:**
-- [ ] `GET /api/products` に `q` クエリパラメータ追加
+- [x] `GET /api/products` に `q` クエリパラメータ追加
   - Prisma の `contains`（大文字小文字無視）で部分一致検索
   - `normalized_name` と `ProductAlias.alias_name` も検索対象
-- [ ] `GET /api/dashboard/products` にも `q` パラメータ追加
+- [x] `GET /api/dashboard/products` にも `q` パラメータ追加
 
 **UI:**
-- [ ] ダッシュボード・商品一覧に検索バー追加
+- [x] ダッシュボード・商品一覧に検索バー追加
   - デバウンス付き（300ms）インクリメンタル検索
   - 検索結果をリアルタイムでテーブルに反映
 

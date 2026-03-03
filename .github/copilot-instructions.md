@@ -58,8 +58,10 @@ Sokone（底値）は、チラシ・Instagram・店頭写真から商品価格�
 
 - Git 操作は **`git` コマンド**および **`gh` CLI** を使用すること
 - GUI ツールや VS Code の Git 機能ではなく、ターミナルでコマンドを実行する
+- **GitKraken MCP ツールは使用しない**（`mcp_gitkraken_*` 系のツールは呼び出さないこと）
 - コミットメッセージは **日本語** で、変更内容が分かるように書く
 - ブランチ戦略: `main`（本番）/ `dev`（開発）/ `feature/*`（機能ブランチ）
+- PR マージは **squash を使わない**（`gh pr merge <id> --merge`）— コミット履歴をそのまま保持する
 
 ### TypeScript / Next.js
 
