@@ -78,7 +78,7 @@ export async function extractExifMetadata(
  */
 export async function processImage(
   inputBuffer: Buffer,
-  mimeType: string,
+  _mimeType: string,
 ): Promise<ProcessedImage> {
   // Extract EXIF BEFORE sharp processing (sharp may strip EXIF during conversions)
   const exif = await extractExifMetadata(inputBuffer);
@@ -137,7 +137,7 @@ export function isValidImageType(mimeType: string): boolean {
 /**
  * Generate a unique key for R2 storage
  */
-export function generateImageKey(userId: string, originalName: string): string {
+export function generateImageKey(userId: string, _originalName: string): string {
   const timestamp = Date.now();
   const randomSuffix = Math.random().toString(36).substring(2, 8);
   const extension = "jpg"; // Always JPEG after processing

@@ -515,6 +515,7 @@ export function OcrResultsView({
               {/* Image preview */}
               <div className="relative h-24 w-24 flex-shrink-0 overflow-hidden rounded-lg border bg-muted">
                 {result.signedUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={result.signedUrl}
                     alt="アップロード画像"

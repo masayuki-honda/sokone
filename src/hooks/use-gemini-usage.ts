@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 
 const STORAGE_KEY = "gemini_usage";
 // Free tier limits for gemini-2.5-flash (confirmed in AI Studio)
@@ -119,10 +119,11 @@ export function useGeminiUsage(): GeminiUsage {
     setUsage(fresh);
   }, []);
 
-  const now = Date.now();
-  const callsLastMinute = usage.recentCallTimestamps.filter(
-    (t) => t > now - 60_000,
-  ).length;
+  const callsLastMinute = useMemo(() => {
+    // eslint-disable-next-line react-hooks/purity
+    const now = Date.now();
+    return usage.recentCallTimestamps.filter((t) => t > now - 60_000).length;
+  }, [usage.recentCallTimestamps]);
 
   return {
     totalCalls: usage.totalCalls,

@@ -245,7 +245,7 @@ export async function analyzeImage(
     }
 
     return parsed;
-  } catch (parseError) {
+  } catch {
     console.error("Failed to parse OCR response:", text);
     throw new Error("OCR結果のパースに失敗しました");
   }
