@@ -274,9 +274,9 @@ export default function UploadPage() {
                   "Gemini APIの無料枠が利用できません（limit: 0）。Google AI Studioでクォータ設定を確認するか、有料プランに切り替えてください。"
                 );
               } else {
-                ocrErrors.push(
-                  errorData.error || `画像 ${image.id} の解析に失敗しました`,
-                );
+                // Show details for non-rate-limit errors to help debugging
+                const detail = errorData.details || errorData.error || `画像 ${image.id} の解析に失敗しました`;
+                ocrErrors.push(`OCR解析エラー: ${detail}`);
               }
             }
           } catch (error) {
