@@ -142,12 +142,17 @@ export function StoreSelect({ value, onChange }: StoreSelectProps) {
               onChange={(e) => setNewStoreName(e.target.value)}
               disabled={creating}
             />
-            <Input
-              placeholder="住所（任意）"
-              value={newStoreAddress}
-              onChange={(e) => setNewStoreAddress(e.target.value)}
-              disabled={creating}
-            />
+            <div className="space-y-1">
+              <Input
+                placeholder="住所（任意）"
+                value={newStoreAddress}
+                onChange={(e) => setNewStoreAddress(e.target.value)}
+                disabled={creating}
+              />
+              <p className="text-xs text-muted-foreground">
+                📍 住所を入力すると座標を自動取得し、写真のGPSから店舗を自動選択できます
+              </p>
+            </div>
           </div>
           <div className="flex gap-2">
             <Button

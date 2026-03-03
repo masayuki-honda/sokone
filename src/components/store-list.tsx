@@ -188,6 +188,9 @@ export function StoreList() {
                 placeholder="例: 横浜市西区みなとみらい1-1-1"
                 className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-zinc-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800"
               />
+              <p className="mt-1 text-xs text-zinc-500">
+                📍 住所を入力すると座標を自動取得し、写真のGPSから店舗を自動判別できるようになります。
+              </p>
             </div>
           </div>
           <div className="mt-6 flex gap-3">
@@ -233,9 +236,20 @@ export function StoreList() {
                 <h3 className="font-medium">{store.name}</h3>
                 {store.address && (
                   <p className="mt-0.5 text-sm text-zinc-500">
-                    📍 {store.address}
+                    {store.address}
                   </p>
                 )}
+                <p className="mt-0.5 text-xs">
+                  {store.latitude != null && store.longitude != null ? (
+                    <span className="text-green-600 dark:text-green-400">
+                      📍 GPS対応済
+                    </span>
+                  ) : (
+                    <span className="text-zinc-400">
+                      GPS座標未設定（住所を登録すると自動取得）
+                    </span>
+                  )}
+                </p>
               </div>
               <div className="flex gap-2">
                 <button
