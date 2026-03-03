@@ -40,6 +40,7 @@ interface OcrResult {
     identified_by: string;
   }>;
   store_name?: string | null;
+  takenAt?: string | null;
 }
 
 const SOURCE_TYPES: {
@@ -86,6 +87,7 @@ export default function UploadPage() {
   const [urlLoading, setUrlLoading] = useState(false);
   const [urlError, setUrlError] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [gpsSuggestedStore, setGpsSuggestedStore] = useState<string | null>(null);
 
   // Handle file selection
   const handleFilesSelected = useCallback((selectedFiles: File[]) => {
@@ -173,6 +175,30 @@ export default function UploadPage() {
         }),
       );
 
+      // Auto-suggest store from GPS if no store selected
+      if (!storeId && uploadData.uploaded.length > 0) {
+        const imageWithGps = uploadData.uploaded.find(
+          (img: { gpsLatitude?: number; gpsLongitude?: number }) =>
+            img.gpsLatitude != null && img.gpsLongitude != null,
+        );
+        if (imageWithGps) {
+          try {
+            const nearbyRes = await fetch(
+              `/api/stores/nearby?lat=${imageWithGps.gpsLatitude}&lng=${imageWithGps.gpsLongitude}`,
+            );
+            if (nearbyRes.ok) {
+              const nearbyData = await nearbyRes.json();
+              if (nearbyData.store) {
+                setStoreId(nearbyData.store.id);
+                setGpsSuggestedStore(nearbyData.store.name);
+              }
+            }
+          } catch {
+            // GPS store suggestion is best-effort
+          }
+        }
+      }
+
       setIsUploading(false);
 
       // Step 2: Run OCR on each uploaded image
@@ -212,6 +238,7 @@ export default function UploadPage() {
                 signedUrl,
                 items: analyzeData.ocrResult?.items || [],
                 store_name: analyzeData.ocrResult?.store_name,
+                takenAt: analyzeData.takenAt || image.takenAt || null,
               });
             } else {
               const errorData = await analyzeRes.json().catch(() => ({}));
@@ -330,6 +357,7 @@ export default function UploadPage() {
     setFiles([]);
     setOcrResults([]);
     setUploadError(null);
+    setGpsSuggestedStore(null);
   }
 
   return (
@@ -387,8 +415,16 @@ export default function UploadPage() {
               <CardContent className="pt-6">
                 <StoreSelect
                   value={storeId}
-                  onChange={(id) => setStoreId(id)}
+                  onChange={(id) => {
+                    setStoreId(id);
+                    setGpsSuggestedStore(null);
+                  }}
                 />
+                {gpsSuggestedStore && (
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    📍 写真の位置情報から「{gpsSuggestedStore}」を自動選択しました
+                  </p>
+                )}
               </CardContent>
             </Card>
 

@@ -153,6 +153,9 @@ model UploadedImage {
   ocrRawText     String?     @map("ocr_raw_text") @db.Text
   ocrResultJson  Json?       @map("ocr_result_json")
   status         ImageStatus @default(pending)
+  takenAt        DateTime?   @map("taken_at")
+  gpsLatitude    Float?      @map("gps_latitude")
+  gpsLongitude   Float?      @map("gps_longitude")
   createdAt      DateTime    @default(now()) @map("created_at")
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)

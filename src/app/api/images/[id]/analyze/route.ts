@@ -79,6 +79,7 @@ export async function POST(_request: NextRequest, { params }: Params) {
       ocrResult,
       itemCount: ocrResult.items?.length ?? 0,
       signedUrl,
+      takenAt: image.takenAt,
     });
   } catch (error) {
     console.error("OCR analysis error:", error);
@@ -89,12 +90,21 @@ export async function POST(_request: NextRequest, { params }: Params) {
       data: { status: "failed" },
     });
 
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
+    const isRateLimit =
+      errorMessage.includes("429") ||
+      errorMessage.includes("quota") ||
+      errorMessage.includes("利用上限");
+
     return NextResponse.json(
       {
-        error: "OCR解析に失敗しました",
-        details: error instanceof Error ? error.message : "Unknown error",
+        error: isRateLimit
+          ? "APIの利用上限に達しました。しばらく時間をおいてください。"
+          : "OCR解析に失敗しました",
+        details: errorMessage,
       },
-      { status: 500 },
+      { status: isRateLimit ? 429 : 500 },
     );
   }
 }
