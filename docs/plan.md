@@ -1,7 +1,7 @@
 # Sokone 全Phase 実装計画
 
 > 作成日: 2026-02-26
-> 最終更新: 2026-02-27
+> 最終更新: 2026-03-03
 >
 > **アーキテクチャ:** Next.js フルスタック + Prisma + Neon + Vercel
 
@@ -162,6 +162,10 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
   - 画像リサイズ（長辺 1600px 以下に。API送信用）
   - **Cloudflare R2 に保存**（`src/lib/r2.ts` 経由）
   - `source_type` パラメータ: `photo`（店頭写真）/ `flyer`（チラシ）/ `instagram`（Instagramスクショ）/ `receipt`（レシート）
+  - EXIF メタデータ抽出（`exifr` ライブラリ）
+    - 撮影日時（DateTimeOriginal / CreateDate / ModifyDate）→ `taken_at` に保存
+    - GPS 座標（GPSLatitude / GPSLongitude）→ `gps_latitude` / `gps_longitude` に保存
+    - スクリーンショットは EXIF がないため自動スキップ
 - [x] `POST /api/images/from-url` — URL指定で画像取得（`src/app/api/images/from-url/route.ts`）
   - URL からの画像ダウンロード
   - Content-Type 検証（画像であることを確認）
@@ -171,6 +175,7 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 - [x] `GET /api/images` — アップロード済み画像一覧
 - [x] `GET /api/images/{id}` — 画像詳細（OCR結果含む）
 - [x] R2 署名付きURL生成（画像の閲覧用）
+- [x] `GET /api/stores/nearby` — GPS 座標から最寄り店舗を検索（Haversine 距離、半径 1km 以内）
 
 **UI:**
 - [x] 画像アップロードページ
@@ -186,7 +191,7 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
   - 登録済み店舗リストから選択
   - 「新しい店舗を追加」インライン入力
   - 「あとで設定」スキップ
-  - （GPS 自動候補は Sprint 2 では Optional）
+  - （GPS 自動候補は Sprint 2 では Optional） → ✅ EXIF GPS から最寄り店舗を自動提案（実装済み）
 
 ### 2-2. Gemini 2.0 Flash OCR 連携
 
@@ -232,7 +237,9 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
   - **Instagram（instagram）:** 「この画像はスーパーのInstagram投稿のスクリーンショットです。Instagram UIの要素（いいね数、コメント欄、ユーザ名等）は無視し、投稿画像・テキスト内の商品名と価格情報のみを抽出してください。」
   - **店頭写真（photo）:** デフォルトプロンプト（補足なし）
   - **レシート（receipt）:** 「この画像は買い物のレシートです。レシートに記載されているすべての商品の商品名と購入価格を抽出してください。値引き・割引がある場合は割引後の価格を使用してください。小計・合計・ポイントなどの合算行は除外してください。レシート上部に記載されている店舗名も抽出してください。」
-- [ ] エラーハンドリング（API 障害時のリトライ、レートリミット対策）
+- [x] エラーハンドリング（API 障害時のリトライ、レートリミット対策）
+  - Gemini API 429 (quota超過) 検出 → 日本語エラーメッセージ表示
+  - OCRエラー詳細をUIに伝播
 
 ### 2-3. OCR 精度検証
 
