@@ -82,16 +82,37 @@ export async function POST(_request: NextRequest, { params }: Params) {
       takenAt: image.takenAt,
     });
   } catch (error) {
-    console.error("OCR analysis error:", error);
+    // Capture error details regardless of error type (SDK may throw non-Error objects)
+    let errorMessage: string;
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    } else if (typeof error === "object" && error !== null) {
+      // Gemini SDK sometimes throws objects with statusText, status, etc.
+      const e = error as Record<string, unknown>;
+      errorMessage =
+        (typeof e.message === "string" ? e.message : null) ??
+        (typeof e.statusText === "string" ? e.statusText : null) ??
+        (typeof e.status === "number" ? `HTTP ${e.status}` : null) ??
+        JSON.stringify(e).slice(0, 300);
+    } else {
+      errorMessage = String(error);
+    }
+
+    // Log full error details to server terminal for debugging
+    console.error("[OCR] Analysis failed:", {
+      errorMessage,
+      errorType: typeof error,
+      isErrorInstance: error instanceof Error,
+      raw: error,
+    });
 
     // Mark as failed in database
     await prisma.uploadedImage.update({
       where: { id },
       data: { status: "failed" },
+    }).catch((dbErr) => {
+      console.error("[OCR] Failed to update status to failed:", dbErr);
     });
-
-    const errorMessage =
-      error instanceof Error ? error.message : "Unknown error";
     const rateLimitType =
       (error as Error & { rateLimitType?: string }).rateLimitType;
     const isRateLimit = rateLimitType != null ||
