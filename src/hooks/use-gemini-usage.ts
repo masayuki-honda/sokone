@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 
 const STORAGE_KEY = "gemini_usage";
+// Free tier limits for gemini-2.5-flash (verify exact values in AI Studio:
+// https://aistudio.google.com/rate-limit)
 const DAILY_LIMIT = 1500;
-const PER_MINUTE_LIMIT = 15;
+const PER_MINUTE_LIMIT = 10; // conservative estimate; 2.0-flash was 15/min
 
 interface UsageEntry {
   /** ISO date string of the Gemini quota reset (JST 17:00 = UTC 08:00) */
