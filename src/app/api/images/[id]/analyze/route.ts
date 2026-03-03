@@ -98,7 +98,8 @@ export async function POST(_request: NextRequest, { params }: Params) {
       errorMessage.includes("429") ||
       errorMessage.includes("RESOURCE_EXHAUSTED") ||
       errorMessage.includes("quota") ||
-      errorMessage.includes("利用上限");
+      errorMessage.includes("利用上限") ||
+      errorMessage.includes("無料枠");
 
     return NextResponse.json(
       {

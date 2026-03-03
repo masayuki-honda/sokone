@@ -269,6 +269,10 @@ export default function UploadPage() {
                 ocrErrors.push(
                   "Gemini APIの1日あたりの上限（1,500回/日）に達しました。翌日（日本時間17時頃）にリセットされます。"
                 );
+              } else if (rateLimitType === "quota_zero") {
+                ocrErrors.push(
+                  "Gemini APIの無料枠が利用できません（limit: 0）。Google AI Studioでクォータ設定を確認するか、有料プランに切り替えてください。"
+                );
               } else {
                 ocrErrors.push(
                   errorData.error || `画像 ${image.id} の解析に失敗しました`,
@@ -291,7 +295,8 @@ export default function UploadPage() {
           const isRateLimit =
             firstError.includes("制限") ||
             firstError.includes("上限") ||
-            firstError.includes("リセット");
+            firstError.includes("リセット") ||
+            firstError.includes("無料枠");
           setUploadError(
             isRateLimit ? firstError : `AI解析に失敗しました: ${firstError}`,
           );

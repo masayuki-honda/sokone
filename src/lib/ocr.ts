@@ -168,11 +168,22 @@ export async function analyzeImage(
   ]).catch((error: Error) => {
     const msg = error.message ?? "";
     if (msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED") || msg.includes("quota")) {
-      // Distinguish per-minute vs per-day quota
-      // Gemini API error messages use PascalCase quotaIds like:
-      //   GenerateRequestsPerMinutePerProjectPerModel-FreeTier
-      //   GenerateRequestsPerDayPerProjectPerModel-FreeTier
+      // Log the full error for debugging
+      console.error("Gemini API rate limit error (full message):", msg);
+
       const msgLower = msg.toLowerCase();
+
+      // Check if the free tier quota limit is literally 0
+      // e.g. "limit: 0, model: gemini-2.0-flash"
+      const limitZero = /limit:\s*0[,\s]/.test(msg);
+      if (limitZero) {
+        const e = new Error(
+          "Gemini APIの無料枠が利用できません（limit: 0）。Google AI Studioでプロジェクトのクォータ設定を確認するか、有料プラン（Pay-as-you-go）に切り替えてください。",
+        );
+        (e as Error & { rateLimitType: string }).rateLimitType = "quota_zero";
+        throw e;
+      }
+
       // Per-minute check takes precedence: if retry delay is seconds (not hours),
       // it's a per-minute limit. The Gemini API often reports BOTH PerMinute and
       // PerDay violations in the same error when per-minute is the trigger.
@@ -181,7 +192,6 @@ export async function analyzeImage(
         msgLower.includes("per-minute") ||
         msgLower.includes("per_minute") ||
         msgLower.includes("ratelimitexceeded") ||
-        // RetryInfo with seconds (e.g. "retrydelay\":\"43s") ⇒ per-minute
         /retrydelay.*?"\d+s"/.test(msgLower);
       // Only classify as per-day if there is NO per-minute signal at all
       const isPerDay =
