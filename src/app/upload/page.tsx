@@ -131,18 +131,17 @@ export default function UploadPage() {
   ): Promise<{ lat: number | null; lng: number | null }> {
     try {
       const exifr = (await import("exifr")).default;
-      const exif = await exifr.parse(file, {
-        pick: ["GPSLatitude", "GPSLatitudeRef", "GPSLongitude", "GPSLongitudeRef"],
-        gps: true,
-      });
+      // Use exifr.gps() dedicated method which reliably returns computed lat/lng.
+      // exifr.parse() with pick[] may omit the computed latitude/longitude fields.
+      const gps = await exifr.gps(file);
       if (
-        exif &&
-        typeof exif.latitude === "number" &&
-        typeof exif.longitude === "number" &&
-        isFinite(exif.latitude) &&
-        isFinite(exif.longitude)
+        gps &&
+        typeof gps.latitude === "number" &&
+        typeof gps.longitude === "number" &&
+        isFinite(gps.latitude) &&
+        isFinite(gps.longitude)
       ) {
-        return { lat: exif.latitude, lng: exif.longitude };
+        return { lat: gps.latitude, lng: gps.longitude };
       }
     } catch {
       // exifr failure is non-critical
