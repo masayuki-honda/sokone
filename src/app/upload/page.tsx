@@ -128,23 +128,57 @@ export default function UploadPage() {
 
   // Extract GPS coordinates from original file before Canvas compression strips EXIF.
   // NOTE: iOS Safari strips GPS from File objects for privacy — returns null on iOS.
+  /** Convert raw DMS array + ref to decimal degrees */
+  function dmsToDecimal(dms: number[], ref: string): number | null {
+    if (!Array.isArray(dms) || dms.length < 3) return null;
+    const decimal = dms[0] + dms[1] / 60 + dms[2] / 3600;
+    return (ref === "S" || ref === "W") ? -decimal : decimal;
+  }
+
   async function extractGpsFromFile(
     file: File,
   ): Promise<{ lat: number | null; lng: number | null; debugNote?: string }> {
     try {
       const exifr = (await import("exifr")).default;
-      // Use parse() with gps:true (no pick filter) — most compatible across cameras.
-      const exif = await exifr.parse(file, { gps: true });
-      if (
-        exif &&
-        typeof exif.latitude === "number" &&
-        typeof exif.longitude === "number" &&
-        isFinite(exif.latitude) &&
-        isFinite(exif.longitude)
-      ) {
-        return { lat: exif.latitude, lng: exif.longitude };
+
+      // Strategy 1: exifr.gps() — dedicated method that returns computed decimal lat/lng
+      try {
+        const gpsResult = await exifr.gps(file);
+        if (
+          gpsResult &&
+          typeof gpsResult.latitude === "number" &&
+          typeof gpsResult.longitude === "number" &&
+          isFinite(gpsResult.latitude) &&
+          isFinite(gpsResult.longitude)
+        ) {
+          return { lat: gpsResult.latitude, lng: gpsResult.longitude, debugNote: "exifr.gps()" };
+        }
+      } catch {
+        // fall through to Strategy 2
       }
-      return { lat: null, lng: null, debugNote: exif ? "exifあり/GPS緯度経度なし" : "exifなし" };
+
+      // Strategy 2: exifr.parse() and manually convert raw DMS arrays
+      const exif = await exifr.parse(file, { gps: true, tiff: true });
+      if (exif) {
+        // exifr may return pre-computed decimal fields
+        if (typeof exif.latitude === "number" && isFinite(exif.latitude) &&
+            typeof exif.longitude === "number" && isFinite(exif.longitude)) {
+          return { lat: exif.latitude, lng: exif.longitude, debugNote: "parse.decimal" };
+        }
+        // Manually compute from raw DMS arrays (GPSLatitude / GPSLongitude)
+        if (exif.GPSLatitude && exif.GPSLongitude) {
+          const lat = dmsToDecimal(exif.GPSLatitude as number[], String(exif.GPSLatitudeRef ?? "N"));
+          const lng = dmsToDecimal(exif.GPSLongitude as number[], String(exif.GPSLongitudeRef ?? "E"));
+          if (lat !== null && lng !== null && isFinite(lat) && isFinite(lng)) {
+            return { lat, lng, debugNote: "parse.DMS手動計算" };
+          }
+          return { lat: null, lng: null, debugNote: `DMS変換失敗: lat=${JSON.stringify(exif.GPSLatitude)}` };
+        }
+        // Exif found but no GPS fields at all
+        const keys = Object.keys(exif).filter(k => k.startsWith("GPS")).join(",") || "GPSタグなし";
+        return { lat: null, lng: null, debugNote: `exifあり/${keys}` };
+      }
+      return { lat: null, lng: null, debugNote: "exifなし" };
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       return { lat: null, lng: null, debugNote: `exifr例外: ${msg.slice(0, 80)}` };
