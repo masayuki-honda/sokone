@@ -25,6 +25,12 @@ export function Header() {
                 店舗管理
               </Link>
               <Link
+                href="/products"
+                className="text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+              >
+                商品一覧
+              </Link>
+              <Link
                 href="/upload"
                 className="text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
               >
