@@ -123,7 +123,7 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
   - Prisma Adapter でユーザ・セッションを DB 管理
   - コールバック・セッション設定
 - [x] NextAuth Route Handler（`src/app/api/auth/[...nextauth]/route.ts`）
-- [x] 認証ミドルウェア（`middleware.ts`）— 未認証時のリダイレクト
+- [x] 認証ミドルウェア（`proxy.ts`）— 未認証時のリダイレクト
 
 **UI:**
 - [x] ログインページ作成
