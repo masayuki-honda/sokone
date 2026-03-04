@@ -104,6 +104,7 @@ export default function UploadPage() {
   const [urlError, setUrlError] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [gpsSuggestedStore, setGpsSuggestedStore] = useState<string | null>(null);
+  const [gpsNoStoreFound, setGpsNoStoreFound] = useState<{ lat: number; lng: number } | null>(null);
   const geminiUsage = useGeminiUsage();
 
   // Handle file selection
@@ -132,6 +133,7 @@ export default function UploadPage() {
         ],
         gps: true,
       });
+      console.log("[GPS] exifr result for", file.name, exif);
       if (
         exif &&
         typeof exif.latitude === "number" &&
@@ -139,11 +141,13 @@ export default function UploadPage() {
         isFinite(exif.latitude) &&
         isFinite(exif.longitude)
       ) {
+        console.log("[GPS] extracted:", exif.latitude, exif.longitude);
         return { lat: exif.latitude, lng: exif.longitude };
       }
-    } catch {
-      // EXIF extraction failure is non-critical
+    } catch (err) {
+      console.warn("[GPS] exifr extraction failed:", err);
     }
+    console.log("[GPS] no GPS found in", file.name);
     return { lat: null, lng: null };
   }
 
@@ -306,20 +310,31 @@ export default function UploadPage() {
           (img) => img.gpsLatitude != null && img.gpsLongitude != null,
         );
         if (imageWithGps) {
+          console.log("[GPS] searching nearby stores for", imageWithGps.gpsLatitude, imageWithGps.gpsLongitude);
           try {
             const nearbyRes = await fetch(
               `/api/stores/nearby?lat=${imageWithGps.gpsLatitude}&lng=${imageWithGps.gpsLongitude}`,
             );
             if (nearbyRes.ok) {
               const nearbyData = await nearbyRes.json();
+              console.log("[GPS] nearby store result:", nearbyData);
               if (nearbyData.store) {
                 setStoreId(nearbyData.store.id);
                 setGpsSuggestedStore(nearbyData.store.name);
+                setGpsNoStoreFound(null);
+              } else {
+                // GPS found but no registered stores nearby
+                setGpsNoStoreFound({
+                  lat: imageWithGps.gpsLatitude!,
+                  lng: imageWithGps.gpsLongitude!,
+                });
               }
             }
           } catch {
             // GPS store suggestion is best-effort
           }
+        } else {
+          console.log("[GPS] no GPS data in uploaded images");
         }
       }
 
@@ -509,6 +524,7 @@ export default function UploadPage() {
     setOcrResults([]);
     setUploadError(null);
     setGpsSuggestedStore(null);
+    setGpsNoStoreFound(null);
   }
 
   return (
@@ -601,11 +617,17 @@ export default function UploadPage() {
                   onChange={(id) => {
                     setStoreId(id);
                     setGpsSuggestedStore(null);
+                    setGpsNoStoreFound(null);
                   }}
                 />
                 {gpsSuggestedStore && (
-                  <p className="mt-2 text-sm text-muted-foreground">
+                  <p className="mt-2 text-sm text-green-600 dark:text-green-400">
                     📍 写真の位置情報から「{gpsSuggestedStore}」を自動選択しました
+                  </p>
+                )}
+                {gpsNoStoreFound && !gpsSuggestedStore && (
+                  <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">
+                    📍 GPS取得済み（{gpsNoStoreFound.lat.toFixed(4)}, {gpsNoStoreFound.lng.toFixed(4)}）ですが、1km以内に登録済み店舗がありません。店舗に住所またはGPS座標を設定すると自動選択できます。
                   </p>
                 )}
               </CardContent>
@@ -741,6 +763,7 @@ export default function UploadPage() {
                 setFiles([]);
                 setStoreId(null);
                 setGpsSuggestedStore(null);
+                setGpsNoStoreFound(null);
                 setUploadError(null);
               }}
             />
