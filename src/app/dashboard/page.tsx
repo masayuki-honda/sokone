@@ -13,6 +13,7 @@ import {
   ArrowRight,
   Loader2,
   StarOff,
+  Database,
 } from "lucide-react";
 import { Header } from "@/components/header";
 import { Button } from "@/components/ui/button";
@@ -74,12 +75,20 @@ interface Category {
   _count: { products: number };
 }
 
+interface DbStorage {
+  usedMB: number;
+  limitMB: number;
+  usagePercent: number;
+  status: "ok" | "warning" | "critical";
+}
+
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentPrices, setRecentPrices] = useState<RecentPrice[]>([]);
   const [favorites, setFavorites] = useState<FavoriteItem[]>([]);
   const [bottomPrices, setBottomPrices] = useState<BottomPriceItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [dbStorage, setDbStorage] = useState<DbStorage | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -99,10 +108,11 @@ export default function DashboardPage() {
     async function fetchAll() {
       setIsLoading(true);
       try {
-        const [dashRes, favsRes, catsRes] = await Promise.all([
+        const [dashRes, favsRes, catsRes, storageRes] = await Promise.all([
           fetch("/api/dashboard"),
           fetch("/api/favorites"),
           fetch("/api/categories"),
+          fetch("/api/admin/db-storage"),
         ]);
 
         if (dashRes.ok) {
@@ -119,6 +129,11 @@ export default function DashboardPage() {
         if (catsRes.ok) {
           const data = await catsRes.json();
           setCategories(data.categories);
+        }
+
+        if (storageRes.ok) {
+          const data = await storageRes.json();
+          setDbStorage(data);
         }
       } catch (error) {
         console.error("Failed to load dashboard:", error);
@@ -207,6 +222,39 @@ export default function DashboardPage() {
             </Button>
           </Link>
         </div>
+
+        {/* DB Storage Banner */}
+        {dbStorage && dbStorage.status !== "ok" && (
+          <div
+            className={`flex items-center gap-3 rounded-lg border px-4 py-3 text-sm ${
+              dbStorage.status === "critical"
+                ? "border-red-300 bg-red-50 text-red-800 dark:border-red-700 dark:bg-red-950 dark:text-red-200"
+                : "border-yellow-300 bg-yellow-50 text-yellow-800 dark:border-yellow-700 dark:bg-yellow-950 dark:text-yellow-200"
+            }`}
+          >
+            <Database className="h-4 w-4 shrink-0" />
+            <div className="flex-1">
+              <span className="font-medium">
+                {dbStorage.status === "critical"
+                  ? "DBストレージの空きがほとんどありません"
+                  : "DBストレージが残り少なくなっています"}
+              </span>
+              <span className="ml-2 opacity-80">
+                {dbStorage.usedMB} MB / {dbStorage.limitMB} MB使用中（{dbStorage.usagePercent}%）
+              </span>
+            </div>
+            <div className="shrink-0 w-24">
+              <div className="h-2 rounded-full bg-current/20 overflow-hidden">
+                <div
+                  className={`h-full rounded-full ${
+                    dbStorage.status === "critical" ? "bg-red-500" : "bg-yellow-500"
+                  }`}
+                  style={{ width: `${Math.min(dbStorage.usagePercent, 100)}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Stats Cards */}
         {stats && (
