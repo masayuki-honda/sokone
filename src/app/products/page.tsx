@@ -10,6 +10,7 @@ import {
   Merge,
   X,
   Check,
+  Wand2,
 } from "lucide-react";
 import { Header } from "@/components/header";
 import { Button } from "@/components/ui/button";
@@ -56,6 +57,10 @@ export default function ProductsPage() {
   const [mergeTarget, setMergeTarget] = useState<ProductItem | null>(null);
   const [isMerging, setIsMerging] = useState(false);
   const [mergeError, setMergeError] = useState<string | null>(null);
+
+  // Auto-categorize state
+  const [isAutoCategorizing, setIsAutoCategorizing] = useState(false);
+  const [autoCategorizeResult, setAutoCategorizeResult] = useState<string | null>(null);
 
   // Debounce main search
   useEffect(() => {
@@ -191,6 +196,31 @@ export default function ProductsPage() {
     setMergeError(null);
   }
 
+  async function handleAutoCategorize() {
+    setIsAutoCategorizing(true);
+    setAutoCategorizeResult(null);
+    try {
+      const res = await fetch("/api/products/auto-categorize", { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        setAutoCategorizeResult(data.message);
+        // Refresh product list and category counts
+        await fetchProducts();
+        const catRes = await fetch("/api/categories");
+        if (catRes.ok) {
+          const catData = await catRes.json();
+          setCategories(catData.categories || []);
+        }
+      } else {
+        setAutoCategorizeResult(`エラー: ${data.error || "不明なエラー"}`);
+      }
+    } catch {
+      setAutoCategorizeResult("通信エラーが発生しました");
+    } finally {
+      setIsAutoCategorizing(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
       <Header />
@@ -206,6 +236,24 @@ export default function ProductsPage() {
             <p className="text-sm text-muted-foreground">
               登録済みの商品を検索・閲覧・統合
             </p>
+          </div>
+          <div className="ml-auto flex flex-col items-end gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleAutoCategorize}
+              disabled={isAutoCategorizing}
+            >
+              {isAutoCategorizing ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Wand2 className="mr-2 h-4 w-4" />
+              )}
+              カテゴリ自動設定
+            </Button>
+            {autoCategorizeResult && (
+              <p className="text-xs text-muted-foreground">{autoCategorizeResult}</p>
+            )}
           </div>
         </div>
 
