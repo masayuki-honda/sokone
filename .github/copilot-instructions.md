@@ -44,6 +44,7 @@ Sokone（底値）は、チラシ・Instagram・店頭写真から商品価格�
 - 開発・本番ともに **Neon**（クラウドPostgreSQL）を使用。ローカルDBは不要
 - Next.js は `npm run dev` でローカル起動
 - ローカルポート: App `3000`
+- **シード実行:** Neon 無料枝は TCP ポート 5432 をブロックする場合があるため、WebSocket Adapter を使用する `npx tsx prisma/seed.ts` で実行する（`npx prisma db seed` は直接TCPのため失敗する場合あり）
 
 ## コーディング規約
 
@@ -127,13 +128,18 @@ sokone/
 ├── src/
 │   ├── app/                   # App Router pages + API Routes
 │   │   ├── api/               # Route Handlers
-│   │   ├── (auth)/            # 認証関連ページ
+│   │   ├── auth/              # 認証関連ページ (signin/)
 │   │   ├── dashboard/         # ダッシュボード
 │   │   ├── stores/            # 店舗管理
+│   │   ├── products/          # 商品一覧
+│   │   ├── products/[id]/     # 商品詳細
 │   │   ├── upload/            # 画像アップロード
 │   │   └── layout.tsx
 │   ├── components/            # React components
-│   │   └── ui/                # shadcn/ui
+│   │   ├── ui/                # shadcn/ui
+│   │   ├── header.tsx
+│   │   ├── ocr-results-view.tsx
+│   │   └── session-provider.tsx
 │   ├── lib/                   # サービスロジック、ユーティリティ
 │   │   ├── prisma.ts          # Prisma client
 │   │   ├── auth.ts            # NextAuth 設定
@@ -143,7 +149,8 @@ sokone/
 │   ├── hooks/                 # Custom hooks
 │   └── types/                 # TypeScript types
 ├── prisma/
-│   └── schema.prisma          # DB スキーマ定義
+│   ├── schema.prisma          # DB スキーマ定義
+│   └── seed.ts                # 初期カテゴリデータ投入（`npx tsx prisma/seed.ts`）
 ├── public/
 ├── package.json
 ├── tsconfig.json
