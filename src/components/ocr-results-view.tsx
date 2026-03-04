@@ -305,7 +305,10 @@ export function OcrResultsView({
 }: OcrResultsViewProps) {
   const router = useRouter();
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
-  const [localStoreId, setLocalStoreId] = useState<string | null>(storeId);
+  // Per-image store selection (key: imageId)
+  const [storeIdMap, setStoreIdMap] = useState<Record<string, string | null>>(
+    () => Object.fromEntries(results.map((r) => [r.imageId, storeId]))
+  );
   const [editableResults, setEditableResults] = useState(results);
   const [isRegistering, setIsRegistering] = useState(false);
   const [registrationError, setRegistrationError] = useState<string | null>(
@@ -369,8 +372,12 @@ export function OcrResultsView({
 
   // Register prices via API
   async function handleRegisterPrices() {
-    if (!localStoreId) {
-      setRegistrationError("店舗を選択してください");
+    // Validate each image with items has a store selected
+    const missingStore = editableResults.some(
+      (r) => r.items.length > 0 && !storeIdMap[r.imageId]
+    );
+    if (missingStore) {
+      setRegistrationError("各画像の店舗を選択してください");
       return;
     }
 
@@ -420,7 +427,7 @@ export function OcrResultsView({
               category_hint: item.category_hint,
               is_tax_included: item.is_tax_included,
             })),
-            storeId: localStoreId,
+            storeId: storeIdMap[result.imageId],
             sourceType,
             sourceImageId: result.imageId,
             recordedAt: result.takenAt || undefined,
@@ -502,30 +509,51 @@ export function OcrResultsView({
         </Button>
       </div>
 
-      {/* Store selection — always shown on results screen */}
-      <div className={`rounded-lg border p-4 ${
-        registrationError === "店舗を選択してください"
-          ? "border-destructive bg-destructive/5"
-          : "bg-card"
-      }`}>
-        <StoreSelect
-          value={localStoreId}
-          onChange={(id, name) => {
-            setLocalStoreId(id);
-            onStoreChange?.(id);
-            if (registrationError === "店舗を選択してください") {
-              setRegistrationError(null);
-            }
-            // suppress gpsSuggestedStore display handled by parent
-            void name;
-          }}
-        />
-        {gpsSuggestedStore && localStoreId && (
-          <p className="mt-2 text-sm text-muted-foreground">
-            📍 写真の位置情報から「{gpsSuggestedStore}」を自動選択しました
-          </p>
-        )}
-      </div>
+      {/* Store selection — apply all convenience (shown when multiple images) */}
+      {editableResults.length > 1 && (
+        <div className="rounded-lg border bg-muted/40 p-4">
+          <p className="mb-2 text-sm font-medium text-muted-foreground">全画像に同じ店舗を適用</p>
+          <StoreSelect
+            value={null}
+            onChange={(id, name) => {
+              if (id) {
+                setStoreIdMap(
+                  Object.fromEntries(editableResults.map((r) => [r.imageId, id]))
+                );
+                onStoreChange?.(id);
+              }
+              void name;
+            }}
+          />
+          {gpsSuggestedStore && (
+            <p className="mt-2 text-sm text-muted-foreground">
+              📍 写真の位置情報から「{gpsSuggestedStore}」を自動選択しました
+            </p>
+          )}
+        </div>
+      )}
+      {editableResults.length === 1 && (
+        <div className={`rounded-lg border p-4 ${
+          registrationError === "各画像の店舗を選択してください"
+            ? "border-destructive bg-destructive/5"
+            : "bg-card"
+        }`}>
+          <StoreSelect
+            value={storeIdMap[editableResults[0].imageId] ?? null}
+            onChange={(id, name) => {
+              setStoreIdMap({ [editableResults[0].imageId]: id });
+              onStoreChange?.(id);
+              if (registrationError) setRegistrationError(null);
+              void name;
+            }}
+          />
+          {gpsSuggestedStore && storeIdMap[editableResults[0].imageId] && (
+            <p className="mt-2 text-sm text-muted-foreground">
+              📍 写真の位置情報から「{gpsSuggestedStore}」を自動選択しました
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Error/Success messages */}
       {registrationError && (
@@ -600,6 +628,24 @@ export function OcrResultsView({
                 )}
               </div>
             </div>
+            {/* Per-image store selector (shown when multiple images) */}
+            {editableResults.length > 1 && (
+              <div className={`mt-3 rounded-lg border p-3 ${
+                registrationError === "各画像の店舗を選択してください" && !storeIdMap[result.imageId]
+                  ? "border-destructive bg-destructive/5"
+                  : "bg-muted/30"
+              }`}>
+                <p className="mb-1.5 text-xs font-medium text-muted-foreground">この画像の店舗</p>
+                <StoreSelect
+                  value={storeIdMap[result.imageId] ?? null}
+                  onChange={(id, name) => {
+                    setStoreIdMap((prev) => ({ ...prev, [result.imageId]: id }));
+                    if (registrationError) setRegistrationError(null);
+                    void name;
+                  }}
+                />
+              </div>
+            )}
           </CardHeader>
           <CardContent className="space-y-2">
             {result.items.length === 0 ? (
