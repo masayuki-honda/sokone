@@ -42,6 +42,24 @@ interface OcrResult {
   takenAt?: string | null;
 }
 
+interface UploadedImageResult {
+  id: string;
+  imageUrl: string;
+  sourceType: string;
+  status: string;
+  createdAt: string;
+  takenAt?: string | null;
+  gpsLatitude?: number | null;
+  gpsLongitude?: number | null;
+}
+
+interface UploadApiResponse {
+  uploaded: UploadedImageResult[];
+  errors: Array<{ name: string; error: string }>;
+  error?: string;
+  summary?: { total: number; success: number; failed: number };
+}
+
 const SOURCE_TYPES: {
   value: SourceType;
   label: string;
@@ -99,6 +117,64 @@ export default function UploadPage() {
     setFiles((prev) => [...prev, ...newFiles]);
   }, []);
 
+  // Compress image client-side before upload to stay under Vercel's 4.5MB body limit
+  async function compressImageForUpload(file: File): Promise<File> {
+    // HEIC/HEIF must be converted server-side (sharp); skip compression
+    if (
+      file.type === "image/heic" ||
+      file.type === "image/heif" ||
+      !file.type.startsWith("image/")
+    ) {
+      return file;
+    }
+    // Already small enough — skip
+    if (file.size < 2 * 1024 * 1024) {
+      return file;
+    }
+    return new Promise((resolve) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const MAX_DIM = 2048;
+        let { width, height } = img;
+        if (width > MAX_DIM || height > MAX_DIM) {
+          if (width >= height) {
+            height = Math.round((height * MAX_DIM) / width);
+            width = MAX_DIM;
+          } else {
+            width = Math.round((width * MAX_DIM) / height);
+            height = MAX_DIM;
+          }
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext("2d")!.drawImage(img, 0, 0, width, height);
+        canvas.toBlob(
+          (blob) => {
+            if (blob) {
+              resolve(
+                new File([blob], file.name.replace(/\.[^.]+$/, ".jpg"), {
+                  type: "image/jpeg",
+                }),
+              );
+            } else {
+              resolve(file);
+            }
+          },
+          "image/jpeg",
+          0.85,
+        );
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve(file);
+      };
+      img.src = url;
+    });
+  }
+
   // Remove file
   const handleRemoveFile = useCallback((index: number) => {
     setFiles((prev) => {
@@ -130,7 +206,8 @@ export default function UploadPage() {
     );
 
     for (const file of files) {
-      formData.append("files", file.file);
+      const compressed = await compressImageForUpload(file.file);
+      formData.append("files", compressed);
     }
 
     try {
@@ -139,7 +216,20 @@ export default function UploadPage() {
         body: formData,
       });
 
-      const uploadData = await uploadRes.json();
+      // Guard against non-JSON responses (e.g. Vercel 413 / 5xx HTML pages)
+      let uploadData: UploadApiResponse;
+      try {
+        uploadData = await uploadRes.json() as UploadApiResponse;
+      } catch {
+        if (uploadRes.status === 413) {
+          throw new Error(
+            "画像サイズが大きすぎます。別の画像を使用するか、もう少し近づいて撮影した写真をお試しください。",
+          );
+        }
+        throw new Error(
+          `サーバーエラーが発生しました (HTTP ${uploadRes.status})。しばらくしてから再試行してください。`,
+        );
+      }
 
       if (!uploadRes.ok) {
         const errorMsg = uploadData.error || "アップロードに失敗しました";
@@ -177,8 +267,7 @@ export default function UploadPage() {
       // Auto-suggest store from GPS if no store selected
       if (!storeId && uploadData.uploaded.length > 0) {
         const imageWithGps = uploadData.uploaded.find(
-          (img: { gpsLatitude?: number; gpsLongitude?: number }) =>
-            img.gpsLatitude != null && img.gpsLongitude != null,
+          (img) => img.gpsLatitude != null && img.gpsLongitude != null,
         );
         if (imageWithGps) {
           try {
