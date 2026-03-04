@@ -1,7 +1,7 @@
 # Sokone 全Phase 実装計画
 
 > 作成日: 2026-02-26
-> 最終更新: 2026-03-05
+> 最終更新: 2026-03-05（Geminiモデル一元管理・カテゴリ自動設定追加）
 >
 > **アーキテクチャ:** Next.js フルスタック + Prisma + Neon + Vercel
 
@@ -9,7 +9,7 @@
 
 | Phase | テーマ | 期間目安 | 状態 |
 |---|---|---|---|
-| **Phase 1** | MVP — 全画像ソース（写真・チラシ・Instagram・レシート）→OCR→底値ダッシュボード | 4〜6週間 | 🔜 次 |
+| **Phase 1** | MVP — 全画像ソース（写真・チラシ・Instagram・レシート）→OCR→底値ダッシュボード | 4〜6週間 | � 進行中 |
 | **Phase 2** | 高度チラシ機能 + 検索・フィルタ + UX改善 | 3〜4週間 | 未着手 |
 | **Phase 3** | 底値アラート + 特売通知 | 3〜4週間 | 未着手 |
 | **Phase 4** | 自動チラシ収集 + バッチ処理 + Instagram API検討 | 継続的 | 未着手 |
@@ -348,6 +348,9 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
   - **☆お気に入りボタン** — タップでお気に入り登録/解除
   - ソースバッジをクリックして元画像をライトボックス表示（`sourceImageId` 付き記録のみ）
   - カテゴリバッジをクリックして直接カテゴリ変更（`PATCH /api/products/{id}`）
+- [x] 商品一覧に「✨ カテゴリ自動設定」ボタン追加（Geminiで未分類商品を一括分類）
+  - `POST /api/products/auto-categorize` を呼び出し、20件バッチでカテゴリ設定
+  - インデックス番号方式でGeminiに送信（UUIDではなくインデックス→ハルシネーション防止）
 
 ### 4-3. お気に入り商品機能
 
@@ -447,11 +450,20 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 | DELETE | `/api/favorites/{product_id}` | 4 | お気に入り解除 |
 | POST | `/api/products/{id}/merge` | 6 | 重複商品統合 |
 | PATCH | `/api/products/{id}` | 6 | 商品汎用更新（カテゴリ変更等） |
+| POST | `/api/products/auto-categorize` | 4 | 未分類商品をGeminiで一括カテゴリ設定 |
 | GET | `/api/admin/db-storage` | 横断 | DB ストレージ使用量 |
 
 ---
 
 ## 技術メモ
+
+### Gemini モデル管理
+
+- モデルIDは `src/lib/gemini.ts` の `GEMINI_MODEL` 定数で一元管理
+  - 現在: `"gemini-2.5-flash"`
+  - モデルを変更する場合はこの1ファイルだけ修正すればOK
+- `genAI`（`GoogleGenerativeAI` インスタンス）も同ファイルから export
+- `src/lib/ocr.ts` と `src/app/api/products/auto-categorize/route.ts` が `@/lib/gemini` をインポート
 
 ### Gemini API プロンプト設計のポイント
 
@@ -1096,6 +1108,9 @@ sokone/
 | 1 | POST | `/api/favorites` | お気に入り登録 |
 | 1 | GET | `/api/favorites` | お気に入り一覧 |
 | 1 | DELETE | `/api/favorites/{product_id}` | お気に入り解除 |
+| 1 | POST | `/api/products/auto-categorize` | 未分類商品をGeminiで一括カテゴリ設定 |
+| 1 | PATCH | `/api/products/{id}` | 商品汎用更新（カテゴリ変更等） |
+| 1 | POST | `/api/products/{id}/merge` | 重複商品統合 |
 | 2 | POST | `/api/products/{id}/merge` | 商品マージ |
 | 2 | POST | `/api/categories` | カテゴリ追加 |
 | 2 | PUT | `/api/categories/{id}` | カテゴリ編集 |

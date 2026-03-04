@@ -138,14 +138,18 @@ sokone/
 │   ├── components/            # React components
 │   │   ├── ui/                # shadcn/ui
 │   │   ├── header.tsx
-│   │   ├── ocr-results-view.tsx
-│   │   └── session-provider.tsx
+│   │   ├── ocr-results-view.tsx   │   ├── store-list.tsx│   │   └── session-provider.tsx
 │   ├── lib/                   # サービスロジック、ユーティリティ
 │   │   ├── prisma.ts          # Prisma client
 │   │   ├── auth.ts            # NextAuth 設定
-│   │   ├── ocr.ts             # OCR処理 (Gemini Flash)
-│   │   ├── r2.ts              # Cloudflare R2 クライアント
-│   │   └── product-matcher.ts # 商品名寄せ
+   │   ├── gemini.ts          # Geminiクライアント・モデルID一元管理 (GEMINI_MODEL)
+   │   ├── ocr.ts             # OCR処理 (Gemini Flash)
+   │   ├── r2.ts              # Cloudflare R2 クライアント
+   │   ├── product-matcher.ts # 商品名寄せ
+   │   ├── bottom-price.ts    # 底値計算サービス
+   │   ├── geocode.ts         # GPS座標・近辺店舐検索
+   │   ├── image-processing.ts # 画像リサイズ・HEIC変換 (sharp)
+   │   └── utils.ts           # 共通ユーティリティ
 │   ├── hooks/                 # Custom hooks
 │   └── types/                 # TypeScript types
 ├── prisma/
@@ -174,7 +178,8 @@ sokone/
 
 ### OCR/AI
 
-- メイン: **Gemini 2.0 Flash**（`@google/generative-ai` Node.js SDK）
+- メイン: **Gemini 2.5 Flash**（`@google/generative-ai` Node.js SDK）
+- **モデルIDの一元管理**: `src/lib/gemini.ts` の `GEMINI_MODEL` 定数を変更するだけで全体に反映
 - 無料枠: 1日1,500リクエスト / 1分15リクエスト
 - フォールバック: GPT-4o-mini → Tesseract + Ollama
 - 画像は **sharp** で長辺 1600px にリサイズしてから送信
