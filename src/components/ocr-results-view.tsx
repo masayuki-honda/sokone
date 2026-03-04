@@ -258,79 +258,79 @@ function EditableItem({
   }
 
   return (
-    <div className="group flex items-center gap-3 rounded-lg border px-4 py-3 transition-colors hover:bg-muted/50">
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="font-medium truncate">{item.name}</span>
-          {item.productId && (
-            <span className="flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700 dark:bg-blue-900 dark:text-blue-300">
-              <Check className="h-3 w-3" />
-              既存商品に紐づけ済
-            </span>
-          )}
-          {item.volume && (
-            <span className="text-sm text-muted-foreground">
-              {item.volume}
-            </span>
-          )}
+    <div className="group rounded-lg border px-3 py-3 transition-colors hover:bg-muted/50">
+      {/* 上段: 商品名 + 操作ボタン */}
+      <div className="flex items-start gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-wrap items-center gap-1">
+            <span className="font-medium break-words">{item.name}</span>
+            {item.volume && (
+              <span className="text-sm text-muted-foreground whitespace-nowrap">
+                {item.volume}
+              </span>
+            )}
+            {item.productId && (
+              <span className="flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+                <Check className="h-3 w-3" />
+                紐づけ済
+              </span>
+            )}
+          </div>
+          {/* バッジ行 */}
+          <div className="mt-1 flex flex-wrap items-center gap-1">
+            {item.unit && (
+              <span className="text-xs text-muted-foreground">{item.unit}</span>
+            )}
+            {item.category_hint && (
+              <Badge variant="outline" className="text-xs">
+                {item.category_hint}
+              </Badge>
+            )}
+            <IdentifiedByBadge identifiedBy={item.identified_by} />
+            <ConfidenceBadge confidence={item.confidence} />
+          </div>
         </div>
-        <div className="mt-1 flex items-center gap-2">
-          {item.unit && (
-            <span className="text-xs text-muted-foreground">
-              {item.unit}
-            </span>
-          )}
-          {item.category_hint && (
-            <Badge variant="outline" className="text-xs">
-              {item.category_hint}
-            </Badge>
-          )}
-          <IdentifiedByBadge identifiedBy={item.identified_by} />
-          <ConfidenceBadge confidence={item.confidence} />
+        {/* 操作ボタン: スマホでは常時表示、PCではホバー時表示 */}
+        <div className="flex shrink-0 gap-1 sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity">
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-8 w-8"
+            onClick={() => setIsEditing(true)}
+          >
+            <Edit2 className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-8 w-8 text-destructive"
+            onClick={onDelete}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
         </div>
       </div>
-      <div className="text-right">
-        <div className="flex items-center justify-end gap-1">
-          {item.confidence < 0.6 && (
-            <span
-              className="flex items-center gap-0.5 text-xs text-amber-600 dark:text-amber-400"
-              title="価格の読み取り確信度が低いです。必ず確認してください。"
-            >
-              <AlertTriangle className="h-3 w-3" />
-              要確認
-            </span>
-          )}
+      {/* 下段: 価格 */}
+      <div className="mt-1 flex items-center gap-1">
+        {item.confidence < 0.6 && (
           <span
-            className={`text-lg font-bold ${
-              item.confidence < 0.6 ? "text-amber-600 dark:text-amber-400" : ""
-            }`}
+            className="flex items-center gap-0.5 text-xs text-amber-600 dark:text-amber-400"
+            title="価格の読み取り確信度が低いです。必ず確認してください。"
           >
-            ¥{item.price.toLocaleString()}
-          </span>
-        </div>
-        {!item.is_tax_included && (
-          <span className="block text-xs text-muted-foreground">
-            (税込換算)
+            <AlertTriangle className="h-3 w-3" />
+            要確認
           </span>
         )}
-      </div>
-      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-8 w-8"
-          onClick={() => setIsEditing(true)}
+        <span
+          className={`text-lg font-bold ${
+            item.confidence < 0.6 ? "text-amber-600 dark:text-amber-400" : ""
+          }`}
         >
-          <Edit2 className="h-3.5 w-3.5" />
-        </Button>
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-8 w-8 text-destructive"
-          onClick={onDelete}
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </Button>
+          ¥{item.price.toLocaleString()}
+        </span>
+        {!item.is_tax_included && (
+          <span className="text-xs text-muted-foreground">(税込換算)</span>
+        )}
       </div>
     </div>
   );
