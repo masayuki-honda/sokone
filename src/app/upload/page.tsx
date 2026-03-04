@@ -117,6 +117,36 @@ export default function UploadPage() {
     setFiles((prev) => [...prev, ...newFiles]);
   }, []);
 
+  // Extract GPS coordinates from original file before Canvas compression strips EXIF
+  async function extractGpsFromFile(
+    file: File,
+  ): Promise<{ lat: number | null; lng: number | null }> {
+    try {
+      const exifr = (await import("exifr")).default;
+      const exif = await exifr.parse(file, {
+        pick: [
+          "GPSLatitude",
+          "GPSLatitudeRef",
+          "GPSLongitude",
+          "GPSLongitudeRef",
+        ],
+        gps: true,
+      });
+      if (
+        exif &&
+        typeof exif.latitude === "number" &&
+        typeof exif.longitude === "number" &&
+        isFinite(exif.latitude) &&
+        isFinite(exif.longitude)
+      ) {
+        return { lat: exif.latitude, lng: exif.longitude };
+      }
+    } catch {
+      // EXIF extraction failure is non-critical
+    }
+    return { lat: null, lng: null };
+  }
+
   // Compress image client-side before upload to stay under Vercel's 4.5MB body limit
   async function compressImageForUpload(file: File): Promise<File> {
     // HEIC/HEIF must be converted server-side (sharp); skip compression
@@ -205,8 +235,14 @@ export default function UploadPage() {
       prev.map((f) => ({ ...f, status: "uploading" as const, progress: 30 })),
     );
 
-    for (const file of files) {
-      const compressed = await compressImageForUpload(file.file);
+    for (let i = 0; i < files.length; i++) {
+      // Extract GPS from original file BEFORE compression (Canvas strips EXIF)
+      const gps = await extractGpsFromFile(files[i].file);
+      if (gps.lat !== null && gps.lng !== null) {
+        formData.append(`gps_client_lat_${i}`, String(gps.lat));
+        formData.append(`gps_client_lng_${i}`, String(gps.lng));
+      }
+      const compressed = await compressImageForUpload(files[i].file);
       formData.append("files", compressed);
     }
 

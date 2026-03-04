@@ -81,7 +81,8 @@ export async function POST(request: NextRequest) {
     const results = [];
     const errors = [];
 
-    for (const file of files) {
+    for (let fileIndex = 0; fileIndex < files.length; fileIndex++) {
+      const file = files[fileIndex];
       try {
         // Validate file type
         if (!isValidImageType(file.type)) {
@@ -112,6 +113,23 @@ export async function POST(request: NextRequest) {
         const key = generateImageKey(session.user.id, file.name);
         await uploadToR2(key, processed.buffer, processed.contentType);
 
+        // GPS fallback: if Canvas compression stripped EXIF, use client-extracted coordinates
+        let gpsLatitude = processed.exif.gpsLatitude;
+        let gpsLongitude = processed.exif.gpsLongitude;
+        if (gpsLatitude === null) {
+          const clientLat = formData.get(`gps_client_lat_${fileIndex}`);
+          const clientLng = formData.get(`gps_client_lng_${fileIndex}`);
+          if (clientLat && clientLng) {
+            const parsedLat = parseFloat(String(clientLat));
+            const parsedLng = parseFloat(String(clientLng));
+            if (isFinite(parsedLat) && isFinite(parsedLng)) {
+              gpsLatitude = parsedLat;
+              gpsLongitude = parsedLng;
+              console.log(`[Upload] GPS restored from client fallback for file ${fileIndex}: (${gpsLatitude}, ${gpsLongitude})`);
+            }
+          }
+        }
+
         // Save to database (including EXIF metadata)
         const uploadedImage = await prisma.uploadedImage.create({
           data: {
@@ -121,12 +139,12 @@ export async function POST(request: NextRequest) {
             sourceType: sourceType as SourceType,
             status: "pending",
             takenAt: processed.exif.takenAt,
-            gpsLatitude: processed.exif.gpsLatitude,
-            gpsLongitude: processed.exif.gpsLongitude,
+            gpsLatitude,
+            gpsLongitude,
           },
         });
 
-        console.log(`[Upload] image saved: id=${uploadedImage.id} gps=(${processed.exif.gpsLatitude}, ${processed.exif.gpsLongitude}) takenAt=${processed.exif.takenAt}`);
+        console.log(`[Upload] image saved: id=${uploadedImage.id} gps=(${gpsLatitude}, ${gpsLongitude}) takenAt=${processed.exif.takenAt}`);
 
         results.push({
           id: uploadedImage.id,
