@@ -15,16 +15,10 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
+    // Page routes only — API routes handle auth themselves via getServerSession
     "/dashboard/:path*",
     "/stores/:path*",
     "/upload/:path*",
     "/products/:path*",
-    "/api/stores/:path*",
-    "/api/images/:path*",
-    "/api/prices/:path*",
-    "/api/products/:path*",
-    "/api/categories/:path*",
-    "/api/dashboard/:path*",
-    "/api/favorites/:path*",
   ],
 };
