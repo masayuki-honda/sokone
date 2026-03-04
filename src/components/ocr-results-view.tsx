@@ -28,6 +28,8 @@ interface OcrItem {
   is_tax_included: boolean;
   confidence: number;
   identified_by: string;
+  /** If set, this item is linked to an existing product (skips findOrCreate, auto-saves alias) */
+  productId?: string | null;
 }
 
 interface OcrResult {
@@ -110,6 +112,9 @@ function EditableItem({
   const [editName, setEditName] = useState(item.name);
   const [editPrice, setEditPrice] = useState(String(item.price));
   const [editUnit, setEditUnit] = useState(item.unit || "");
+  // Track if user has linked this item to an existing product
+  const [linkedProductId, setLinkedProductId] = useState<string | null>(item.productId ?? null);
+  const [linkedProductName, setLinkedProductName] = useState<string | null>(item.productId ? item.name : null);
   const [suggestions, setSuggestions] = useState<
     Array<{ id: string; name: string }>
   >([]);
@@ -139,6 +144,9 @@ function EditableItem({
 
   function handleNameChange(value: string) {
     setEditName(value);
+    // Clear product link when user types manually
+    setLinkedProductId(null);
+    setLinkedProductName(null);
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
     }
@@ -149,6 +157,8 @@ function EditableItem({
 
   function handleSelectSuggestion(suggestion: { id: string; name: string }) {
     setEditName(suggestion.name);
+    setLinkedProductId(suggestion.id);
+    setLinkedProductName(suggestion.name);
     setShowSuggestions(false);
     setSuggestions([]);
   }
@@ -173,6 +183,7 @@ function EditableItem({
       name: editName,
       price: parseInt(editPrice) || item.price,
       unit: editUnit || null,
+      productId: linkedProductId ?? undefined,
     });
     setIsEditing(false);
   }
@@ -181,6 +192,8 @@ function EditableItem({
     setEditName(item.name);
     setEditPrice(String(item.price));
     setEditUnit(item.unit || "");
+    setLinkedProductId(item.productId ?? null);
+    setLinkedProductName(item.productId ? item.name : null);
     setIsEditing(false);
   }
 
@@ -225,6 +238,12 @@ function EditableItem({
             className="w-40"
           />
           <div className="flex-1" />
+          {linkedProductId && (
+            <span className="flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+              <Check className="h-3 w-3" />
+              {linkedProductName ?? "既存商品に紐づけ"}
+            </span>
+          )}
           <Button size="sm" onClick={handleSave}>
             <Check className="mr-1 h-3 w-3" />
             保存
@@ -242,6 +261,12 @@ function EditableItem({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="font-medium truncate">{item.name}</span>
+          {item.productId && (
+            <span className="flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+              <Check className="h-3 w-3" />
+              既存商品に紐づけ済
+            </span>
+          )}
           {item.volume && (
             <span className="text-sm text-muted-foreground">
               {item.volume}
@@ -426,6 +451,7 @@ export function OcrResultsView({
               volume: item.volume,
               category_hint: item.category_hint,
               is_tax_included: item.is_tax_included,
+              ...(item.productId ? { productId: item.productId } : {}),
             })),
             storeId: storeIdMap[result.imageId],
             sourceType,

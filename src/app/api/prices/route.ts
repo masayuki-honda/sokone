@@ -126,11 +126,14 @@ export async function POST(request: NextRequest) {
             select: { normalizedName: true },
           });
           if (product && product.normalizedName !== aliasName) {
-            await prisma.productAlias.upsert({
-              where: { productId_aliasName: { productId, aliasName } },
-              update: {},
-              create: { productId, aliasName },
+            const existing = await prisma.productAlias.findFirst({
+              where: { aliasName },
             });
+            if (!existing) {
+              await prisma.productAlias.create({
+                data: { productId, aliasName },
+              });
+            }
           }
         }
 
