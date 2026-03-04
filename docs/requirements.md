@@ -1,6 +1,6 @@
 # Sokone（底値） - 要件定義書
 
-> 最終更新: 2026-02-27
+> 最終更新: 2026-03-05
 
 ## 1. プロジェクト概要
 
@@ -195,7 +195,7 @@
 | **ORM** | **Prisma** | TypeScript型安全、自動マイグレーション、Neon対応 |
 | **DB** | **PostgreSQL 16 (Neon Free)** | 0.5GB無料、サーバーレス接続対応 |
 | **認証** | **NextAuth.js (Auth.js) + Google OAuth** | セッションベース認証。シンプルかつ安全 |
-| **OCR/AI** | **@google/generative-ai (Gemini 2.0 Flash)** | Node.js SDK。無料枠で運用 |
+| **OCR/AI** | **@google/generative-ai (Gemini 2.5 Flash)** | Node.js SDK。無料枠で運用。モデルIDは `src/lib/gemini.ts` で一元管理 |
 | **画像処理** | **sharp** | 画像リサイズ・HEIC→JPEG変換 |
 | **画像ストレージ** | **Cloudflare R2** | S3互換、無料枠10GB/月。Phase 1から使用 |
 | **ホスティング** | **Vercel (Hobby)** | Next.js最適、無料（非商用個人利用） |
@@ -206,20 +206,20 @@
 
 **目標：可能な限り無料で運用**
 
-#### メイン構成：Google Gemini 2.0 Flash（無料枠で運用）
+#### メイン構成：Google Gemini 2.5 Flash（無料枠で運用）
 
-Gemini 2.0 Flash は画像を直接入力でき、OCR（文字認識）と構造化抽出（商品名・価格のJSON化）を
+Gemini 2.5 Flash は画像を直接入力でき、OCR（文字認識）と構造化抽出（商品名・価格のJSON化）を
 **1回のAPIコールで同時実行**できる。これにより Cloud Vision API を別途呼ぶ必要がなくなり、
 アーキテクチャがシンプルになる。
 
 | 処理 | メイン（無料） | 代替プロバイダ（有料・安価） | フォールバック（無料・ローカル） |
 |---|---|---|---|
-| **OCR＋構造化抽出** | **Gemini 2.0 Flash**（1日1,500リクエスト無料） | GPT-4o-mini（$0.15/1M input tokens） | Tesseract + Ollama |
+| **OCR＋構造化抽出** | **Gemini 2.5 Flash**（1日1,500リクエスト無料） | GPT-4o-mini（$0.15/1M input tokens） | Tesseract + Ollama |
 | **商品名寄せ** | 編集距離＋ルールベース | Gemini Flash / GPT-4o-mini | ルールベースのみ |
 
-#### Gemini 2.0 Flash vs GPT-4o-mini 比較
+#### Gemini 2.5 Flash vs GPT-4o-mini 比較
 
-| 項目 | Gemini 2.0 Flash | GPT-4o-mini |
+| 項目 | Gemini 2.5 Flash | GPT-4o-mini |
 |---|---|---|
 | **コスト** | **無料**（1日1,500 req / 1分15 req） | 有料（Input: $0.15/1M, Output: $0.60/1M） |
 | **日本語精度** | ◎ | ◎ |
@@ -234,18 +234,18 @@ Gemini 2.0 Flash は画像を直接入力でき、OCR（文字認識）と構造
 
 | サービス | 無料枠 | Sokoneでの用途 |
 |---|---|---|
-| **Gemini 2.0 Flash** | 1日1,500リクエスト / 1分15リクエスト | OCR＋構造化抽出（メイン） |
+| **Gemini 2.5 Flash** | 1日1,500リクエスト / 1分15リクエスト | OCR＋構造化抽出（メイン） |
 | **Google Cloud Vision API** | 月1,000画像 | 必要に応じてOCR補助（Geminiで十分なら不要） |
 | **Tesseract** | 完全無料（ローカル） | フォールバック |
 
 **推奨構成（ほぼ完全無料）：**
-1. **メイン** → Gemini 2.0 Flash に画像を直接送信 → OCR＋構造化抽出を一発実行（無料枠内）
+1. **メイン** → Gemini 2.5 Flash に画像を直接送信 → OCR＋構造化抽出を一発実行（無料枠内）
 2. **代替** → GPT-4o-mini（Gemini障害時、月数百円以内）
 3. **フォールバック** → Tesseract + Ollama（全API障害時、完全ローカル）
 
 #### 画像による商品識別（Visual Product Recognition）
 
-Gemini 2.0 Flash はマルチモーダルモデルであり、テキストの読み取りだけでなく**画像に写っている商品を見た目から識別**することも可能。
+Gemini 2.5 Flash はマルチモーダルモデルであり、テキストの読み取りだけでなく**画像に写っている商品を見た目から識別**することも可能。
 これにより、商品名のテキストが写っていない場合（例：野菜コーナーの大根、トマト等）でも、画像から商品を推定できる。
 
 - テキストラベルがある商品 → OCRでテキストを読み取り＋画像から商品を補助的に識別
@@ -320,7 +320,7 @@ FavoriteProduct（お気に入り商品）
 - [ ] 画像アップロード → 店舗選択（ハイブリッドUI）
 - [ ] ソースタイプ選択（店頭写真 / チラシ / Instagram スクショ / レシート）
 - [ ] チラシURL指定での画像取得
-- [ ] 画像 → Gemini 2.0 Flash でOCR＋構造化抽出＋画像による商品識別
+- [x] 画像 → Gemini 2.5 Flash でOCR＋構造化抽出＋画像による商品識別
 - [ ] 画像ストレージ（Cloudflare R2）
 - [ ] 抽出結果の確認・修正UI
 - [ ] 価格履歴の記録
