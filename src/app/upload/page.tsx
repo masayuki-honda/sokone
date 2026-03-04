@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useGeminiUsage } from "@/hooks/use-gemini-usage";
 import { Camera, Newspaper, Instagram, Receipt, Link2, Loader2, AlertCircle, RotateCcw } from "lucide-react";
 import { Header } from "@/components/header";
@@ -105,7 +105,13 @@ export default function UploadPage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [gpsSuggestedStore, setGpsSuggestedStore] = useState<string | null>(null);
   const [gpsNoStoreFound, setGpsNoStoreFound] = useState<{ lat: number; lng: number } | null>(null);
+  const [gpsDebugMsg, setGpsDebugMsg] = useState<string | null>(null);
   const geminiUsage = useGeminiUsage();
+
+  // Warm up Vercel serverless functions on page load to avoid cold-start network error
+  useEffect(() => {
+    fetch("/api/health").catch(() => { /* warmup only — ignore errors */ });
+  }, []);
 
   // Handle file selection
   const handleFilesSelected = useCallback((selectedFiles: File[]) => {
@@ -118,22 +124,17 @@ export default function UploadPage() {
     setFiles((prev) => [...prev, ...newFiles]);
   }, []);
 
-  // Extract GPS coordinates from original file before Canvas compression strips EXIF
+  // Extract GPS coordinates from original file before Canvas compression strips EXIF.
+  // NOTE: iOS Safari strips GPS from File objects for privacy — returns null on iOS.
   async function extractGpsFromFile(
     file: File,
   ): Promise<{ lat: number | null; lng: number | null }> {
     try {
       const exifr = (await import("exifr")).default;
       const exif = await exifr.parse(file, {
-        pick: [
-          "GPSLatitude",
-          "GPSLatitudeRef",
-          "GPSLongitude",
-          "GPSLongitudeRef",
-        ],
+        pick: ["GPSLatitude", "GPSLatitudeRef", "GPSLongitude", "GPSLongitudeRef"],
         gps: true,
       });
-      console.log("[GPS] exifr result for", file.name, exif);
       if (
         exif &&
         typeof exif.latitude === "number" &&
@@ -141,13 +142,11 @@ export default function UploadPage() {
         isFinite(exif.latitude) &&
         isFinite(exif.longitude)
       ) {
-        console.log("[GPS] extracted:", exif.latitude, exif.longitude);
         return { lat: exif.latitude, lng: exif.longitude };
       }
-    } catch (err) {
-      console.warn("[GPS] exifr extraction failed:", err);
+    } catch {
+      // exifr failure is non-critical
     }
-    console.log("[GPS] no GPS found in", file.name);
     return { lat: null, lng: null };
   }
 
@@ -239,9 +238,11 @@ export default function UploadPage() {
       prev.map((f) => ({ ...f, status: "uploading" as const, progress: 30 })),
     );
 
+    // Collect GPS coordinates per file (before compression strips EXIF)
+    const fileGpsList: Array<{ lat: number | null; lng: number | null }> = [];
     for (let i = 0; i < files.length; i++) {
-      // Extract GPS from original file BEFORE compression (Canvas strips EXIF)
       const gps = await extractGpsFromFile(files[i].file);
+      fileGpsList.push(gps);
       if (gps.lat !== null && gps.lng !== null) {
         formData.append(`gps_client_lat_${i}`, String(gps.lat));
         formData.append(`gps_client_lng_${i}`, String(gps.lng));
@@ -306,35 +307,38 @@ export default function UploadPage() {
 
       // Auto-suggest store from GPS if no store selected
       if (!storeId && uploadData.uploaded.length > 0) {
+        // Use server-extracted EXIF GPS; fall back to client-extracted EXIF (Android Chrome)
         const imageWithGps = uploadData.uploaded.find(
           (img) => img.gpsLatitude != null && img.gpsLongitude != null,
         );
-        if (imageWithGps) {
-          console.log("[GPS] searching nearby stores for", imageWithGps.gpsLatitude, imageWithGps.gpsLongitude);
+        const clientGps = fileGpsList.find((g) => g.lat !== null && g.lng !== null);
+        const coordsToUse = imageWithGps
+          ? { lat: imageWithGps.gpsLatitude!, lng: imageWithGps.gpsLongitude! }
+          : clientGps && clientGps.lat !== null && clientGps.lng !== null
+          ? { lat: clientGps.lat, lng: clientGps.lng }
+          : null;
+
+        if (coordsToUse) {
+          setGpsDebugMsg(`📡 GPS取得済み: ${coordsToUse.lat.toFixed(4)}, ${coordsToUse.lng.toFixed(4)}`);
           try {
             const nearbyRes = await fetch(
-              `/api/stores/nearby?lat=${imageWithGps.gpsLatitude}&lng=${imageWithGps.gpsLongitude}`,
+              `/api/stores/nearby?lat=${coordsToUse.lat}&lng=${coordsToUse.lng}`,
             );
             if (nearbyRes.ok) {
               const nearbyData = await nearbyRes.json();
-              console.log("[GPS] nearby store result:", nearbyData);
               if (nearbyData.store) {
                 setStoreId(nearbyData.store.id);
                 setGpsSuggestedStore(nearbyData.store.name);
                 setGpsNoStoreFound(null);
               } else {
-                // GPS found but no registered stores nearby
-                setGpsNoStoreFound({
-                  lat: imageWithGps.gpsLatitude!,
-                  lng: imageWithGps.gpsLongitude!,
-                });
+                setGpsNoStoreFound({ lat: coordsToUse.lat, lng: coordsToUse.lng });
               }
             }
           } catch {
             // GPS store suggestion is best-effort
           }
         } else {
-          console.log("[GPS] no GPS data in uploaded images");
+          setGpsDebugMsg("📡 GPS情報なし（写真にGPS情報が含まれていません）");
         }
       }
 
@@ -525,6 +529,7 @@ export default function UploadPage() {
     setUploadError(null);
     setGpsSuggestedStore(null);
     setGpsNoStoreFound(null);
+    setGpsDebugMsg(null);
   }
 
   return (
@@ -629,6 +634,9 @@ export default function UploadPage() {
                   <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">
                     📍 GPS取得済み（{gpsNoStoreFound.lat.toFixed(4)}, {gpsNoStoreFound.lng.toFixed(4)}）ですが、1km以内に登録済み店舗がありません。店舗に住所またはGPS座標を設定すると自動選択できます。
                   </p>
+                )}
+                {gpsDebugMsg && !gpsSuggestedStore && (
+                  <p className="mt-1 text-xs text-muted-foreground">{gpsDebugMsg}</p>
                 )}
               </CardContent>
             </Card>
@@ -764,6 +772,7 @@ export default function UploadPage() {
                 setStoreId(null);
                 setGpsSuggestedStore(null);
                 setGpsNoStoreFound(null);
+                setGpsDebugMsg(null);
                 setUploadError(null);
               }}
             />
