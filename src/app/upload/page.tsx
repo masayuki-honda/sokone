@@ -106,13 +106,16 @@ export default function UploadPage() {
   const [gpsSuggestedStore, setGpsSuggestedStore] = useState<string | null>(null);
   const [gpsNoStoreFound, setGpsNoStoreFound] = useState<{ lat: number; lng: number } | null>(null);
   const [gpsDebugMsg, setGpsDebugMsg] = useState<string | null>(null);
+  const [isWarmingUp, setIsWarmingUp] = useState(true);
   const geminiUsage = useGeminiUsage();
 
   // Warm up Vercel serverless functions on page load to avoid cold-start network error
   useEffect(() => {
     // Warm up the upload serverless function to prevent cold-start network errors.
     // /api/health is a different function on Vercel; warm up the actual endpoints.
-    fetch("/api/images/upload").catch(() => { /* warmup only — ignore errors */ });
+    fetch("/api/images/upload")
+      .catch(() => { /* warmup only — ignore errors */ })
+      .finally(() => setIsWarmingUp(false));
   }, []);
 
   // Handle file selection
@@ -167,12 +170,21 @@ export default function UploadPage() {
         }
         // Manually compute from raw DMS arrays (GPSLatitude / GPSLongitude)
         if (exif.GPSLatitude && exif.GPSLongitude) {
-          const lat = dmsToDecimal(exif.GPSLatitude as number[], String(exif.GPSLatitudeRef ?? "N"));
-          const lng = dmsToDecimal(exif.GPSLongitude as number[], String(exif.GPSLongitudeRef ?? "E"));
+          const rawLat = exif.GPSLatitude as number | number[];
+          const rawLng = exif.GPSLongitude as number | number[];
+          const latRef = String(exif.GPSLatitudeRef ?? "N");
+          const lngRef = String(exif.GPSLongitudeRef ?? "E");
+          // Some devices store GPS as a single decimal number (already converted)
+          const lat = typeof rawLat === "number" && isFinite(rawLat)
+            ? (latRef === "S" ? -rawLat : rawLat)
+            : dmsToDecimal(rawLat as number[], latRef);
+          const lng = typeof rawLng === "number" && isFinite(rawLng)
+            ? (lngRef === "W" ? -rawLng : rawLng)
+            : dmsToDecimal(rawLng as number[], lngRef);
           if (lat !== null && lng !== null && isFinite(lat) && isFinite(lng)) {
             return { lat, lng, debugNote: "parse.DMS手動計算" };
           }
-          return { lat: null, lng: null, debugNote: `DMS変換失敗: lat=${JSON.stringify(exif.GPSLatitude)}` };
+          return { lat: null, lng: null, debugNote: `DMS変換失敗: lat=${JSON.stringify(rawLat)}(${latRef}) lng=${JSON.stringify(rawLng)}(${lngRef})` };
         }
         // Exif found but no GPS fields at all
         const keys = Object.keys(exif).filter(k => k.startsWith("GPS")).join(",") || "GPSタグなし";
@@ -286,11 +298,19 @@ export default function UploadPage() {
       formData.append("files", compressed);
     }
 
+    // Helper: upload with one automatic retry on network error (cold-start recovery)
+    async function doUpload(fd: FormData): Promise<Response> {
+      try {
+        return await fetch("/api/images/upload", { method: "POST", body: fd });
+      } catch {
+        // Wait 2s then retry once
+        await new Promise(r => setTimeout(r, 2000));
+        return fetch("/api/images/upload", { method: "POST", body: fd });
+      }
+    }
+
     try {
-      const uploadRes = await fetch("/api/images/upload", {
-        method: "POST",
-        body: formData,
-      });
+      const uploadRes = await doUpload(formData);
 
       // Guard against non-JSON responses (e.g. Vercel 413 / 5xx HTML pages)
       let uploadData: UploadApiResponse;
@@ -770,6 +790,11 @@ export default function UploadPage() {
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                           AI解析中...
+                        </>
+                      ) : isWarmingUp ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          準備中...
                         </>
                       ) : (
                         <>アップロードして解析</>
