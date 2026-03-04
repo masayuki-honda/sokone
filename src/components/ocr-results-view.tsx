@@ -304,6 +304,7 @@ export function OcrResultsView({
   onStoreChange,
 }: OcrResultsViewProps) {
   const router = useRouter();
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [localStoreId, setLocalStoreId] = useState<string | null>(storeId);
   const [editableResults, setEditableResults] = useState(results);
   const [isRegistering, setIsRegistering] = useState(false);
@@ -538,13 +539,40 @@ export function OcrResultsView({
         </div>
       )}
 
+      {/* Lightbox */}
+      {lightboxUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setLightboxUrl(null)}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={lightboxUrl}
+            alt="拡大表示"
+            className="max-h-full max-w-full rounded-lg object-contain shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button
+            onClick={() => setLightboxUrl(null)}
+            className="absolute right-4 top-4 rounded-full bg-white/20 p-2 text-white hover:bg-white/40"
+            aria-label="閉じる"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Results per image */}
       {editableResults.map((result, resultIndex) => (
         <Card key={result.imageId}>
           <CardHeader>
             <div className="flex items-start gap-4">
-              {/* Image preview */}
-              <div className="relative h-24 w-24 flex-shrink-0 overflow-hidden rounded-lg border bg-muted">
+              {/* Image preview — click to enlarge */}
+              <div
+                className="relative h-24 w-24 flex-shrink-0 overflow-hidden rounded-lg border bg-muted cursor-zoom-in"
+                onClick={() => result.signedUrl && setLightboxUrl(result.signedUrl)}
+                title="クリックで拡大"
+              >
                 {result.signedUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
