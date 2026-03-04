@@ -6,7 +6,8 @@ import { getR2SignedUrl } from "@/lib/r2";
 import { analyzeImage, OcrSourceType } from "@/lib/ocr";
 
 // Allow longer execution on Vercel (Gemini API + R2 fetch can take time)
-export const maxDuration = 30;
+// gemini-2.5-flash can be slower than 2.0-flash; bump to 60s to avoid timeouts
+export const maxDuration = 60;
 
 interface Params {
   params: Promise<{ id: string }>;

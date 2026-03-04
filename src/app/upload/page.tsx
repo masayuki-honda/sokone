@@ -128,25 +128,25 @@ export default function UploadPage() {
   // NOTE: iOS Safari strips GPS from File objects for privacy — returns null on iOS.
   async function extractGpsFromFile(
     file: File,
-  ): Promise<{ lat: number | null; lng: number | null }> {
+  ): Promise<{ lat: number | null; lng: number | null; debugNote?: string }> {
     try {
       const exifr = (await import("exifr")).default;
-      // Use exifr.gps() dedicated method which reliably returns computed lat/lng.
-      // exifr.parse() with pick[] may omit the computed latitude/longitude fields.
-      const gps = await exifr.gps(file);
+      // Use parse() with gps:true (no pick filter) — most compatible across cameras.
+      const exif = await exifr.parse(file, { gps: true });
       if (
-        gps &&
-        typeof gps.latitude === "number" &&
-        typeof gps.longitude === "number" &&
-        isFinite(gps.latitude) &&
-        isFinite(gps.longitude)
+        exif &&
+        typeof exif.latitude === "number" &&
+        typeof exif.longitude === "number" &&
+        isFinite(exif.latitude) &&
+        isFinite(exif.longitude)
       ) {
-        return { lat: gps.latitude, lng: gps.longitude };
+        return { lat: exif.latitude, lng: exif.longitude };
       }
-    } catch {
-      // exifr failure is non-critical
+      return { lat: null, lng: null, debugNote: exif ? "exifあり/GPS緯度経度なし" : "exifなし" };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return { lat: null, lng: null, debugNote: `exifr例外: ${msg.slice(0, 80)}` };
     }
-    return { lat: null, lng: null };
   }
 
   // Compress image client-side before upload to stay under Vercel's 4.5MB body limit
@@ -238,7 +238,7 @@ export default function UploadPage() {
     );
 
     // Collect GPS coordinates per file (before compression strips EXIF)
-    const fileGpsList: Array<{ lat: number | null; lng: number | null }> = [];
+    const fileGpsList: Array<{ lat: number | null; lng: number | null; debugNote?: string }> = [];
     for (let i = 0; i < files.length; i++) {
       const gps = await extractGpsFromFile(files[i].file);
       fileGpsList.push(gps);
@@ -317,8 +317,11 @@ export default function UploadPage() {
           ? { lat: clientGps.lat, lng: clientGps.lng }
           : null;
 
+        // Build a verbose debug message to help diagnose issues
+        const serverGps = imageWithGps ? `サーバー(${imageWithGps.gpsLatitude!.toFixed(4)},${imageWithGps.gpsLongitude!.toFixed(4)})` : "サーバーnull";
+        const clientGpsNote = clientGps && clientGps.lat !== null && clientGps.lng !== null ? `クライアント(${clientGps.lat.toFixed(4)},${clientGps.lng.toFixed(4)})` : `クライアントnull${fileGpsList[0]?.debugNote ? `[${fileGpsList[0].debugNote}]` : ""}`;
         if (coordsToUse) {
-          setGpsDebugMsg(`📡 GPS取得済み: ${coordsToUse.lat.toFixed(4)}, ${coordsToUse.lng.toFixed(4)}`);
+          setGpsDebugMsg(`📡 GPS取得済み: ${coordsToUse.lat.toFixed(4)}, ${coordsToUse.lng.toFixed(4)} [${serverGps} / ${clientGpsNote}]`);
           try {
             const nearbyRes = await fetch(
               `/api/stores/nearby?lat=${coordsToUse.lat}&lng=${coordsToUse.lng}`,
@@ -337,7 +340,7 @@ export default function UploadPage() {
             // GPS store suggestion is best-effort
           }
         } else {
-          setGpsDebugMsg("📡 GPS情報なし（写真にGPS情報が含まれていません）");
+          setGpsDebugMsg(`📡 GPS情報なし [${serverGps} / ${clientGpsNote}]`);
         }
       }
 
