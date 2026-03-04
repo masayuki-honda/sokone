@@ -76,23 +76,25 @@ export async function POST() {
   // Process in batches to respect Gemini rate limits
   for (let i = 0; i < uncategorized.length; i += BATCH_SIZE) {
     const batch = uncategorized.slice(i, i + BATCH_SIZE);
+    const batchNum = Math.floor(i / BATCH_SIZE) + 1;
 
+    // Use simple integer indices to avoid Gemini hallucinating UUIDs
     const productList = batch
-      .map((p) => `{"id": "${p.id}", "name": "${p.name.replace(/"/g, "'")}"}`)
-      .join(",\n");
+      .map((p, idx) => `${idx}: ${p.name.replace(/\n/g, " ")}`)
+      .join("\n");
 
     const prompt = `以下の商品リストに対して、それぞれ最も適切なカテゴリを1つ割り当ててください。
 カテゴリは必ず以下の12種類の中から選んでください：
 ${CATEGORIES.join("、")}
 
-商品リスト（JSON形式）：
-[${productList}]
+商品リスト（番号: 商品名）：
+${productList}
 
-各商品の id と割り当てたカテゴリ名を results 配列で返してください。`;
+各商品の番号(id)と割り当てたカテゴリ名(category)を results 配列で返してください。`;
 
     try {
       const model = genAI.getGenerativeModel({
-        model: "gemini-2.0-flash",
+        model: "gemini-2.5-flash",
         generationConfig: {
           responseMimeType: "application/json",
           responseSchema: categorizationSchema,
@@ -101,17 +103,28 @@ ${CATEGORIES.join("、")}
       });
 
       const result = await model.generateContent(prompt);
-      const parsed = JSON.parse(result.response.text()) as {
+      const rawText = result.response.text();
+      console.log(`[auto-categorize] batch ${batchNum} raw:`, rawText.slice(0, 500));
+      const parsed = JSON.parse(rawText) as {
         results: Array<{ id: string; category: string }>;
       };
 
-      // Update each product in the DB
+      // Update each product using the integer index -> original product ID
       for (const item of parsed.results) {
+        const idx = parseInt(item.id, 10);
+        if (isNaN(idx) || idx < 0 || idx >= batch.length) {
+          console.warn(`[auto-categorize] invalid index: "${item.id}"`);
+          continue;
+        }
+
         const categoryId = categoryMap.get(item.category);
-        if (!categoryId) continue;
+        if (!categoryId) {
+          console.warn(`[auto-categorize] unknown category: "${item.category}"`);
+          continue;
+        }
 
         await prisma.product.update({
-          where: { id: item.id },
+          where: { id: batch[idx].id },
           data: { categoryId },
         });
         totalUpdated++;
