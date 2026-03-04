@@ -11,6 +11,9 @@ import {
   Store,
   Calendar,
   BarChart3,
+  Pencil,
+  Check,
+  X,
 } from "lucide-react";
 import { Header } from "@/components/header";
 import { Button } from "@/components/ui/button";
@@ -87,6 +90,9 @@ export default function ProductDetailPage({
   const [isLoading, setIsLoading] = useState(true);
   const [isFavorite, setIsFavorite] = useState(false);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [categories, setCategories] = useState<Array<{ id: string; name: string }>>([])
+  const [editingCategory, setEditingCategory] = useState(false);
+  const [pendingCategoryId, setPendingCategoryId] = useState<string>("");
 
   useEffect(() => {
     async function fetchData() {
@@ -116,6 +122,14 @@ export default function ProductDetailPage({
     fetchData();
   }, [id, period]);
 
+  // Fetch categories for the selector
+  useEffect(() => {
+    fetch("/api/categories")
+      .then((r) => r.json())
+      .then((data) => setCategories(data.categories || []))
+      .catch(() => {});
+  }, []);
+
   async function handleToggleFavorite() {
     try {
       if (isFavorite) {
@@ -131,6 +145,27 @@ export default function ProductDetailPage({
       }
     } catch (error) {
       console.error("Failed to toggle favorite:", error);
+    }
+  }
+
+  async function handleCategoryUpdate() {
+    if (!product) return;
+    try {
+      const res = await fetch(`/api/products/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ categoryId: pendingCategoryId || null }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setProduct((prev) =>
+          prev ? { ...prev, category: updated.category } : prev
+        );
+      }
+    } catch (error) {
+      console.error("Failed to update category:", error);
+    } finally {
+      setEditingCategory(false);
     }
   }
 
@@ -195,9 +230,56 @@ export default function ProductDetailPage({
             </Button>
             <div>
               <h1 className="text-2xl font-bold">{product.name}</h1>
-              <div className="mt-1 flex items-center gap-2">
-                {product.category && (
-                  <Badge variant="secondary">{product.category.name}</Badge>
+              <div className="mt-1 flex items-center gap-2 flex-wrap">
+                {editingCategory ? (
+                  <div className="flex items-center gap-1">
+                    <select
+                      autoFocus
+                      className="text-sm border rounded px-2 py-0.5 bg-background"
+                      value={pendingCategoryId}
+                      onChange={(e) => setPendingCategoryId(e.target.value)}
+                    >
+                      <option value="">カテゴリなし</option>
+                      {categories.map((cat) => (
+                        <option key={cat.id} value={cat.id}>
+                          {cat.name}
+                        </option>
+                      ))}
+                    </select>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      onClick={handleCategoryUpdate}
+                    >
+                      <Check className="h-3 w-3" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      onClick={() => setEditingCategory(false)}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ) : (
+                  <button
+                    className="flex items-center gap-1 group"
+                    onClick={() => {
+                      setPendingCategoryId(product.category?.id ?? "");
+                      setEditingCategory(true);
+                    }}
+                    title="カテゴリを変更"
+                  >
+                    <Badge
+                      variant="secondary"
+                      className="group-hover:bg-secondary/70 cursor-pointer"
+                    >
+                      {product.category?.name ?? "カテゴリなし"}
+                    </Badge>
+                    <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </button>
                 )}
                 {product.unit && (
                   <span className="text-sm text-muted-foreground">

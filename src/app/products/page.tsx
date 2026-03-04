@@ -209,41 +209,43 @@ export default function ProductsPage() {
           </div>
         </div>
 
-        {/* Search + Filter */}
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="商品名で検索..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-          <div className="flex gap-2 flex-wrap">
+        {/* Search */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="商品名で検索..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+
+        {/* Category filter */}
+        <div className="flex gap-2 flex-wrap">
+          <Button
+            variant={selectedCategory === "" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setSelectedCategory("")}
+          >
+            すべて
+          </Button>
+          {categories.map((cat) => (
             <Button
-              variant={selectedCategory === "" ? "default" : "outline"}
+              key={cat.id}
+              variant={
+                selectedCategory === cat.id ? "default" : "outline"
+              }
               size="sm"
-              onClick={() => setSelectedCategory("")}
+              onClick={() => setSelectedCategory(cat.id)}
             >
-              すべて
-            </Button>
-            {categories.map((cat) => (
-              <Button
-                key={cat.id}
-                variant={
-                  selectedCategory === cat.id ? "default" : "outline"
-                }
-                size="sm"
-                onClick={() => setSelectedCategory(cat.id)}
-              >
-                {cat.name}
+              {cat.name}
+              {cat._count.products > 0 && (
                 <span className="ml-1 text-xs text-muted-foreground">
                   ({cat._count.products})
                 </span>
-              </Button>
-            ))}
-          </div>
+              )}
+            </Button>
+          ))}
         </div>
 
         {/* Product list */}
