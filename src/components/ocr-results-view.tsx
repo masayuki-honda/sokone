@@ -678,6 +678,31 @@ export function OcrResultsView({
           </CardContent>
         </Card>
       ))}
+
+      {/* Register button (bottom) */}
+      <Button
+        size="lg"
+        className="w-full"
+        disabled={totalItems === 0 || isRegistering || registrationSuccess}
+        onClick={handleRegisterPrices}
+      >
+        {isRegistering ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            登録中...
+          </>
+        ) : registrationSuccess ? (
+          <>
+            <Check className="mr-2 h-4 w-4" />
+            登録完了！
+          </>
+        ) : (
+          <>
+            <Check className="mr-2 h-4 w-4" />
+            すべて確認して登録（{totalItems}件）
+          </>
+        )}
+      </Button>
     </div>
   );
 }
