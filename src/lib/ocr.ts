@@ -1,6 +1,7 @@
-import { GoogleGenerativeAI, SchemaType, type Schema } from "@google/generative-ai";
+import { SchemaType, type Schema } from "@google/generative-ai";
+import { genAI, GEMINI_MODEL } from "@/lib/gemini";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+// Note: use-gemini-usage.ts tracks free-tier limits for GEMINI_MODEL
 
 // === Types ===
 
@@ -146,7 +147,7 @@ export async function analyzeImage(
   sourceType: OcrSourceType,
 ): Promise<OcrResult> {
   const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash",
+    model: GEMINI_MODEL,
     generationConfig: {
       responseMimeType: "application/json",
       responseSchema: ocrResponseSchema,

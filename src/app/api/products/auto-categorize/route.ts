@@ -2,9 +2,8 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { GoogleGenerativeAI, SchemaType, type Schema } from "@google/generative-ai";
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+import { SchemaType, type Schema } from "@google/generative-ai";
+import { genAI, GEMINI_MODEL } from "@/lib/gemini";
 
 const CATEGORIES = [
   "酒類",
@@ -94,7 +93,7 @@ ${productList}
 
     try {
       const model = genAI.getGenerativeModel({
-        model: "gemini-2.5-flash",
+        model: GEMINI_MODEL,
         generationConfig: {
           responseMimeType: "application/json",
           responseSchema: categorizationSchema,
