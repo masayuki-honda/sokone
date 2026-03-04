@@ -30,6 +30,7 @@ interface ProductDetail {
     price: number;
     taxIncluded: boolean;
     sourceType: string;
+    sourceImageId: string | null;
     recordedAt: string;
     createdAt: string;
     store: { id: string; name: string };
@@ -85,6 +86,7 @@ export default function ProductDetailPage({
   const [period, setPeriod] = useState("all");
   const [isLoading, setIsLoading] = useState(true);
   const [isFavorite, setIsFavorite] = useState(false);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchData() {
@@ -129,6 +131,18 @@ export default function ProductDetailPage({
       }
     } catch (error) {
       console.error("Failed to toggle favorite:", error);
+    }
+  }
+
+  async function handleImageClick(imageId: string) {
+    try {
+      const res = await fetch(`/api/images/${imageId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setLightboxUrl(data.signedUrl);
+      }
+    } catch (error) {
+      console.error("Failed to load image:", error);
     }
   }
 
@@ -397,10 +411,27 @@ export default function ProductDetailPage({
                             )}
                           </td>
                           <td className="py-2 hidden sm:table-cell">
-                            <Badge variant="outline" className="text-xs">
-                              {sourceTypeLabels[record.sourceType] ||
-                                record.sourceType}
-                            </Badge>
+                            {record.sourceImageId ? (
+                              <button
+                                onClick={() =>
+                                  handleImageClick(record.sourceImageId!)
+                                }
+                                className="cursor-pointer"
+                              >
+                                <Badge
+                                  variant="outline"
+                                  className="text-xs underline decoration-dotted hover:bg-accent"
+                                >
+                                  {sourceTypeLabels[record.sourceType] ||
+                                    record.sourceType}
+                                </Badge>
+                              </button>
+                            ) : (
+                              <Badge variant="outline" className="text-xs">
+                                {sourceTypeLabels[record.sourceType] ||
+                                  record.sourceType}
+                              </Badge>
+                            )}
                           </td>
                         </tr>
                       );
@@ -430,6 +461,32 @@ export default function ProductDetailPage({
           </Card>
         )}
       </main>
+
+      {/* Lightbox for source image */}
+      {lightboxUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setLightboxUrl(null)}
+        >
+          <div
+            className="relative max-w-screen-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              className="absolute -top-8 right-0 text-white text-sm hover:text-gray-300"
+              onClick={() => setLightboxUrl(null)}
+            >
+              ✕ 閉じる
+            </button>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={lightboxUrl}
+              alt="ソース画像"
+              className="max-h-[90vh] max-w-full rounded-lg object-contain"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
