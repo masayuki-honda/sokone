@@ -1,6 +1,15 @@
 import { PrismaClient } from "@prisma/client";
+import { PrismaNeon } from "@prisma/adapter-neon";
+import { neonConfig } from "@neondatabase/serverless";
+import ws from "ws";
 
-const prisma = new PrismaClient();
+// Use WebSocket so seed works even when TCP port 5432 is blocked (e.g. Neon free tier)
+neonConfig.webSocketConstructor = ws;
+
+const adapter = new PrismaNeon({
+  connectionString: process.env.DATABASE_URL,
+});
+const prisma = new PrismaClient({ adapter });
 
 const categories = [
   { name: "酒類", displayOrder: 1 },
