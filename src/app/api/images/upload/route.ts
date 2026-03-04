@@ -18,6 +18,13 @@ export const maxDuration = 30;
 const VALID_SOURCE_TYPES: SourceType[] = ["photo", "flyer", "instagram", "receipt"];
 
 /**
+ * GET /api/images/upload — Warmup endpoint (keeps serverless function warm)
+ */
+export async function GET() {
+  return NextResponse.json({ status: "ok" });
+}
+
+/**
  * POST /api/images/upload — Upload images
  * Accepts multipart/form-data with:
  * - files: one or more image files
