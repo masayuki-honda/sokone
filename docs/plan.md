@@ -1,7 +1,7 @@
 # Sokone 全Phase 実装計画
 
 > 作成日: 2026-02-26
-> 最終更新: 2026-03-04
+> 最終更新: 2026-03-05
 >
 > **アーキテクチャ:** Next.js フルスタック + Prisma + Neon + Vercel
 
@@ -347,6 +347,7 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
   - 過去の価格記録一覧
   - **☆お気に入りボタン** — タップでお気に入り登録/解除
   - ソースバッジをクリックして元画像をライトボックス表示（`sourceImageId` 付き記録のみ）
+  - カテゴリバッジをクリックして直接カテゴリ変更（`PATCH /api/products/{id}`）
 
 ### 4-3. お気に入り商品機能
 
@@ -445,6 +446,7 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 | GET | `/api/favorites` | 4 | お気に入り一覧 |
 | DELETE | `/api/favorites/{product_id}` | 4 | お気に入り解除 |
 | POST | `/api/products/{id}/merge` | 6 | 重複商品統合 |
+| PATCH | `/api/products/{id}` | 6 | 商品汎用更新（カテゴリ変更等） |
 | GET | `/api/admin/db-storage` | 横断 | DB ストレージ使用量 |
 
 ---
