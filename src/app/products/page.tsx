@@ -203,7 +203,10 @@ export default function ProductsPage() {
       const res = await fetch("/api/products/auto-categorize", { method: "POST" });
       const data = await res.json();
       if (res.ok) {
-        setAutoCategorizeResult(data.message);
+        const errNote = data.errors?.length
+          ? ` (エラー: ${data.errors[0]})`
+          : "";
+        setAutoCategorizeResult(data.message + errNote);
         // Refresh product list and category counts
         await fetchProducts();
         const catRes = await fetch("/api/categories");
@@ -212,10 +215,10 @@ export default function ProductsPage() {
           setCategories(catData.categories || []);
         }
       } else {
-        setAutoCategorizeResult(`エラー: ${data.error || "不明なエラー"}`);
+        setAutoCategorizeResult(`エラー: ${data.error || JSON.stringify(data)}`);
       }
-    } catch {
-      setAutoCategorizeResult("通信エラーが発生しました");
+    } catch (err) {
+      setAutoCategorizeResult(`通信エラー: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setIsAutoCategorizing(false);
     }
