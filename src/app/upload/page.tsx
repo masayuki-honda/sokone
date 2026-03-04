@@ -614,6 +614,9 @@ export default function UploadPage() {
               onBack={() => {
                 setOcrResults([]);
                 setFiles([]);
+                setStoreId(null);
+                setGpsSuggestedStore(null);
+                setUploadError(null);
               }}
             />
           </div>
