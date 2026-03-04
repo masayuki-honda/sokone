@@ -126,7 +126,7 @@ export async function POST(_request: NextRequest, { params }: Params) {
       {
         error: isRateLimit ? errorMessage : "OCR解析に失敗しました",
         rateLimitType: rateLimitType ?? null,
-        details: errorMessage,
+        details: errorMessage || "不明なエラー（ターミナルログを確認）",
       },
       { status: isRateLimit ? 429 : 500 },
     );

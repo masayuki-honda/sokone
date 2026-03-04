@@ -257,7 +257,10 @@ export default function UploadPage() {
                 );
               } else {
                 // Show details for non-rate-limit errors to help debugging
-                const detail = errorData.details || errorData.error || `画像 ${image.id} の解析に失敗しました`;
+                const detail = errorData.details || errorData.error ||
+                  (analyzeRes.status === 404 ? "画像が見つかりません（再読み込みして試してください）" :
+                   analyzeRes.status === 401 ? "認証エラー（再ログインしてください）" :
+                   `解析サーバーエラー (HTTP ${analyzeRes.status})`);
                 ocrErrors.push(`OCR解析エラー: ${detail}`);
               }
             }
