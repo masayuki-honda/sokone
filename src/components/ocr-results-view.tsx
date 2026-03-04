@@ -12,6 +12,7 @@ import {
   Eye,
   Image as ImageIcon,
   Loader2,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -289,9 +290,24 @@ function EditableItem({
         </div>
       </div>
       <div className="text-right">
-        <span className="text-lg font-bold">
-          ¥{item.price.toLocaleString()}
-        </span>
+        <div className="flex items-center justify-end gap-1">
+          {item.confidence < 0.6 && (
+            <span
+              className="flex items-center gap-0.5 text-xs text-amber-600 dark:text-amber-400"
+              title="価格の読み取り確信度が低いです。必ず確認してください。"
+            >
+              <AlertTriangle className="h-3 w-3" />
+              要確認
+            </span>
+          )}
+          <span
+            className={`text-lg font-bold ${
+              item.confidence < 0.6 ? "text-amber-600 dark:text-amber-400" : ""
+            }`}
+          >
+            ¥{item.price.toLocaleString()}
+          </span>
+        </div>
         {!item.is_tax_included && (
           <span className="block text-xs text-muted-foreground">
             (税込換算)
