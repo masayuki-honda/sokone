@@ -110,7 +110,9 @@ export default function UploadPage() {
 
   // Warm up Vercel serverless functions on page load to avoid cold-start network error
   useEffect(() => {
-    fetch("/api/health").catch(() => { /* warmup only — ignore errors */ });
+    // Warm up the upload serverless function to prevent cold-start network errors.
+    // /api/health is a different function on Vercel; warm up the actual endpoints.
+    fetch("/api/images/upload").catch(() => { /* warmup only — ignore errors */ });
   }, []);
 
   // Handle file selection
