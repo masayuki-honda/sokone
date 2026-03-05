@@ -1,7 +1,7 @@
 # Sokone 全Phase 実装計画
 
 > 作成日: 2026-02-26
-> 最終更新: 2026-03-05（スマホレスポンシブ・Skeleton・Toast・PWA・テスト・重複検出追加）
+> 最終更新: 2026-03-06（カテゴリCRUD・アップロード履歴ページ追加）
 >
 > **アーキテクチャ:** Next.js フルスタック + Prisma + Neon + Vercel
 
@@ -612,14 +612,15 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
 
 **API (Route Handlers):**
 - [ ] `GET /api/categories` — カテゴリツリー取得（既存の拡張）
-- [ ] `POST /api/categories` — カスタムカテゴリ追加
-- [ ] `PUT /api/categories/{id}` — カテゴリ編集
+- [x] `POST /api/categories` — カスタムカテゴリ追加
+- [x] `PUT /api/categories/{id}` — カテゴリ編集
+- [x] `DELETE /api/categories/{id}` — カテゴリ削除（商品0件の場合のみ）
 - [ ] 商品のカテゴリ変更 API
 
 **UI:**
-- [ ] カテゴリ管理ページ
-  - ツリー構造での表示・編集
-  - ドラッグ&ドロップでの並び替え
+- [x] カテゴリ管理ページ（`/categories`）
+  - カテゴリ一覧表示・追加・インライン編集・削除
+  - 商品件数表示・削除制約バリデーション
 - [ ] 商品のカテゴリ変更UI
 
 ### Sprint 7: 商品検索・フィルタ＋UX改善（〜1週間）
@@ -650,7 +651,7 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
 **UI:**
 - [x] ローディング表示の統一（Skeleton UI）
 - [x] エラーハンドリングの統一（Toast通知）
-- [ ] 画像アップロード履歴ページ
+- [x] 画像アップロード履歴ページ（`/uploads`）— フィルタ（ソースタイプ・ステータス）・ライトボックス・OCR結果サマリ表示
 - [ ] 「最近見た商品」セクション追加
 - [x] PWA 基本設定（manifest.json、アイコン）→ ホーム画面に追加可能に
 - [x] 同一画像の重複アップロード検出（SHA-256 + localStorage + 確認ダイアログ）
@@ -660,8 +661,9 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
 | Method | Path | Sprint | 説明 |
 |---|---|---|---|
 | POST | `/api/products/{id}/merge` | 6 | 商品マージ |
-| POST | `/api/categories` | 6 | カテゴリ追加 |
-| PUT | `/api/categories/{id}` | 6 | カテゴリ編集 |
+| POST | `/api/categories` | 6 | カテゴリ追加 ✅ |
+| PUT | `/api/categories/{id}` | 6 | カテゴリ編集 ✅ |
+| DELETE | `/api/categories/{id}` | 6 | カテゴリ削除 ✅ |
 
 ### 成功基準（Phase 2 完了条件）
 
