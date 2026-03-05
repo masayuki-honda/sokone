@@ -5,6 +5,10 @@ import { prisma } from "@/lib/prisma";
 import { getR2SignedUrl } from "@/lib/r2";
 import { analyzeImage, OcrSourceType } from "@/lib/ocr";
 
+// Allow longer execution on Vercel (Gemini API + R2 fetch can take time)
+// gemini-2.5-flash can be slower than 2.0-flash; bump to 60s to avoid timeouts
+export const maxDuration = 60;
+
 interface Params {
   params: Promise<{ id: string }>;
 }
@@ -75,22 +79,57 @@ export async function POST(_request: NextRequest, { params }: Params) {
       status: updated.status,
       ocrResult,
       itemCount: ocrResult.items?.length ?? 0,
+      signedUrl,
+      takenAt: image.takenAt,
     });
   } catch (error) {
-    console.error("OCR analysis error:", error);
+    // Capture error details regardless of error type (SDK may throw non-Error objects)
+    let errorMessage: string;
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    } else if (typeof error === "object" && error !== null) {
+      // Gemini SDK sometimes throws objects with statusText, status, etc.
+      const e = error as Record<string, unknown>;
+      errorMessage =
+        (typeof e.message === "string" ? e.message : null) ??
+        (typeof e.statusText === "string" ? e.statusText : null) ??
+        (typeof e.status === "number" ? `HTTP ${e.status}` : null) ??
+        JSON.stringify(e).slice(0, 300);
+    } else {
+      errorMessage = String(error);
+    }
+
+    // Log full error details to server terminal for debugging
+    console.error("[OCR] Analysis failed:", {
+      errorMessage,
+      errorType: typeof error,
+      isErrorInstance: error instanceof Error,
+      raw: error,
+    });
 
     // Mark as failed in database
     await prisma.uploadedImage.update({
       where: { id },
       data: { status: "failed" },
+    }).catch((dbErr) => {
+      console.error("[OCR] Failed to update status to failed:", dbErr);
     });
+    const rateLimitType =
+      (error as Error & { rateLimitType?: string }).rateLimitType;
+    const isRateLimit = rateLimitType != null ||
+      errorMessage.includes("429") ||
+      errorMessage.includes("RESOURCE_EXHAUSTED") ||
+      errorMessage.includes("quota") ||
+      errorMessage.includes("利用上限") ||
+      errorMessage.includes("無料枠");
 
     return NextResponse.json(
       {
-        error: "OCR解析に失敗しました",
-        details: error instanceof Error ? error.message : "Unknown error",
+        error: isRateLimit ? errorMessage : "OCR解析に失敗しました",
+        rateLimitType: rateLimitType ?? null,
+        details: errorMessage || "不明なエラー（ターミナルログを確認）",
       },
-      { status: 500 },
+      { status: isRateLimit ? 429 : 500 },
     );
   }
 }

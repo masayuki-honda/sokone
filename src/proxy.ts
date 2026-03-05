@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const token = await getToken({ req: request });
 
   if (!token) {
@@ -15,16 +15,10 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
+    // Page routes only — API routes handle auth themselves via getServerSession
     "/dashboard/:path*",
     "/stores/:path*",
     "/upload/:path*",
     "/products/:path*",
-    "/api/stores/:path*",
-    "/api/images/:path*",
-    "/api/prices/:path*",
-    "/api/products/:path*",
-    "/api/categories/:path*",
-    "/api/dashboard/:path*",
-    "/api/favorites/:path*",
   ],
 };

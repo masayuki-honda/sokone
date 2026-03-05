@@ -12,11 +12,13 @@ import {
   Eye,
   Image as ImageIcon,
   Loader2,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StoreSelect } from "@/components/store-select";
 
 interface OcrItem {
   name: string;
@@ -27,6 +29,8 @@ interface OcrItem {
   is_tax_included: boolean;
   confidence: number;
   identified_by: string;
+  /** If set, this item is linked to an existing product (skips findOrCreate, auto-saves alias) */
+  productId?: string | null;
 }
 
 interface OcrResult {
@@ -34,13 +38,16 @@ interface OcrResult {
   signedUrl: string;
   items: OcrItem[];
   store_name?: string | null;
+  takenAt?: string | null;
 }
 
 interface OcrResultsViewProps {
   results: OcrResult[];
   sourceType: string;
   storeId: string | null;
+  gpsSuggestedStore?: string | null;
   onBack: () => void;
+  onStoreChange?: (id: string | null) => void;
 }
 
 function ConfidenceBadge({ confidence }: { confidence: number }) {
@@ -106,6 +113,9 @@ function EditableItem({
   const [editName, setEditName] = useState(item.name);
   const [editPrice, setEditPrice] = useState(String(item.price));
   const [editUnit, setEditUnit] = useState(item.unit || "");
+  // Track if user has linked this item to an existing product
+  const [linkedProductId, setLinkedProductId] = useState<string | null>(item.productId ?? null);
+  const [linkedProductName, setLinkedProductName] = useState<string | null>(item.productId ? item.name : null);
   const [suggestions, setSuggestions] = useState<
     Array<{ id: string; name: string }>
   >([]);
@@ -135,6 +145,9 @@ function EditableItem({
 
   function handleNameChange(value: string) {
     setEditName(value);
+    // Clear product link when user types manually
+    setLinkedProductId(null);
+    setLinkedProductName(null);
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
     }
@@ -145,6 +158,8 @@ function EditableItem({
 
   function handleSelectSuggestion(suggestion: { id: string; name: string }) {
     setEditName(suggestion.name);
+    setLinkedProductId(suggestion.id);
+    setLinkedProductName(suggestion.name);
     setShowSuggestions(false);
     setSuggestions([]);
   }
@@ -169,6 +184,7 @@ function EditableItem({
       name: editName,
       price: parseInt(editPrice) || item.price,
       unit: editUnit || null,
+      productId: linkedProductId ?? undefined,
     });
     setIsEditing(false);
   }
@@ -177,6 +193,8 @@ function EditableItem({
     setEditName(item.name);
     setEditPrice(String(item.price));
     setEditUnit(item.unit || "");
+    setLinkedProductId(item.productId ?? null);
+    setLinkedProductName(item.productId ? item.name : null);
     setIsEditing(false);
   }
 
@@ -221,6 +239,12 @@ function EditableItem({
             className="w-40"
           />
           <div className="flex-1" />
+          {linkedProductId && (
+            <span className="flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+              <Check className="h-3 w-3" />
+              {linkedProductName ?? "既存商品に紐づけ"}
+            </span>
+          )}
           <Button size="sm" onClick={handleSave}>
             <Check className="mr-1 h-3 w-3" />
             保存
@@ -234,58 +258,79 @@ function EditableItem({
   }
 
   return (
-    <div className="group flex items-center gap-3 rounded-lg border px-4 py-3 transition-colors hover:bg-muted/50">
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="font-medium truncate">{item.name}</span>
-          {item.volume && (
-            <span className="text-sm text-muted-foreground">
-              {item.volume}
-            </span>
-          )}
+    <div className="group rounded-lg border px-3 py-3 transition-colors hover:bg-muted/50">
+      {/* 上段: 商品名 + 操作ボタン */}
+      <div className="flex items-start gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-wrap items-center gap-1">
+            <span className="font-medium break-words">{item.name}</span>
+            {item.volume && (
+              <span className="text-sm text-muted-foreground whitespace-nowrap">
+                {item.volume}
+              </span>
+            )}
+            {item.productId && (
+              <span className="flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+                <Check className="h-3 w-3" />
+                紐づけ済
+              </span>
+            )}
+          </div>
+          {/* バッジ行 */}
+          <div className="mt-1 flex flex-wrap items-center gap-1">
+            {item.unit && (
+              <span className="text-xs text-muted-foreground">{item.unit}</span>
+            )}
+            {item.category_hint && (
+              <Badge variant="outline" className="text-xs">
+                {item.category_hint}
+              </Badge>
+            )}
+            <IdentifiedByBadge identifiedBy={item.identified_by} />
+            <ConfidenceBadge confidence={item.confidence} />
+          </div>
         </div>
-        <div className="mt-1 flex items-center gap-2">
-          {item.unit && (
-            <span className="text-xs text-muted-foreground">
-              {item.unit}
-            </span>
-          )}
-          {item.category_hint && (
-            <Badge variant="outline" className="text-xs">
-              {item.category_hint}
-            </Badge>
-          )}
-          <IdentifiedByBadge identifiedBy={item.identified_by} />
-          <ConfidenceBadge confidence={item.confidence} />
+        {/* 操作ボタン: スマホでは常時表示、PCではホバー時表示 */}
+        <div className="flex shrink-0 gap-1 sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity">
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-8 w-8"
+            onClick={() => setIsEditing(true)}
+          >
+            <Edit2 className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-8 w-8 text-destructive"
+            onClick={onDelete}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
         </div>
       </div>
-      <div className="text-right">
-        <span className="text-lg font-bold">
+      {/* 下段: 価格 */}
+      <div className="mt-1 flex items-center gap-1">
+        {item.confidence < 0.6 && (
+          <span
+            className="flex items-center gap-0.5 text-xs text-amber-600 dark:text-amber-400"
+            title="価格の読み取り確信度が低いです。必ず確認してください。"
+          >
+            <AlertTriangle className="h-3 w-3" />
+            要確認
+          </span>
+        )}
+        <span
+          className={`text-lg font-bold ${
+            item.confidence < 0.6 ? "text-amber-600 dark:text-amber-400" : ""
+          }`}
+        >
           ¥{item.price.toLocaleString()}
         </span>
         {!item.is_tax_included && (
-          <span className="block text-xs text-muted-foreground">
-            (税込換算)
-          </span>
+          <span className="text-xs text-muted-foreground">(税込換算)</span>
         )}
-      </div>
-      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-8 w-8"
-          onClick={() => setIsEditing(true)}
-        >
-          <Edit2 className="h-3.5 w-3.5" />
-        </Button>
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-8 w-8 text-destructive"
-          onClick={onDelete}
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </Button>
       </div>
     </div>
   );
@@ -295,9 +340,16 @@ export function OcrResultsView({
   results,
   sourceType,
   storeId,
+  gpsSuggestedStore,
   onBack,
+  onStoreChange,
 }: OcrResultsViewProps) {
   const router = useRouter();
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  // Per-image store selection (key: imageId)
+  const [storeIdMap, setStoreIdMap] = useState<Record<string, string | null>>(
+    () => Object.fromEntries(results.map((r) => [r.imageId, storeId]))
+  );
   const [editableResults, setEditableResults] = useState(results);
   const [isRegistering, setIsRegistering] = useState(false);
   const [registrationError, setRegistrationError] = useState<string | null>(
@@ -361,8 +413,12 @@ export function OcrResultsView({
 
   // Register prices via API
   async function handleRegisterPrices() {
-    if (!storeId) {
-      setRegistrationError("店舗を選択してください。戻って店舗を選択し直してください。");
+    // Validate each image with items has a store selected
+    const missingStore = editableResults.some(
+      (r) => r.items.length > 0 && !storeIdMap[r.imageId]
+    );
+    if (missingStore) {
+      setRegistrationError("各画像の店舗を選択してください");
       return;
     }
 
@@ -411,10 +467,12 @@ export function OcrResultsView({
               volume: item.volume,
               category_hint: item.category_hint,
               is_tax_included: item.is_tax_included,
+              ...(item.productId ? { productId: item.productId } : {}),
             })),
-            storeId,
+            storeId: storeIdMap[result.imageId],
             sourceType,
             sourceImageId: result.imageId,
+            recordedAt: result.takenAt || undefined,
           }),
         });
 
@@ -493,6 +551,52 @@ export function OcrResultsView({
         </Button>
       </div>
 
+      {/* Store selection — apply all convenience (shown when multiple images) */}
+      {editableResults.length > 1 && (
+        <div className="rounded-lg border bg-muted/40 p-4">
+          <p className="mb-2 text-sm font-medium text-muted-foreground">全画像に同じ店舗を適用</p>
+          <StoreSelect
+            value={null}
+            onChange={(id, name) => {
+              if (id) {
+                setStoreIdMap(
+                  Object.fromEntries(editableResults.map((r) => [r.imageId, id]))
+                );
+                onStoreChange?.(id);
+              }
+              void name;
+            }}
+          />
+          {gpsSuggestedStore && (
+            <p className="mt-2 text-sm text-muted-foreground">
+              📍 写真の位置情報から「{gpsSuggestedStore}」を自動選択しました
+            </p>
+          )}
+        </div>
+      )}
+      {editableResults.length === 1 && (
+        <div className={`rounded-lg border p-4 ${
+          registrationError === "各画像の店舗を選択してください"
+            ? "border-destructive bg-destructive/5"
+            : "bg-card"
+        }`}>
+          <StoreSelect
+            value={storeIdMap[editableResults[0].imageId] ?? null}
+            onChange={(id, name) => {
+              setStoreIdMap({ [editableResults[0].imageId]: id });
+              onStoreChange?.(id);
+              if (registrationError) setRegistrationError(null);
+              void name;
+            }}
+          />
+          {gpsSuggestedStore && storeIdMap[editableResults[0].imageId] && (
+            <p className="mt-2 text-sm text-muted-foreground">
+              📍 写真の位置情報から「{gpsSuggestedStore}」を自動選択しました
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Error/Success messages */}
       {registrationError && (
         <div className="rounded-lg border border-destructive bg-destructive/10 p-4 text-sm text-destructive">
@@ -505,14 +609,42 @@ export function OcrResultsView({
         </div>
       )}
 
+      {/* Lightbox */}
+      {lightboxUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setLightboxUrl(null)}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={lightboxUrl}
+            alt="拡大表示"
+            className="max-h-full max-w-full rounded-lg object-contain shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button
+            onClick={() => setLightboxUrl(null)}
+            className="absolute right-4 top-4 rounded-full bg-white/20 p-2 text-white hover:bg-white/40"
+            aria-label="閉じる"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Results per image */}
       {editableResults.map((result, resultIndex) => (
         <Card key={result.imageId}>
           <CardHeader>
             <div className="flex items-start gap-4">
-              {/* Image preview */}
-              <div className="relative h-24 w-24 flex-shrink-0 overflow-hidden rounded-lg border bg-muted">
+              {/* Image preview — click to enlarge */}
+              <div
+                className="relative h-24 w-24 flex-shrink-0 overflow-hidden rounded-lg border bg-muted cursor-zoom-in"
+                onClick={() => result.signedUrl && setLightboxUrl(result.signedUrl)}
+                title="クリックで拡大"
+              >
                 {result.signedUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={result.signedUrl}
                     alt="アップロード画像"
@@ -538,6 +670,24 @@ export function OcrResultsView({
                 )}
               </div>
             </div>
+            {/* Per-image store selector (shown when multiple images) */}
+            {editableResults.length > 1 && (
+              <div className={`mt-3 rounded-lg border p-3 ${
+                registrationError === "各画像の店舗を選択してください" && !storeIdMap[result.imageId]
+                  ? "border-destructive bg-destructive/5"
+                  : "bg-muted/30"
+              }`}>
+                <p className="mb-1.5 text-xs font-medium text-muted-foreground">この画像の店舗</p>
+                <StoreSelect
+                  value={storeIdMap[result.imageId] ?? null}
+                  onChange={(id, name) => {
+                    setStoreIdMap((prev) => ({ ...prev, [result.imageId]: id }));
+                    if (registrationError) setRegistrationError(null);
+                    void name;
+                  }}
+                />
+              </div>
+            )}
           </CardHeader>
           <CardContent className="space-y-2">
             {result.items.length === 0 ? (
@@ -570,6 +720,31 @@ export function OcrResultsView({
           </CardContent>
         </Card>
       ))}
+
+      {/* Register button (bottom) */}
+      <Button
+        size="lg"
+        className="w-full"
+        disabled={totalItems === 0 || isRegistering || registrationSuccess}
+        onClick={handleRegisterPrices}
+      >
+        {isRegistering ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            登録中...
+          </>
+        ) : registrationSuccess ? (
+          <>
+            <Check className="mr-2 h-4 w-4" />
+            登録完了！
+          </>
+        ) : (
+          <>
+            <Check className="mr-2 h-4 w-4" />
+            すべて確認して登録（{totalItems}件）
+          </>
+        )}
+      </Button>
     </div>
   );
 }

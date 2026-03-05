@@ -2,10 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { geocodeAddress } from "@/lib/geocode";
 
 interface Params {
   params: Promise<{ id: string }>;
 }
+
+// PUT may trigger geocoding (Nominatim: up to ~5s with retries)
+export const maxDuration = 30;
 
 // GET /api/stores/[id] — Get a single store
 export async function GET(_request: NextRequest, { params }: Params) {
@@ -62,17 +66,31 @@ export async function PUT(request: NextRequest, { params }: Params) {
     }
   }
 
+  // Auto-geocode: if address changes and no explicit lat/lon, derive coordinates
+  let resolvedLat: number | null | undefined =
+    latitude !== undefined ? (latitude != null ? Number(latitude) : null) : undefined;
+  let resolvedLng: number | null | undefined =
+    longitude !== undefined ? (longitude != null ? Number(longitude) : null) : undefined;
+  if (
+    address !== undefined &&
+    resolvedLat == null &&
+    resolvedLng == null &&
+    address?.trim()
+  ) {
+    const coords = await geocodeAddress(address.trim());
+    if (coords) {
+      resolvedLat = coords.latitude;
+      resolvedLng = coords.longitude;
+    }
+  }
+
   const store = await prisma.store.update({
     where: { id },
     data: {
       ...(name !== undefined && { name: name.trim() }),
       ...(address !== undefined && { address: address?.trim() || null }),
-      ...(latitude !== undefined && {
-        latitude: latitude != null ? Number(latitude) : null,
-      }),
-      ...(longitude !== undefined && {
-        longitude: longitude != null ? Number(longitude) : null,
-      }),
+      ...(resolvedLat !== undefined && { latitude: resolvedLat }),
+      ...(resolvedLng !== undefined && { longitude: resolvedLng }),
     },
   });
 

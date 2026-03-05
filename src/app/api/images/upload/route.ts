@@ -12,7 +12,17 @@ import { SourceType } from "@prisma/client";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
+// Allow longer execution on Vercel (sharp processing + R2 upload)
+export const maxDuration = 30;
+
 const VALID_SOURCE_TYPES: SourceType[] = ["photo", "flyer", "instagram", "receipt"];
+
+/**
+ * GET /api/images/upload — Warmup endpoint (keeps serverless function warm)
+ */
+export async function GET() {
+  return NextResponse.json({ status: "ok" });
+}
 
 /**
  * POST /api/images/upload — Upload images
@@ -78,7 +88,8 @@ export async function POST(request: NextRequest) {
     const results = [];
     const errors = [];
 
-    for (const file of files) {
+    for (let fileIndex = 0; fileIndex < files.length; fileIndex++) {
+      const file = files[fileIndex];
       try {
         // Validate file type
         if (!isValidImageType(file.type)) {
@@ -109,7 +120,24 @@ export async function POST(request: NextRequest) {
         const key = generateImageKey(session.user.id, file.name);
         await uploadToR2(key, processed.buffer, processed.contentType);
 
-        // Save to database
+        // GPS fallback: if Canvas compression stripped EXIF, use client-extracted coordinates
+        let gpsLatitude = processed.exif.gpsLatitude;
+        let gpsLongitude = processed.exif.gpsLongitude;
+        if (gpsLatitude === null) {
+          const clientLat = formData.get(`gps_client_lat_${fileIndex}`);
+          const clientLng = formData.get(`gps_client_lng_${fileIndex}`);
+          if (clientLat && clientLng) {
+            const parsedLat = parseFloat(String(clientLat));
+            const parsedLng = parseFloat(String(clientLng));
+            if (isFinite(parsedLat) && isFinite(parsedLng)) {
+              gpsLatitude = parsedLat;
+              gpsLongitude = parsedLng;
+              console.log(`[Upload] GPS restored from client fallback for file ${fileIndex}: (${gpsLatitude}, ${gpsLongitude})`);
+            }
+          }
+        }
+
+        // Save to database (including EXIF metadata)
         const uploadedImage = await prisma.uploadedImage.create({
           data: {
             userId: session.user.id,
@@ -117,8 +145,13 @@ export async function POST(request: NextRequest) {
             imageUrl: key,
             sourceType: sourceType as SourceType,
             status: "pending",
+            takenAt: processed.exif.takenAt,
+            gpsLatitude,
+            gpsLongitude,
           },
         });
+
+        console.log(`[Upload] image saved: id=${uploadedImage.id} gps=(${gpsLatitude}, ${gpsLongitude}) takenAt=${processed.exif.takenAt}`);
 
         results.push({
           id: uploadedImage.id,
@@ -126,6 +159,9 @@ export async function POST(request: NextRequest) {
           sourceType: uploadedImage.sourceType,
           status: uploadedImage.status,
           createdAt: uploadedImage.createdAt,
+          takenAt: uploadedImage.takenAt,
+          gpsLatitude: uploadedImage.gpsLatitude,
+          gpsLongitude: uploadedImage.gpsLongitude,
         });
       } catch (fileError) {
         console.error(`Error processing file ${file.name}:`, fileError);

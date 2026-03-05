@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useDropzone } from "react-dropzone";
-import { Upload, X, Loader2, ImageIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Upload, X, Loader2, ImageIcon, Camera } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 interface UploadedFile {
@@ -31,9 +31,46 @@ export function ImageDropzone({
   isUploading,
   maxFiles = 10,
 }: ImageDropzoneProps) {
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [fileTypeError, setFileTypeError] = useState<string | null>(null);
+
   const onDrop = useCallback(
     (acceptedFiles: File[]) => {
       onFilesSelected(acceptedFiles);
+    },
+    [onFilesSelected],
+  );
+
+  const handleCameraCapture = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const capturedFiles = Array.from(e.target.files ?? []);
+      if (capturedFiles.length > 0) {
+        onFilesSelected(capturedFiles);
+      }
+      // Reset so the same file can be captured again
+      e.target.value = "";
+    },
+    [onFilesSelected],
+  );
+
+  // accept="*/*" is used to bypass Android's Google Photos media picker.
+  // Image files are validated here by MIME type or extension.
+  const handleFileSelect = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      setFileTypeError(null);
+      const all = Array.from(e.target.files ?? []);
+      const imageFiles = all.filter(
+        (f) =>
+          f.type.startsWith("image/") ||
+          /\.(jpe?g|png|heic|heif|webp)$/i.test(f.name),
+      );
+      if (all.length > 0 && imageFiles.length === 0) {
+        setFileTypeError("画像ファイル（JPEG・PNG・HEIC・WebP）を選択してください");
+      } else {
+        if (imageFiles.length > 0) onFilesSelected(imageFiles);
+      }
+      e.target.value = "";
     },
     [onFilesSelected],
   );
@@ -54,11 +91,62 @@ export function ImageDropzone({
 
   return (
     <div className="space-y-4">
-      {/* Drop zone */}
+      {/* Hidden camera input — opens device camera directly (bypasses Google Photos) */}
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={handleCameraCapture}
+        disabled={isUploading}
+      />
+
+      {/* Hidden file input — accept all files to force Android Files app instead of
+          the Google Photos media picker. Image files are validated client-side.
+          Any image-specific accept value triggers the media picker on Android. */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="*/*"
+        multiple
+        className="hidden"
+        onChange={handleFileSelect}
+        disabled={isUploading}
+      />
+
+      {/* Two quick-access buttons for mobile */}
+      <div className="grid grid-cols-2 gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          className="gap-2 border-dashed"
+          disabled={isUploading}
+          onClick={() => cameraInputRef.current?.click()}
+        >
+          <Camera className="h-4 w-4" />
+          カメラで撮影
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          className="gap-2 border-dashed"
+          disabled={isUploading}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <ImageIcon className="h-4 w-4" />
+          ファイルから選択
+        </Button>
+      </div>
+      {fileTypeError && (
+        <p className="text-sm text-destructive">{fileTypeError}</p>
+      )}
+
+      {/* Drop zone (PC drag-and-drop / fallback tap) */}
       <div
         {...getRootProps()}
         className={cn(
-          "flex min-h-[200px] cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-8 text-center transition-colors",
+          "flex min-h-[120px] cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-4 text-center transition-colors",
           isDragActive
             ? "border-primary bg-primary/5"
             : "border-muted-foreground/25 hover:border-primary/50",
@@ -66,16 +154,14 @@ export function ImageDropzone({
         )}
       >
         <input {...getInputProps()} />
-        <Upload className="mb-4 h-10 w-10 text-muted-foreground" />
+        <Upload className="mb-2 h-6 w-6 text-muted-foreground" />
         {isDragActive ? (
           <p className="text-sm font-medium">ここにドロップしてください</p>
         ) : (
           <>
-            <p className="text-sm font-medium">
-              ドラッグ＆ドロップ、またはクリックして画像を選択
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              JPEG, PNG, HEIC, WebP（最大10MB / 最大{maxFiles}枚）
+            <p className="text-sm font-medium">ドラッグ＆ドロップ</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              JPEG, PNG, HEIC, WebP（最大{maxFiles}枚）
             </p>
           </>
         )}
@@ -91,6 +177,7 @@ export function ImageDropzone({
             >
               <div className="relative aspect-square">
                 {file.preview ? (
+                  // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={file.preview}
                     alt={file.file.name}

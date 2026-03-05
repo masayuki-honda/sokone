@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { searchProducts } from "@/lib/product-matcher";
 
 /**
  * GET /api/products — List/search products
@@ -24,15 +23,23 @@ export async function GET(request: NextRequest) {
   const limit = Math.min(Number(searchParams.get("limit")) || 20, 100);
   const cursor = searchParams.get("cursor");
 
-  // If search query provided, use product matcher
-  if (q && q.trim().length > 0) {
-    const products = await searchProducts(q.trim(), limit);
-    return NextResponse.json({ products, nextCursor: null, hasMore: false });
-  }
-
-  // Default: list products with optional category filter
+  // Build where clause (search + optional category filter)
+  const normalized = q ? q.trim().replace(/\s+/g, " ").toLowerCase() : null;
   const where = {
     ...(categoryId && { categoryId }),
+    ...(normalized && {
+      OR: [
+        { name: { contains: normalized, mode: "insensitive" as const } },
+        { normalizedName: { contains: normalized, mode: "insensitive" as const } },
+        {
+          aliases: {
+            some: {
+              aliasName: { contains: normalized, mode: "insensitive" as const },
+            },
+          },
+        },
+      ],
+    }),
   };
 
   const products = await prisma.product.findMany({
