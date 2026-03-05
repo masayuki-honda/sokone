@@ -129,11 +129,13 @@ sokone/
 │   ├── app/                   # App Router pages + API Routes
 │   │   ├── api/               # Route Handlers
 │   │   ├── auth/              # 認証関連ページ (signin/)
+│   │   ├── categories/        # カテゴリ管理
 │   │   ├── dashboard/         # ダッシュボード
 │   │   ├── stores/            # 店舗管理
 │   │   ├── products/          # 商品一覧
 │   │   ├── products/[id]/     # 商品詳細
 │   │   ├── upload/            # 画像アップロード
+│   │   ├── uploads/           # アップロード履歴
 │   │   └── layout.tsx
 │   ├── components/            # React components
 │   │   ├── ui/                # shadcn/ui
