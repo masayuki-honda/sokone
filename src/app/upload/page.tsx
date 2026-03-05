@@ -107,7 +107,6 @@ export default function UploadPage() {
   const [gpsNoStoreFound, setGpsNoStoreFound] = useState<{ lat: number; lng: number } | null>(null);
   const [gpsDebugMsg, setGpsDebugMsg] = useState<string | null>(null);
   const [isWarmingUp, setIsWarmingUp] = useState(true);
-  const [browserGeoLocation, setBrowserGeoLocation] = useState<{ lat: number; lng: number } | null>(null);
   const geminiUsage = useGeminiUsage();
 
   // Warm up Vercel serverless functions on page load to avoid cold-start network error
@@ -117,26 +116,6 @@ export default function UploadPage() {
       fetch("/api/images/upload").catch(() => {}),
       fetch("/api/health").catch(() => {}),
     ]).finally(() => setIsWarmingUp(false));
-  }, []);
-
-  // Request browser geolocation on mount as GPS fallback.
-  // Google Photos on Android strips EXIF GPS when serving images through the file picker,
-  // so browser geolocation is the only reliable source for store-visit photos.
-  useEffect(() => {
-    if (typeof navigator !== "undefined" && navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setBrowserGeoLocation({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-          });
-        },
-        () => {
-          // User denied or geolocation unavailable — proceed without it
-        },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 },
-      );
-    }
   }, []);
 
   // Handle file selection
@@ -317,22 +296,6 @@ export default function UploadPage() {
       }
       const compressed = await compressImageForUpload(files[i].file);
       formData.append("files", compressed);
-    }
-
-    // Fallback: if EXIF GPS extraction failed for all files (e.g. Google Photos strips EXIF),
-    // use browser Geolocation API as a fallback source for store-visit photos.
-    if (!fileGpsList.some(g => g.lat !== null && g.lng !== null) && browserGeoLocation) {
-      for (let i = 0; i < files.length; i++) {
-        if (fileGpsList[i].lat === null) {
-          fileGpsList[i] = {
-            lat: browserGeoLocation.lat,
-            lng: browserGeoLocation.lng,
-            debugNote: "ブラウザ位置情報(GPSフォールバック)",
-          };
-          formData.append(`gps_client_lat_${i}`, String(browserGeoLocation.lat));
-          formData.append(`gps_client_lng_${i}`, String(browserGeoLocation.lng));
-        }
-      }
     }
 
     // Helper: upload with automatic retries + exponential backoff (cold-start recovery)
