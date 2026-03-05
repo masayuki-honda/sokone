@@ -105,6 +105,8 @@ npm start
 | `npm start` | 本番モード起動 |
 | `npm run lint` | ESLint 実行 |
 | `npm run type-check` | TypeScript 型チェック |
+| `npm test` | Vitest テスト実行 |
+| `npm run test:watch` | Vitest ウォッチモード |
 | `npm run db:generate` | Prisma クライアント生成（`--no-engine`、WebSocket/Serverless用） |
 | `npm run db:migrate` | マイグレーション実行 |
 | `npm run db:push` | スキーマをDBに直接反映 |
@@ -117,6 +119,24 @@ npm start
 - **ホスティング**: Vercel (Hobby)
 - **自動デプロイ**: GitHub リポジトリ連携により、`main` ブランチへの push で本番デプロイ、その他のブランチ（`dev` 等）への push でプレビューデプロイが実行される
 - Vercel 上では `@prisma/client` の postinstall フックが `prisma generate`（`--no-engine` なし）を自動実行するため、ビルドエラーは発生しない
+
+## テスト
+
+```bash
+# 全テスト実行
+npm test
+
+# ウォッチモード
+npm run test:watch
+```
+
+**テスト構成:**
+- **Vitest** — テストランナー
+- API Route Handler テスト（`src/app/api/**/route.test.ts`）
+- サービスロジック テスト（`src/lib/*.test.ts`）
+  - OCR（Gemini API モック）
+  - 商品名寄せ（`normalizeProductName` 等）
+  - 底値計算
 
 ## ドキュメント
 

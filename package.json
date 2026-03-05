@@ -8,6 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "type-check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
@@ -41,6 +43,7 @@
     "react-dom": "19.2.3",
     "react-dropzone": "^15.0.0",
     "sharp": "^0.33",
+    "sonner": "^2.0.7",
     "tailwind-merge": "^3",
     "ws": "^8.19.0"
   },
@@ -50,11 +53,13 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/ws": "^8.18.1",
+    "@vitejs/plugin-react": "^5.1.4",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "prisma": "^6",
     "tailwindcss": "^4",
     "tsx": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.0.18"
   }
 }
