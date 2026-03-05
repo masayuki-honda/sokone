@@ -84,3 +84,44 @@ export async function GET(_request: NextRequest, { params }: Params) {
     isFavorite: !!isFavorite,
   });
 }
+
+/**
+ * PATCH /api/products/[id] — Update product category (or other fields)
+ */
+export async function PATCH(request: NextRequest, { params }: Params) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { id } = await params;
+  const body = await request.json();
+  const { categoryId } = body as { categoryId: string | null };
+
+  // Validate product exists
+  const product = await prisma.product.findUnique({ where: { id } });
+  if (!product) {
+    return NextResponse.json({ error: "商品が見つかりません" }, { status: 404 });
+  }
+
+  // Validate category if provided
+  if (categoryId) {
+    const category = await prisma.productCategory.findUnique({
+      where: { id: categoryId },
+    });
+    if (!category) {
+      return NextResponse.json(
+        { error: "指定されたカテゴリが見つかりません" },
+        { status: 400 },
+      );
+    }
+  }
+
+  const updated = await prisma.product.update({
+    where: { id },
+    data: { categoryId: categoryId ?? null },
+    include: { category: true },
+  });
+
+  return NextResponse.json(updated);
+}

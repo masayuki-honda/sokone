@@ -1,0 +1,31 @@
+﻿
+> sokone@0.1.0 lint
+> eslint
+
+
+C:\Projects\Study\GitHub-Copilot\sokone\src\app\api\favorites\route.ts
+  9:27  warning  '_request' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Projects\Study\GitHub-Copilot\sokone\src\hooks\use-gemini-usage.ts
+  123:17  error  Error: Cannot call impure function during render
+
+`Date.now` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
+
+C:\Projects\Study\GitHub-Copilot\sokone\src\hooks\use-gemini-usage.ts:123:17
+  121 |
+  122 |   const callsLastMinute = useMemo(() => {
+> 123 |     const now = Date.now();
+      |                 ^^^^^^^^^^ Cannot call impure function
+  124 |     return usage.recentCallTimestamps.filter((t) => t > now - 60_000).length;
+  125 |   }, [usage.recentCallTimestamps]);
+  126 |  react-hooks/purity
+
+C:\Projects\Study\GitHub-Copilot\sokone\src\lib\image-processing.ts
+   81:3   warning  '_mimeType' is defined but never used      @typescript-eslint/no-unused-vars
+  140:50  warning  '_originalName' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Projects\Study\GitHub-Copilot\sokone\src\lib\product-matcher.ts
+  93:3  warning  '_userId' is defined but never used  @typescript-eslint/no-unused-vars
+
+笨・5 problems (1 error, 4 warnings)
+

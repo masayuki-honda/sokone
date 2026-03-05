@@ -1,6 +1,7 @@
-import { GoogleGenerativeAI, SchemaType, type Schema } from "@google/generative-ai";
+import { SchemaType, type Schema } from "@google/generative-ai";
+import { genAI, GEMINI_MODEL } from "@/lib/gemini";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+// Note: use-gemini-usage.ts tracks free-tier limits for GEMINI_MODEL
 
 // === Types ===
 
@@ -61,7 +62,7 @@ const ocrResponseSchema: Schema = {
           },
           confidence: {
             type: SchemaType.NUMBER,
-            description: "読み取り確信度（0.0-1.0）",
+            description: "読み取り確信度（0.0-1.0）。価格の数字が明確に読める場合は0.8以上、不髦明または引きの写真で小さく写っている場合は0.5未満、読み取り不能な場合は0.3以下"
           },
           identified_by: {
             type: SchemaType.STRING,
@@ -98,6 +99,15 @@ const BASE_PROMPT = `以下の画像はスーパーマーケットの商品価�
 例えば、野菜や果物など商品名のテキストラベルがない場合でも、
 画像に写っている商品の外見から「大根」「トマト」「りんご」等を識別し、
 近くの価格表示と紐付けてください。
+
+【確信度（confidence）の基準】
+- 0.8～1.0: 価格の数字が明確にテキストとして読める場合
+- 0.5～0.7: 価格が読めるが若干不髦明、または推測が含まれる場合
+- 0.3～0.5: 引きの写真・辺りの写真で価格札が小さい/ぼやけている場合
+- 0.3未満: 価格が明確に読み取れない場合
+
+※引きの写真・複数商品が小さく写っている場合は、価格を断言せず confidence 0.5未満を設定してください。
+価格数字が全く読めない場合はその商品をリストから除外するか、confidence 0.3以下にしてください。
 
 各商品について以下の情報を抽出してください：
 - name: 商品名
@@ -146,7 +156,7 @@ export async function analyzeImage(
   sourceType: OcrSourceType,
 ): Promise<OcrResult> {
   const model = genAI.getGenerativeModel({
-    model: "gemini-2.0-flash",
+    model: GEMINI_MODEL,
     generationConfig: {
       responseMimeType: "application/json",
       responseSchema: ocrResponseSchema,
@@ -165,7 +175,67 @@ export async function analyzeImage(
         data: base64Image,
       },
     },
-  ]);
+  ]).catch((error: Error) => {
+    const msg = error.message ?? "";
+
+    // Model not found / deprecated
+    if (msg.includes("404") || msg.includes("no longer available") || msg.includes("Not Found")) {
+      throw new Error(
+        `Geminiモデルが利用できません: ${msg.slice(0, 200)}`,
+      );
+    }
+    if (msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED") || msg.includes("quota")) {
+      // Log the full error for debugging
+      console.error("Gemini API rate limit error (full message):", msg);
+
+      const msgLower = msg.toLowerCase();
+
+      // Check if the free tier quota limit is literally 0
+      // e.g. "limit: 0, model: gemini-2.0-flash"
+      const limitZero = /limit:\s*0[,\s]/.test(msg);
+      if (limitZero) {
+        const e = new Error(
+          "Gemini APIの無料枠が利用できません（limit: 0）。Google AI Studioでプロジェクトのクォータ設定を確認するか、有料プラン（Pay-as-you-go）に切り替えてください。",
+        );
+        (e as Error & { rateLimitType: string }).rateLimitType = "quota_zero";
+        throw e;
+      }
+
+      // Per-minute check takes precedence: if retry delay is seconds (not hours),
+      // it's a per-minute limit. The Gemini API often reports BOTH PerMinute and
+      // PerDay violations in the same error when per-minute is the trigger.
+      const isPerMinute =
+        msgLower.includes("perminute") ||
+        msgLower.includes("per-minute") ||
+        msgLower.includes("per_minute") ||
+        msgLower.includes("ratelimitexceeded") ||
+        /retrydelay.*?"\d+s"/.test(msgLower);
+      // Only classify as per-day if there is NO per-minute signal at all
+      const isPerDay =
+        !isPerMinute &&
+        (msgLower.includes("perday") ||
+          msgLower.includes("per-day") ||
+          msgLower.includes("per_day") ||
+          msgLower.includes("dailylimit") ||
+          msgLower.includes("daily"));
+
+      if (isPerDay) {
+        const e = new Error(
+          "Gemini APIの1日あたりの上限（1,500回/日）に達しました。翌日（日本時間17時頃）にリセットされます。",
+        );
+        (e as Error & { rateLimitType: string }).rateLimitType = "daily";
+        throw e;
+      } else {
+        // Default to per-minute (most common; also covers mixed PerMinute+PerDay messages)
+        const e = new Error(
+          "Gemini APIの1分あたりのリクエスト上限（15回/分）に達しました。1分ほど待ってから再試行してください。",
+        );
+        (e as Error & { rateLimitType: string }).rateLimitType = "per_minute";
+        throw e;
+      }
+    }
+    throw error;
+  });
 
   const response = result.response;
   const text = response.text();
@@ -185,7 +255,7 @@ export async function analyzeImage(
     }
 
     return parsed;
-  } catch (parseError) {
+  } catch {
     console.error("Failed to parse OCR response:", text);
     throw new Error("OCR結果のパースに失敗しました");
   }

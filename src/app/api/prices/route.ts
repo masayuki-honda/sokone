@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { findOrCreateProduct } from "@/lib/product-matcher";
+import { findOrCreateProduct, normalizeProductName } from "@/lib/product-matcher";
 import { SourceType } from "@prisma/client";
 
 interface PriceItem {
@@ -117,6 +117,24 @@ export async function POST(request: NextRequest) {
           });
           productId = product.id;
           isNewProduct = product.isNew;
+        } else {
+          // User manually linked an OCR-extracted name to an existing product.
+          // Auto-register the OCR name as an alias so future scans match automatically.
+          const aliasName = normalizeProductName(item.name);
+          const product = await prisma.product.findUnique({
+            where: { id: productId },
+            select: { normalizedName: true },
+          });
+          if (product && product.normalizedName !== aliasName) {
+            const existing = await prisma.productAlias.findFirst({
+              where: { aliasName },
+            });
+            if (!existing) {
+              await prisma.productAlias.create({
+                data: { productId, aliasName },
+              });
+            }
+          }
         }
 
         // Ensure price is tax-included integer

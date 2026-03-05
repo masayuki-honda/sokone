@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, use } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -12,6 +11,9 @@ import {
   Store,
   Calendar,
   BarChart3,
+  Pencil,
+  Check,
+  X,
 } from "lucide-react";
 import { Header } from "@/components/header";
 import { Button } from "@/components/ui/button";
@@ -31,6 +33,7 @@ interface ProductDetail {
     price: number;
     taxIncluded: boolean;
     sourceType: string;
+    sourceImageId: string | null;
     recordedAt: string;
     createdAt: string;
     store: { id: string; name: string };
@@ -86,6 +89,10 @@ export default function ProductDetailPage({
   const [period, setPeriod] = useState("all");
   const [isLoading, setIsLoading] = useState(true);
   const [isFavorite, setIsFavorite] = useState(false);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [categories, setCategories] = useState<Array<{ id: string; name: string }>>([])
+  const [editingCategory, setEditingCategory] = useState(false);
+  const [pendingCategoryId, setPendingCategoryId] = useState<string>("");
 
   useEffect(() => {
     async function fetchData() {
@@ -115,6 +122,14 @@ export default function ProductDetailPage({
     fetchData();
   }, [id, period]);
 
+  // Fetch categories for the selector
+  useEffect(() => {
+    fetch("/api/categories")
+      .then((r) => r.json())
+      .then((data) => setCategories(data.categories || []))
+      .catch(() => {});
+  }, []);
+
   async function handleToggleFavorite() {
     try {
       if (isFavorite) {
@@ -130,6 +145,39 @@ export default function ProductDetailPage({
       }
     } catch (error) {
       console.error("Failed to toggle favorite:", error);
+    }
+  }
+
+  async function handleCategoryUpdate() {
+    if (!product) return;
+    try {
+      const res = await fetch(`/api/products/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ categoryId: pendingCategoryId || null }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setProduct((prev) =>
+          prev ? { ...prev, category: updated.category } : prev
+        );
+      }
+    } catch (error) {
+      console.error("Failed to update category:", error);
+    } finally {
+      setEditingCategory(false);
+    }
+  }
+
+  async function handleImageClick(imageId: string) {
+    try {
+      const res = await fetch(`/api/images/${imageId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setLightboxUrl(data.signedUrl);
+      }
+    } catch (error) {
+      console.error("Failed to load image:", error);
     }
   }
 
@@ -182,9 +230,56 @@ export default function ProductDetailPage({
             </Button>
             <div>
               <h1 className="text-2xl font-bold">{product.name}</h1>
-              <div className="mt-1 flex items-center gap-2">
-                {product.category && (
-                  <Badge variant="secondary">{product.category.name}</Badge>
+              <div className="mt-1 flex items-center gap-2 flex-wrap">
+                {editingCategory ? (
+                  <div className="flex items-center gap-1">
+                    <select
+                      autoFocus
+                      className="text-sm border rounded px-2 py-0.5 bg-background"
+                      value={pendingCategoryId}
+                      onChange={(e) => setPendingCategoryId(e.target.value)}
+                    >
+                      <option value="">カテゴリなし</option>
+                      {categories.map((cat) => (
+                        <option key={cat.id} value={cat.id}>
+                          {cat.name}
+                        </option>
+                      ))}
+                    </select>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      onClick={handleCategoryUpdate}
+                    >
+                      <Check className="h-3 w-3" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      onClick={() => setEditingCategory(false)}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ) : (
+                  <button
+                    className="flex items-center gap-1 group"
+                    onClick={() => {
+                      setPendingCategoryId(product.category?.id ?? "");
+                      setEditingCategory(true);
+                    }}
+                    title="カテゴリを変更"
+                  >
+                    <Badge
+                      variant="secondary"
+                      className="group-hover:bg-secondary/70 cursor-pointer"
+                    >
+                      {product.category?.name ?? "カテゴリなし"}
+                    </Badge>
+                    <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </button>
                 )}
                 {product.unit && (
                   <span className="text-sm text-muted-foreground">
@@ -398,10 +493,27 @@ export default function ProductDetailPage({
                             )}
                           </td>
                           <td className="py-2 hidden sm:table-cell">
-                            <Badge variant="outline" className="text-xs">
-                              {sourceTypeLabels[record.sourceType] ||
-                                record.sourceType}
-                            </Badge>
+                            {record.sourceImageId ? (
+                              <button
+                                onClick={() =>
+                                  handleImageClick(record.sourceImageId!)
+                                }
+                                className="cursor-pointer"
+                              >
+                                <Badge
+                                  variant="outline"
+                                  className="text-xs underline decoration-dotted hover:bg-accent"
+                                >
+                                  {sourceTypeLabels[record.sourceType] ||
+                                    record.sourceType}
+                                </Badge>
+                              </button>
+                            ) : (
+                              <Badge variant="outline" className="text-xs">
+                                {sourceTypeLabels[record.sourceType] ||
+                                  record.sourceType}
+                              </Badge>
+                            )}
                           </td>
                         </tr>
                       );
@@ -431,6 +543,32 @@ export default function ProductDetailPage({
           </Card>
         )}
       </main>
+
+      {/* Lightbox for source image */}
+      {lightboxUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setLightboxUrl(null)}
+        >
+          <div
+            className="relative max-w-screen-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              className="absolute -top-8 right-0 text-white text-sm hover:text-gray-300"
+              onClick={() => setLightboxUrl(null)}
+            >
+              ✕ 閉じる
+            </button>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={lightboxUrl}
+              alt="ソース画像"
+              className="max-h-[90vh] max-w-full rounded-lg object-contain"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

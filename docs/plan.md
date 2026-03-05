@@ -1,7 +1,7 @@
 # Sokone 全Phase 実装計画
 
 > 作成日: 2026-02-26
-> 最終更新: 2026-02-27
+> 最終更新: 2026-03-05（AndroidカメラGPS対応・Vercelコールドスタート対策追加）
 >
 > **アーキテクチャ:** Next.js フルスタック + Prisma + Neon + Vercel
 
@@ -9,7 +9,7 @@
 
 | Phase | テーマ | 期間目安 | 状態 |
 |---|---|---|---|
-| **Phase 1** | MVP — 全画像ソース（写真・チラシ・Instagram・レシート）→OCR→底値ダッシュボード | 4〜6週間 | 🔜 次 |
+| **Phase 1** | MVP — 全画像ソース（写真・チラシ・Instagram・レシート）→OCR→底値ダッシュボード | 4〜6週間 | � 進行中 |
 | **Phase 2** | 高度チラシ機能 + 検索・フィルタ + UX改善 | 3〜4週間 | 未着手 |
 | **Phase 3** | 底値アラート + 特売通知 | 3〜4週間 | 未着手 |
 | **Phase 4** | 自動チラシ収集 + バッチ処理 + Instagram API検討 | 継続的 | 未着手 |
@@ -123,7 +123,7 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
   - Prisma Adapter でユーザ・セッションを DB 管理
   - コールバック・セッション設定
 - [x] NextAuth Route Handler（`src/app/api/auth/[...nextauth]/route.ts`）
-- [x] 認証ミドルウェア（`middleware.ts`）— 未認証時のリダイレクト
+- [x] 認証ミドルウェア（`proxy.ts`）— 未認証時のリダイレクト
 
 **UI:**
 - [x] ログインページ作成
@@ -162,6 +162,10 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
   - 画像リサイズ（長辺 1600px 以下に。API送信用）
   - **Cloudflare R2 に保存**（`src/lib/r2.ts` 経由）
   - `source_type` パラメータ: `photo`（店頭写真）/ `flyer`（チラシ）/ `instagram`（Instagramスクショ）/ `receipt`（レシート）
+  - EXIF メタデータ抽出（`exifr` ライブラリ）
+    - 撮影日時（DateTimeOriginal / CreateDate / ModifyDate）→ `taken_at` に保存
+    - GPS 座標（GPSLatitude / GPSLongitude）→ `gps_latitude` / `gps_longitude` に保存
+    - スクリーンショットは EXIF がないため自動スキップ
 - [x] `POST /api/images/from-url` — URL指定で画像取得（`src/app/api/images/from-url/route.ts`）
   - URL からの画像ダウンロード
   - Content-Type 検証（画像であることを確認）
@@ -171,12 +175,19 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 - [x] `GET /api/images` — アップロード済み画像一覧
 - [x] `GET /api/images/{id}` — 画像詳細（OCR結果含む）
 - [x] R2 署名付きURL生成（画像の閲覧用）
+- [x] `GET /api/stores/nearby` — GPS 座標から最寄り店舗を検索（Haversine 距離、半径 1km 以内）
 
 **UI:**
 - [x] 画像アップロードページ
   - ドラッグ & ドロップ + ファイル選択
   - 複数画像一括対応
   - アップロードプログレス表示
+  - [x] **カメラ直接撮影ボタン**（`capture="environment"`）— AndroidでGoogleフォト経由を回避し直接カメラを起動
+  - [x] **`accept="*/*"` ファイル選択ボタン**（「ファイルから選択」）— Androidのファイルマネージャーを起動してEXIF GPS情報を保持（GoogleフォtoはEXIFを削除するため）。クライアント側でMIME/拡張子検証を実施
+  - [x] **Vercelコールドスタート対策**
+    - ページ表示時に `/api/images/upload` と `/api/health` を並列でウォームアップリクエスト送信
+    - ウォームアップ中はアップロードボタンを無効化（`isWarmingUp` フラグ）
+    - ネットワークエラー発生時に指数バックオフリトライ（最大3回: 2s → 4s）
 - [x] ソースタイプ選択UI
   - 📷 店頭写真 / 📰 チラシ / 📱 Instagramスクショ / 🧾 レシート の4タブ or セレクト
   - チラシ選択時はURL入力フォームも表示
@@ -186,7 +197,7 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
   - 登録済み店舗リストから選択
   - 「新しい店舗を追加」インライン入力
   - 「あとで設定」スキップ
-  - （GPS 自動候補は Sprint 2 では Optional）
+  - （GPS 自動候補は Sprint 2 では Optional） → ✅ EXIF GPS から最寄り店舗を自動提案（実装済み）
 
 ### 2-2. Gemini 2.0 Flash OCR 連携
 
@@ -232,7 +243,9 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
   - **Instagram（instagram）:** 「この画像はスーパーのInstagram投稿のスクリーンショットです。Instagram UIの要素（いいね数、コメント欄、ユーザ名等）は無視し、投稿画像・テキスト内の商品名と価格情報のみを抽出してください。」
   - **店頭写真（photo）:** デフォルトプロンプト（補足なし）
   - **レシート（receipt）:** 「この画像は買い物のレシートです。レシートに記載されているすべての商品の商品名と購入価格を抽出してください。値引き・割引がある場合は割引後の価格を使用してください。小計・合計・ポイントなどの合算行は除外してください。レシート上部に記載されている店舗名も抽出してください。」
-- [ ] エラーハンドリング（API 障害時のリトライ、レートリミット対策）
+- [x] エラーハンドリング（API 障害時のリトライ、レートリミット対策）
+  - Gemini API 429 (quota超過) 検出 → 日本語エラーメッセージ表示
+  - OCRエラー詳細をUIに伝播
 
 ### 2-3. OCR 精度検証
 
@@ -270,6 +283,9 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 - [x] 商品名のサジェスト
   - 既存の商品マスタから部分一致で候補表示
   - 新規商品の場合はそのまま登録
+- [x] 解析結果画面での既存商品紐付けUI
+  - 編集フォームのドロップダウンで既存商品を選択 → 登録時にその商品IDで紐付け
+  - 紐付け済み商品は青いバッジで表示
 
 ### 3-2. 価格登録 API
 
@@ -293,6 +309,8 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
   - 全角→半角変換
   - スペース・記号の統一
   - 容量表記の正規化（350ｍｌ → 350ml）
+- [x] 表記ゆれ対応: 価格登録時に入力商品名をエイリアスとして自動保存
+  - `POST /api/prices` 登録時に入力商品名と正規化名が異なる場合 `ProductAlias` に追記
 
 ### 完了条件
 
@@ -334,6 +352,11 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
   - 底値ハイライト表示
   - 過去の価格記録一覧
   - **☆お気に入りボタン** — タップでお気に入り登録/解除
+  - ソースバッジをクリックして元画像をライトボックス表示（`sourceImageId` 付き記録のみ）
+  - カテゴリバッジをクリックして直接カテゴリ変更（`PATCH /api/products/{id}`）
+- [x] 商品一覧に「✨ カテゴリ自動設定」ボタン追加（Geminiで未分類商品を一括分類）
+  - `POST /api/products/auto-categorize` を呼び出し、20件バッチでカテゴリ設定
+  - インデックス番号方式でGeminiに送信（UUIDではなくインデックス→ハルシネーション防止）
 
 ### 4-3. お気に入り商品機能
 
@@ -367,7 +390,7 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 - [ ] スマホ向けレイアウト最適化
   - モバイルファーストで各ページをチェック
   - ナビゲーション（ハンバーガーメニュー or ボトムナビ）
-  - 画像アップロードがスマホブラウザから快適に動作することを確認
+  - [x] 画像アップロードがスマホブラウザから快適に動作することを確認（Androidカメラ直接撮影・ファイル選択・GPS自動提案）
 
 ### 完了条件
 
@@ -395,12 +418,12 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 
 ### DB ストレージ監視
 
-- [ ] `GET /api/admin/db-storage` — Neon のストレージ使用量を取得する API
-  - Neon API（`https://console.neon.tech/api/v2/`）を使って使用量を取得
+- [x] `GET /api/admin/db-storage` — Neon のストレージ使用量を取得する API
+  - PostgreSQL組み込み関数 `pg_database_size()` で使用量を取得（Prisma rawQuery）
   - 使用量 / 上限（0.5GB）の割合を返す
-- [ ] ダッシュボードにストレージ使用量インジケータを表示
-  - 80% 超過でアラートバナー（黄色: 「DBストレージが残り少なくなっています」）
-  - 90% 超過で警告バナー（赤: 「DBストレージの空きがほとんどありません」）
+- [x] ダッシュボードにストレージ使用量インジケータを表示
+  - 80% 超過でアラートバナー（黄色: 」DBストレージが残り少なくなっています「）
+  - 90% 超過で警告バナー（赤: 」DBストレージの空きがほとんどありません「）
 
 ---
 
@@ -431,11 +454,22 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 | POST | `/api/favorites` | 4 | お気に入り登録 |
 | GET | `/api/favorites` | 4 | お気に入り一覧 |
 | DELETE | `/api/favorites/{product_id}` | 4 | お気に入り解除 |
+| POST | `/api/products/{id}/merge` | 6 | 重複商品統合 |
+| PATCH | `/api/products/{id}` | 6 | 商品汎用更新（カテゴリ変更等） |
+| POST | `/api/products/auto-categorize` | 4 | 未分類商品をGeminiで一括カテゴリ設定 |
 | GET | `/api/admin/db-storage` | 横断 | DB ストレージ使用量 |
 
 ---
 
 ## 技術メモ
+
+### Gemini モデル管理
+
+- モデルIDは `src/lib/gemini.ts` の `GEMINI_MODEL` 定数で一元管理
+  - 現在: `"gemini-2.5-flash"`
+  - モデルを変更する場合はこの1ファイルだけ修正すればOK
+- `genAI`（`GoogleGenerativeAI` インスタンス）も同ファイルから export
+- `src/lib/ocr.ts` と `src/app/api/products/auto-categorize/route.ts` が `@/lib/gemini` をインポート
 
 ### Gemini API プロンプト設計のポイント
 
@@ -567,9 +601,10 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
   - LLM による類似判定（Gemini Flash）
     - 候補商品リストを提示して「同じ商品か？」を判定
     - 確信度が低い場合はユーザに確認を求める
-- [ ] 商品マージ機能
+- [x] 商品マージ機能
   - `POST /api/products/{id}/merge` — 重複商品を統合（Prisma transaction）
-  - 統合時に価格記録も移行
+  - 統合時に価格記録・エイリアスも移行
+  - 商品一覧ページに「統合」ボタン追加（Dialog で統合先検索・選択→実行）
 
 #### 6-2. カテゴリ管理UI
 
@@ -1079,6 +1114,9 @@ sokone/
 | 1 | POST | `/api/favorites` | お気に入り登録 |
 | 1 | GET | `/api/favorites` | お気に入り一覧 |
 | 1 | DELETE | `/api/favorites/{product_id}` | お気に入り解除 |
+| 1 | POST | `/api/products/auto-categorize` | 未分類商品をGeminiで一括カテゴリ設定 |
+| 1 | PATCH | `/api/products/{id}` | 商品汎用更新（カテゴリ変更等） |
+| 1 | POST | `/api/products/{id}/merge` | 重複商品統合 |
 | 2 | POST | `/api/products/{id}/merge` | 商品マージ |
 | 2 | POST | `/api/categories` | カテゴリ追加 |
 | 2 | PUT | `/api/categories/{id}` | カテゴリ編集 |
