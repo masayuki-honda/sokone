@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import { useDropzone } from "react-dropzone";
-import { Upload, X, Loader2, ImageIcon } from "lucide-react";
+import { Upload, X, Loader2, ImageIcon, Camera } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 interface UploadedFile {
@@ -30,9 +31,23 @@ export function ImageDropzone({
   isUploading,
   maxFiles = 10,
 }: ImageDropzoneProps) {
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+
   const onDrop = useCallback(
     (acceptedFiles: File[]) => {
       onFilesSelected(acceptedFiles);
+    },
+    [onFilesSelected],
+  );
+
+  const handleCameraCapture = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const capturedFiles = Array.from(e.target.files ?? []);
+      if (capturedFiles.length > 0) {
+        onFilesSelected(capturedFiles);
+      }
+      // Reset so the same file can be captured again
+      e.target.value = "";
     },
     [onFilesSelected],
   );
@@ -53,11 +68,34 @@ export function ImageDropzone({
 
   return (
     <div className="space-y-4">
+      {/* Hidden camera input — opens device camera directly (bypasses Google Photos) */}
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={handleCameraCapture}
+        disabled={isUploading}
+      />
+
+      {/* Camera capture button — mobile-friendly shortcut */}
+      <Button
+        type="button"
+        variant="outline"
+        className="w-full gap-2 border-dashed"
+        disabled={isUploading}
+        onClick={() => cameraInputRef.current?.click()}
+      >
+        <Camera className="h-4 w-4" />
+        カメラで撮影する
+      </Button>
+
       {/* Drop zone */}
       <div
         {...getRootProps()}
         className={cn(
-          "flex min-h-[200px] cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-8 text-center transition-colors",
+          "flex min-h-[160px] cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-6 text-center transition-colors",
           isDragActive
             ? "border-primary bg-primary/5"
             : "border-muted-foreground/25 hover:border-primary/50",
@@ -65,13 +103,13 @@ export function ImageDropzone({
         )}
       >
         <input {...getInputProps()} />
-        <Upload className="mb-4 h-10 w-10 text-muted-foreground" />
+        <Upload className="mb-3 h-8 w-8 text-muted-foreground" />
         {isDragActive ? (
           <p className="text-sm font-medium">ここにドロップしてください</p>
         ) : (
           <>
             <p className="text-sm font-medium">
-              ドラッグ＆ドロップ、またはクリックして画像を選択
+              ギャラリーから選択 / ドラッグ＆ドロップ
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
               JPEG, PNG, HEIC, WebP（最大10MB / 最大{maxFiles}枚）
