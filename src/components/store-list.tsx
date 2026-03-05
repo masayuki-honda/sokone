@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { toast } from "sonner";
 
 interface Store {
   id: string;
@@ -75,7 +76,7 @@ export function StoreList() {
 
   const handleGetCurrentLocation = () => {
     if (!navigator.geolocation) {
-      alert("このブラウザは位置情報に対応していません");
+      toast.error("このブラウザは位置情報に対応していません");
       return;
     }
     setGettingLocation(true);
@@ -86,7 +87,7 @@ export function StoreList() {
         setGettingLocation(false);
       },
       () => {
-        alert("位置情報の取得に失敗しました。ブラウザの位置情報許可を確認してください。");
+        toast.error("位置情報の取得に失敗しました。ブラウザの位置情報許可を確認してください。");
         setGettingLocation(false);
       },
       { enableHighAccuracy: true, timeout: 10000 }
@@ -125,6 +126,7 @@ export function StoreList() {
 
       closeForm();
       await fetchStores();
+      toast.success(editingStore ? "店舗を更新しました" : "店舗を追加しました");
     } catch (err) {
       setError(err instanceof Error ? err.message : "エラーが発生しました");
     } finally {
@@ -142,6 +144,7 @@ export function StoreList() {
         throw new Error(data.error || "削除に失敗しました");
       }
       await fetchStores();
+      toast.success(`「${store.name}」を削除しました`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "エラーが発生しました");
     }
@@ -341,28 +344,30 @@ export function StoreList() {
           {stores.map((store) => (
             <div
               key={store.id}
-              className="flex items-center justify-between rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
+              className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
             >
-              <div>
-                <h3 className="font-medium">{store.name}</h3>
-                {store.address && (
-                  <p className="mt-0.5 text-sm text-zinc-500">
-                    {store.address}
-                  </p>
-                )}
-                <p className="mt-0.5 text-xs">
-                  {store.latitude != null && store.longitude != null ? (
-                    <span className="text-green-600 dark:text-green-400">
-                      📍 GPS対応済（{store.latitude.toFixed(4)}, {store.longitude.toFixed(4)}）
-                    </span>
-                  ) : (
-                    <span className="text-zinc-400">
-                      GPS座標未設定
-                    </span>
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <h3 className="font-medium">{store.name}</h3>
+                  {store.address && (
+                    <p className="mt-0.5 text-sm text-zinc-500 break-words">
+                      {store.address}
+                    </p>
                   )}
-                </p>
+                  <p className="mt-0.5 text-xs">
+                    {store.latitude != null && store.longitude != null ? (
+                      <span className="text-green-600 dark:text-green-400">
+                        📍 GPS対応済（{store.latitude.toFixed(4)}, {store.longitude.toFixed(4)}）
+                      </span>
+                    ) : (
+                      <span className="text-zinc-400">
+                        GPS座標未設定
+                      </span>
+                    )}
+                  </p>
+                </div>
               </div>
-              <div className="flex gap-2">
+              <div className="mt-3 flex flex-wrap gap-2">
                 <button
                   onClick={() => openEditForm(store)}
                   className="rounded-md px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"

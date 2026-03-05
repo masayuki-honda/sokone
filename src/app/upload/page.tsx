@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useGeminiUsage } from "@/hooks/use-gemini-usage";
-import { Camera, Newspaper, Instagram, Receipt, Link2, Loader2, AlertCircle, RotateCcw } from "lucide-react";
+import { Camera, Newspaper, Instagram, Receipt, Link2, Loader2, AlertCircle, RotateCcw, AlertTriangle } from "lucide-react";
 import { Header } from "@/components/header";
 import { ImageDropzone } from "@/components/image-dropzone";
 import { StoreSelect } from "@/components/store-select";
@@ -13,6 +13,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 type SourceType = "photo" | "flyer" | "instagram" | "receipt";
 
@@ -59,6 +67,39 @@ interface UploadApiResponse {
   error?: string;
   summary?: { total: number; success: number; failed: number };
 }
+
+// ── Duplicate detection helpers ────────────────────────────────────────────
+const HASH_STORAGE_KEY = "sokone_uploaded_hashes";
+
+async function computeFileHash(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer();
+  const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
+  return Array.from(new Uint8Array(hashBuffer))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function loadUploadedHashes(): Set<string> {
+  try {
+    const stored = localStorage.getItem(HASH_STORAGE_KEY);
+    return new Set(stored ? (JSON.parse(stored) as string[]) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveUploadedHash(hash: string) {
+  try {
+    const existing = loadUploadedHashes();
+    existing.add(hash);
+    // Keep last 500 entries to avoid unbounded growth
+    const arr = Array.from(existing).slice(-500);
+    localStorage.setItem(HASH_STORAGE_KEY, JSON.stringify(arr));
+  } catch {
+    // Ignore storage errors (private browsing etc.)
+  }
+}
+// ────────────────────────────────────────────────────────────────────────────
 
 const SOURCE_TYPES: {
   value: SourceType;
@@ -107,6 +148,12 @@ export default function UploadPage() {
   const [gpsNoStoreFound, setGpsNoStoreFound] = useState<{ lat: number; lng: number } | null>(null);
   const [gpsDebugMsg, setGpsDebugMsg] = useState<string | null>(null);
   const [isWarmingUp, setIsWarmingUp] = useState(true);
+  const [duplicateWarning, setDuplicateWarning] = useState<{
+    pendingFiles: File[];
+    duplicateNames: string[];
+  } | null>(null);
+  // Stores SHA-256 hash for each selected File object (used to persist after upload)
+  const fileHashesRef = useRef<Map<File, string>>(new Map());
   const geminiUsage = useGeminiUsage();
 
   // Warm up Vercel serverless functions on page load to avoid cold-start network error
@@ -118,8 +165,8 @@ export default function UploadPage() {
     ]).finally(() => setIsWarmingUp(false));
   }, []);
 
-  // Handle file selection
-  const handleFilesSelected = useCallback((selectedFiles: File[]) => {
+  // Add files to state (called directly or after duplicate confirmation)
+  function addFilesToState(selectedFiles: File[]) {
     const newFiles: UploadedFile[] = selectedFiles.map((file) => ({
       file,
       preview: URL.createObjectURL(file),
@@ -127,6 +174,26 @@ export default function UploadPage() {
       progress: 0,
     }));
     setFiles((prev) => [...prev, ...newFiles]);
+  }
+
+  // Handle file selection — compute hashes and warn about duplicates
+  const handleFilesSelected = useCallback(async (selectedFiles: File[]) => {
+    const knownHashes = loadUploadedHashes();
+    const duplicateNames: string[] = [];
+
+    for (const file of selectedFiles) {
+      const hash = await computeFileHash(file);
+      fileHashesRef.current.set(file, hash);
+      if (knownHashes.has(hash)) {
+        duplicateNames.push(file.name);
+      }
+    }
+
+    if (duplicateNames.length > 0) {
+      setDuplicateWarning({ pendingFiles: selectedFiles, duplicateNames });
+    } else {
+      addFilesToState(selectedFiles);
+    }
   }, []);
 
   // Extract GPS coordinates from original file before Canvas compression strips EXIF.
@@ -346,6 +413,15 @@ export default function UploadPage() {
         setUploadError(errorMsg);
         setIsUploading(false);
         return;
+      }
+
+      // Save hashes of successfully-uploaded files to localStorage
+      for (let i = 0; i < files.length; i++) {
+        const uploaded = uploadData.uploaded[i];
+        if (uploaded) {
+          const hash = fileHashesRef.current.get(files[i].file);
+          if (hash) saveUploadedHash(hash);
+        }
       }
 
       // Update file statuses
@@ -600,10 +676,10 @@ export default function UploadPage() {
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
       <Header />
-      <main className="mx-auto max-w-4xl px-4 py-8">
-        <div className="flex flex-wrap items-start justify-between gap-2">
+      <main className="mx-auto max-w-4xl px-4 py-6 sm:py-8">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-start sm:justify-between gap-2">
           <div>
-            <h1 className="text-2xl font-bold">画像アップロード</h1>
+            <h1 className="text-xl sm:text-2xl font-bold">画像アップロード</h1>
             <p className="mt-1 text-sm text-muted-foreground">
               商品の画像をアップロードして、AIが価格を自動読み取りします
             </p>
@@ -767,11 +843,11 @@ export default function UploadPage() {
                   </Alert>
                 )}
 
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                   <div className="text-sm text-muted-foreground">
                     {files.length}枚の画像を選択中
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 self-end sm:self-auto">
                     {/* Reset button — shown after upload attempt */}
                     {canReset && (
                       <Button
@@ -849,6 +925,49 @@ export default function UploadPage() {
           </div>
         )}
       </main>
+
+      {/* Duplicate photo confirmation dialog */}
+      <Dialog
+        open={duplicateWarning !== null}
+        onOpenChange={(open) => { if (!open) setDuplicateWarning(null); }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-yellow-500" />
+              過去に登録したことがある写真です
+            </DialogTitle>
+            <DialogDescription asChild>
+              <div className="space-y-2">
+                <p>以下の写真は過去にアップロードされた記録があります。本当に進めますか？</p>
+                <ul className="text-sm text-foreground list-disc list-inside space-y-1">
+                  {duplicateWarning?.duplicateNames.map((name) => (
+                    <li key={name} className="truncate">{name}</li>
+                  ))}
+                </ul>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setDuplicateWarning(null)}
+            >
+              やめる
+            </Button>
+            <Button
+              onClick={() => {
+                if (duplicateWarning) {
+                  addFilesToState(duplicateWarning.pendingFiles);
+                  setDuplicateWarning(null);
+                }
+              }}
+            >
+              続けて登録
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

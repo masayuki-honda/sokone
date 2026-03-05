@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StoreSelect } from "@/components/store-select";
+import { toast } from "sonner";
 
 interface OcrItem {
   name: string;
@@ -491,8 +492,10 @@ export function OcrResultsView({
         setRegistrationError(
           `登録に失敗しました: ${allErrors.map((e: { error?: string } | string) => (typeof e === "string" ? e : e.error)).join(", ")}`,
         );
+        toast.error("価格登録に失敗しました");
       } else {
         setRegistrationSuccess(true);
+        toast.success(`${allResults.length}件の価格を登録しました`);
         // Navigate to dashboard after short delay
         setTimeout(() => {
           router.push("/dashboard");
@@ -501,6 +504,7 @@ export function OcrResultsView({
     } catch (error) {
       console.error("Price registration error:", error);
       setRegistrationError("ネットワークエラーが発生しました");
+      toast.error("ネットワークエラーが発生しました");
     } finally {
       setIsRegistering(false);
     }

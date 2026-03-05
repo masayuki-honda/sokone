@@ -228,19 +228,21 @@ export default function ProductsPage() {
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
       <Header />
       <main className="mx-auto max-w-4xl px-4 py-8 space-y-6">
-        <div className="flex items-center gap-3">
-          <Link href="/dashboard">
-            <Button variant="ghost" size="icon">
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold">商品一覧</h1>
-            <p className="text-sm text-muted-foreground">
-              登録済みの商品を検索・閲覧・統合
-            </p>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <Link href="/dashboard">
+              <Button variant="ghost" size="icon">
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+            </Link>
+            <div>
+              <h1 className="text-xl sm:text-2xl font-bold">商品一覧</h1>
+              <p className="text-sm text-muted-foreground">
+                登録済みの商品を検索・閲覧・統合
+              </p>
+            </div>
           </div>
-          <div className="ml-auto flex flex-col items-end gap-1">
+          <div className="sm:ml-auto flex flex-col items-start sm:items-end gap-1">
             <Button
               variant="outline"
               size="sm"
@@ -272,10 +274,11 @@ export default function ProductsPage() {
         </div>
 
         {/* Category filter */}
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2 overflow-x-auto pb-1 -mb-1 scrollbar-none">
           <Button
             variant={selectedCategory === "" ? "default" : "outline"}
             size="sm"
+            className="shrink-0"
             onClick={() => setSelectedCategory("")}
           >
             すべて
@@ -287,6 +290,7 @@ export default function ProductsPage() {
                 selectedCategory === cat.id ? "default" : "outline"
               }
               size="sm"
+              className="shrink-0"
               onClick={() => setSelectedCategory(cat.id)}
             >
               {cat.name}

@@ -366,7 +366,7 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 - [x] `GET /api/favorites` — お気に入り一覧（底値情報付き）
   - 商品情報 + 底値 + 最新価格 + 店舗名を Prisma で join して返却
 - [x] `DELETE /api/favorites/{product_id}` — お気に入り解除（`src/app/api/favorites/[productId]/route.ts`）
-- [ ] `PUT /api/favorites/order` — 表示順序変更（任意）
+- [x] `PUT /api/favorites/order` — 表示順序変更（任意）
 
 **Prisma モデル:**
 - [x] `FavoriteProduct` モデル — id (UUID), user_id (FK), product_id (FK), display_order (int), created_at
@@ -387,7 +387,7 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 
 ### 4-5. レスポンシブ対応
 
-- [ ] スマホ向けレイアウト最適化
+- [x] スマホ向けレイアウト最適化
   - モバイルファーストで各ページをチェック
   - ナビゲーション（ハンバーガーメニュー or ボトムナビ）
   - [x] 画像アップロードがスマホブラウザから快適に動作することを確認（Androidカメラ直接撮影・ファイル選択・GPS自動提案）
@@ -406,15 +406,15 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 
 ### テスト
 
-- [ ] Vitest で API Route Handler テスト（各エンドポイント）
-- [ ] OCR サービスのユニットテスト（モック使用）
+- [x] Vitest で API Route Handler テスト（各エンドポイント）
+- [x] OCR サービスのユニットテスト（モック使用）
 - [ ] 主要コンポーネントの基本テスト（Testing Library）
 
 ### ドキュメント
 
 - [ ] API 仕様書（補足ドキュメント）
-- [ ] 開発環境セットアップ手順を README に追記
-- [ ] `.env.example` の説明コメント
+- [x] 開発環境セットアップ手順を README に追記
+- [x] `.env.example` の説明コメント
 
 ### DB ストレージ監視
 
@@ -454,6 +454,8 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 | POST | `/api/favorites` | 4 | お気に入り登録 |
 | GET | `/api/favorites` | 4 | お気に入り一覧 |
 | DELETE | `/api/favorites/{product_id}` | 4 | お気に入り解除 |
+| PUT | `/api/favorites/order` | 4 | お気に入り表示順序変更 |
+| DELETE | `/api/prices/{id}` | 3 | 価格記録削除（誤登録修正） |
 | POST | `/api/products/{id}/merge` | 6 | 重複商品統合 |
 | PATCH | `/api/products/{id}` | 6 | 商品汎用更新（カテゴリ変更等） |
 | POST | `/api/products/auto-categorize` | 4 | 未分類商品をGeminiで一括カテゴリ設定 |
@@ -646,11 +648,11 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
 #### 7-2. UX 改善
 
 **UI:**
-- [ ] ローディング表示の統一（Skeleton UI）
-- [ ] エラーハンドリングの統一（Toast通知）
+- [x] ローディング表示の統一（Skeleton UI）
+- [x] エラーハンドリングの統一（Toast通知）
 - [ ] 画像アップロード履歴ページ
 - [ ] 「最近見た商品」セクション追加
-- [ ] PWA 基本設定（manifest.json、アイコン）→ ホーム画面に追加可能に
+- [x] PWA 基本設定（manifest.json、アイコン）→ ホーム画面に追加可能に
 
 ### 追加 API（Phase 2）
 

@@ -213,12 +213,13 @@ export default function DashboardPage() {
       <Header />
       <main className="mx-auto max-w-6xl px-4 py-8 space-y-8">
         {/* Title + Action */}
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">ダッシュボード</h1>
+        <div className="flex items-center justify-between gap-2">
+          <h1 className="text-xl sm:text-2xl font-bold">ダッシュボード</h1>
           <Link href="/upload">
-            <Button>
-              <Camera className="mr-2 h-4 w-4" />
-              画像をアップロード
+            <Button size="sm" className="sm:size-default">
+              <Camera className="mr-1.5 h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">画像をアップロード</span>
+              <span className="sm:hidden">アップロード</span>
             </Button>
           </Link>
         </div>
@@ -411,10 +412,11 @@ export default function DashboardPage() {
                 className="pl-10"
               />
             </div>
-            <div className="flex gap-2 flex-wrap">
+            <div className="flex gap-2 overflow-x-auto pb-1 -mb-1 scrollbar-none">
               <Button
                 variant={selectedCategory === "" ? "default" : "outline"}
                 size="sm"
+                className="shrink-0"
                 onClick={() => setSelectedCategory("")}
               >
                 すべて
@@ -426,6 +428,7 @@ export default function DashboardPage() {
                     selectedCategory === cat.id ? "default" : "outline"
                   }
                   size="sm"
+                  className="shrink-0"
                   onClick={() => setSelectedCategory(cat.id)}
                 >
                   {cat.name}

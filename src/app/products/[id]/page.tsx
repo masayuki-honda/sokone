@@ -219,17 +219,18 @@ export default function ProductDetailPage({
       <Header />
       <main className="mx-auto max-w-4xl px-4 py-8 space-y-6">
         {/* Header */}
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <Button
               variant="ghost"
               size="icon"
+              className="shrink-0"
               onClick={() => router.back()}
             >
               <ArrowLeft className="h-5 w-5" />
             </Button>
-            <div>
-              <h1 className="text-2xl font-bold">{product.name}</h1>
+            <div className="min-w-0">
+              <h1 className="text-lg sm:text-2xl font-bold break-words">{product.name}</h1>
               <div className="mt-1 flex items-center gap-2 flex-wrap">
                 {editingCategory ? (
                   <div className="flex items-center gap-1">
@@ -373,9 +374,9 @@ export default function ProductDetailPage({
         {history && history.series.length > 0 && (
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <CardTitle className="text-base">店舗別価格比較</CardTitle>
-                <div className="flex gap-1">
+                <div className="flex gap-1 overflow-x-auto scrollbar-none">
                   {[
                     { value: "1m", label: "1ヶ月" },
                     { value: "3m", label: "3ヶ月" },
@@ -387,7 +388,7 @@ export default function ProductDetailPage({
                       key={p.value}
                       variant={period === p.value ? "default" : "ghost"}
                       size="sm"
-                      className="text-xs"
+                      className="text-xs shrink-0"
                       onClick={() => setPeriod(p.value)}
                     >
                       {p.label}
