@@ -32,6 +32,7 @@ export function ImageDropzone({
   maxFiles = 10,
 }: ImageDropzoneProps) {
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const onDrop = useCallback(
     (acceptedFiles: File[]) => {
@@ -47,6 +48,21 @@ export function ImageDropzone({
         onFilesSelected(capturedFiles);
       }
       // Reset so the same file can be captured again
+      e.target.value = "";
+    },
+    [onFilesSelected],
+  );
+
+  // Use extension-based accept (not "image/*") so Android opens the system file manager
+  // instead of the Google Photos media picker. Google Photos strips EXIF GPS on serve.
+  const handleFileSelect = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const selectedFiles = Array.from(e.target.files ?? []).filter((f) =>
+        /\.(jpe?g|png|heic|heif|webp)$/i.test(f.name),
+      );
+      if (selectedFiles.length > 0) {
+        onFilesSelected(selectedFiles);
+      }
       e.target.value = "";
     },
     [onFilesSelected],
@@ -79,23 +95,47 @@ export function ImageDropzone({
         disabled={isUploading}
       />
 
-      {/* Camera capture button — mobile-friendly shortcut */}
-      <Button
-        type="button"
-        variant="outline"
-        className="w-full gap-2 border-dashed"
+      {/* Hidden file input — extension-based accept triggers system file manager on Android,
+          bypassing the Google Photos media picker that strips EXIF GPS. */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".jpg,.jpeg,.png,.heic,.heif,.webp"
+        multiple
+        className="hidden"
+        onChange={handleFileSelect}
         disabled={isUploading}
-        onClick={() => cameraInputRef.current?.click()}
-      >
-        <Camera className="h-4 w-4" />
-        カメラで撮影する
-      </Button>
+      />
 
-      {/* Drop zone */}
+      {/* Two quick-access buttons for mobile */}
+      <div className="grid grid-cols-2 gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          className="gap-2 border-dashed"
+          disabled={isUploading}
+          onClick={() => cameraInputRef.current?.click()}
+        >
+          <Camera className="h-4 w-4" />
+          カメラで撮影
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          className="gap-2 border-dashed"
+          disabled={isUploading}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <ImageIcon className="h-4 w-4" />
+          ファイルから選択
+        </Button>
+      </div>
+
+      {/* Drop zone (PC drag-and-drop / fallback tap) */}
       <div
         {...getRootProps()}
         className={cn(
-          "flex min-h-[160px] cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-6 text-center transition-colors",
+          "flex min-h-[120px] cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-4 text-center transition-colors",
           isDragActive
             ? "border-primary bg-primary/5"
             : "border-muted-foreground/25 hover:border-primary/50",
@@ -103,16 +143,14 @@ export function ImageDropzone({
         )}
       >
         <input {...getInputProps()} />
-        <Upload className="mb-3 h-8 w-8 text-muted-foreground" />
+        <Upload className="mb-2 h-6 w-6 text-muted-foreground" />
         {isDragActive ? (
           <p className="text-sm font-medium">ここにドロップしてください</p>
         ) : (
           <>
-            <p className="text-sm font-medium">
-              ギャラリーから選択 / ドラッグ＆ドロップ
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              JPEG, PNG, HEIC, WebP（最大10MB / 最大{maxFiles}枚）
+            <p className="text-sm font-medium">ドラッグ＆ドロップ</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              JPEG, PNG, HEIC, WebP（最大{maxFiles}枚）
             </p>
           </>
         )}
