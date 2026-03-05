@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import { Upload, X, Loader2, ImageIcon, Camera } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
@@ -33,6 +33,7 @@ export function ImageDropzone({
 }: ImageDropzoneProps) {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [fileTypeError, setFileTypeError] = useState<string | null>(null);
 
   const onDrop = useCallback(
     (acceptedFiles: File[]) => {
@@ -53,15 +54,21 @@ export function ImageDropzone({
     [onFilesSelected],
   );
 
-  // Use extension-based accept (not "image/*") so Android opens the system file manager
-  // instead of the Google Photos media picker. Google Photos strips EXIF GPS on serve.
+  // accept="*/*" is used to bypass Android's Google Photos media picker.
+  // Image files are validated here by MIME type or extension.
   const handleFileSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      const selectedFiles = Array.from(e.target.files ?? []).filter((f) =>
-        /\.(jpe?g|png|heic|heif|webp)$/i.test(f.name),
+      setFileTypeError(null);
+      const all = Array.from(e.target.files ?? []);
+      const imageFiles = all.filter(
+        (f) =>
+          f.type.startsWith("image/") ||
+          /\.(jpe?g|png|heic|heif|webp)$/i.test(f.name),
       );
-      if (selectedFiles.length > 0) {
-        onFilesSelected(selectedFiles);
+      if (all.length > 0 && imageFiles.length === 0) {
+        setFileTypeError("画像ファイル（JPEG・PNG・HEIC・WebP）を選択してください");
+      } else {
+        if (imageFiles.length > 0) onFilesSelected(imageFiles);
       }
       e.target.value = "";
     },
@@ -95,12 +102,13 @@ export function ImageDropzone({
         disabled={isUploading}
       />
 
-      {/* Hidden file input — extension-based accept triggers system file manager on Android,
-          bypassing the Google Photos media picker that strips EXIF GPS. */}
+      {/* Hidden file input — accept all files to force Android Files app instead of
+          the Google Photos media picker. Image files are validated client-side.
+          Any image-specific accept value triggers the media picker on Android. */}
       <input
         ref={fileInputRef}
         type="file"
-        accept=".jpg,.jpeg,.png,.heic,.heif,.webp"
+        accept="*/*"
         multiple
         className="hidden"
         onChange={handleFileSelect}
@@ -130,6 +138,9 @@ export function ImageDropzone({
           ファイルから選択
         </Button>
       </div>
+      {fileTypeError && (
+        <p className="text-sm text-destructive">{fileTypeError}</p>
+      )}
 
       {/* Drop zone (PC drag-and-drop / fallback tap) */}
       <div
