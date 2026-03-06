@@ -13,6 +13,7 @@ import {
   Wand2,
   ArrowUpDown,
   SlidersHorizontal,
+  Trash2,
 } from "lucide-react";
 import { Header } from "@/components/header";
 import { Button } from "@/components/ui/button";
@@ -74,6 +75,11 @@ export default function ProductsPage() {
   // Auto-categorize state
   const [isAutoCategorizing, setIsAutoCategorizing] = useState(false);
   const [autoCategorizeResult, setAutoCategorizeResult] = useState<string | null>(null);
+
+  // Delete state
+  const [deleteTarget, setDeleteTarget] = useState<ProductItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Debounce main search
   useEffect(() => {
@@ -231,6 +237,26 @@ export default function ProductsPage() {
     const grams = parseFloat(match[1]);
     if (grams <= 0) return null;
     return Math.round((price * 100) / grams);
+  }
+
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      const res = await fetch(`/api/products/${deleteTarget.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json();
+        setDeleteError(data.error || "削除に失敗しました");
+        return;
+      }
+      setProducts((prev) => prev.filter((p) => p.id !== deleteTarget.id));
+      setDeleteTarget(null);
+    } catch {
+      setDeleteError("削除中にエラーが発生しました");
+    } finally {
+      setIsDeleting(false);
+    }
   }
 
   async function handleAutoCategorize() {
@@ -473,6 +499,15 @@ export default function ProductsPage() {
                       <Merge className="h-3 w-3" />
                       統合
                     </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                      onClick={() => { setDeleteTarget(product); setDeleteError(null); }}
+                      title="削除"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
@@ -489,6 +524,41 @@ export default function ProductsPage() {
           </div>
         )}
       </main>
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>商品を削除</DialogTitle>
+            <DialogDescription>
+              「{deleteTarget?.name}」を削除します。この操作は取り消せません。
+              <br />
+              関連する{deleteTarget?._count.priceRecords}件の価格記録もすべて削除されます。
+            </DialogDescription>
+          </DialogHeader>
+          {deleteError && (
+            <p className="text-sm text-destructive">{deleteError}</p>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={isDeleting}>
+              キャンセル
+            </Button>
+            <Button variant="destructive" onClick={handleDelete} disabled={isDeleting}>
+              {isDeleting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  削除中...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  削除する
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Merge dialog */}
       <Dialog open={!!mergeSource} onOpenChange={(open) => !open && closeMergeDialog()}>
