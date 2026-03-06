@@ -57,11 +57,19 @@ export async function POST(_request: NextRequest, { params }: Params) {
 
     const imageBuffer = Buffer.from(await response.arrayBuffer());
 
+    // Fetch user-defined categories from DB to inject into OCR prompt
+    const dbCategories = await prisma.productCategory.findMany({
+      select: { name: true },
+      orderBy: { displayOrder: "asc" },
+    });
+    const categoryNames = dbCategories.map((c) => c.name);
+
     // Run OCR
     const ocrResult = await analyzeImage(
       imageBuffer,
       "image/jpeg", // Images are always converted to JPEG during upload
       image.sourceType as OcrSourceType,
+      categoryNames,
     );
 
     // Update the database with OCR results

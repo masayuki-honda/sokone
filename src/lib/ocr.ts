@@ -53,7 +53,7 @@ const ocrResponseSchema: Schema = {
           },
           category_hint: {
             type: SchemaType.STRING,
-            description: "推定カテゴリ（酒類/肉類/野菜類/魚介類/卵/乳製品/飲料/調味料/冷凍食品/お菓子/日用品/その他）",
+            description: "推定カテゴリ名。リストの中から最も近いものを選択してください。該当なしの場合はnull",
             nullable: true,
           },
           is_tax_included: {
@@ -124,46 +124,48 @@ const BASE_PROMPT = `以下の画像はスーパーマーケットの商品価�
 - price: 税込価格（数値）
 - unit: 単位（個/袋/本/パック/100g等）
 - volume: 容量（350ml/1L等）
-- category_hint: 推定カテゴリ（酒類/肉類/野菜類/魚介類/卵/乳製品/飲料/調味料/冷凍食品/お菓子/日用品/その他）
+- category_hint: 推定カテゴリ名（後述のリストから選択）
 - is_tax_included: 元の表示が税込かどうか
 - confidence: 読み取り確信度（0.0-1.0）
 - identified_by: text（テキストから識別）/ image（画像から識別）/ both（両方）`;
 
-const SOURCE_TYPE_PROMPTS: Record<OcrSourceType, string> = {
-  photo: BASE_PROMPT,
-  flyer: `${BASE_PROMPT}
+// Default fallback categories if none are defined in DB
+const DEFAULT_CATEGORIES = [
+  "酒類", "肉類", "野菜類", "魚介類", "卵", "乳製品", "飲料", "ノンアル飲料",
+  "調味料", "冷凍食品", "お菓子", "パン・ベーカリー", "日用品", "その他",
+];
 
-【補足】この画像はスーパーのチラシです。
-1枚の画像に複数商品が並んでいます。すべての商品を抽出してください。
-セール価格がある場合はセール価格を優先してください。
-元の価格と割引後の価格がある場合は、割引後の価格を使用してください。`,
-  instagram: `${BASE_PROMPT}
+function buildPrompt(sourceType: OcrSourceType, categoryNames: string[]): string {
+  const categoryList = categoryNames.length > 0 ? categoryNames : DEFAULT_CATEGORIES;
+  const categorySection = `【カテゴリ一覧】category_hint には以下のカテゴリ名のいずれかを使ってください。該当しない場合はnullを指定してください:\n${categoryList.map((c) => `- ${c}`).join("\n")}`;
 
-【補足】この画像はスーパーのInstagram投稿のスクリーンショットです。
-Instagram UIの要素（いいね数、コメント欄、ユーザ名等）は無視し、
-投稿画像・テキスト内の商品名と価格情報のみを抽出してください。`,
-  receipt: `${BASE_PROMPT}
+  const baseWithCategory = `${BASE_PROMPT}\n\n${categorySection}`;
 
-【補足】この画像は買い物のレシートです。
-レシートに記載されているすべての商品の商品名と購入価格を抽出してください。
-値引き・割引がある場合は割引後の価格を使用してください。
-小計・合計・ポイントなどの合算行は除外してください。
-レシート上部に記載されている店舗名も store_name フィールドに抽出してください。`,
-};
+  const suffixes: Record<OcrSourceType, string> = {
+    photo: "",
+    flyer: `\n\n【補足】この画像はスーパーのチラシです。\n1枚の画像に複数商品が並んでいます。すべての商品を抽出してください。\nセール価格がある場合はセール価格を優先してください。\n元の価格と割引後の価格がある場合は、割引後の価格を使用してください。`,
+    instagram: `\n\n【補足】この画像はスーパーのInstagram投稿のスクリーンショットです。\nInstagram UIの要素（いいね数、コメント欄、ユーザ名等）は無視し、\n投稿画像・テキスト内の商品名と価格情報のみを抽出してください。`,
+    receipt: `\n\n【補足】この画像は買い物のレシートです。\nレシートに記載されているすべての商品の商品名と購入価格を抽出してください。\n値引き・割引がある場合は割引後の価格を使用してください。\n小計・合計・ポイントなどの合算行は除外してください。\nレシート上部に記載されている店舗名も store_name フィールドに抽出してください。`,
+  };
+
+  return baseWithCategory + suffixes[sourceType];
+}
 
 // === Main OCR function ===
 
 /**
- * Analyze an image using Gemini 2.0 Flash
+ * Analyze an image using Gemini Flash
  * @param imageBuffer - The image data as a Buffer
  * @param mimeType - The MIME type of the image
  * @param sourceType - The type of source (photo/flyer/instagram/receipt)
+ * @param categoryNames - Category names from DB (injected by caller). Falls back to defaults.
  * @returns OCR result with extracted items
  */
 export async function analyzeImage(
   imageBuffer: Buffer,
   mimeType: string,
   sourceType: OcrSourceType,
+  categoryNames: string[] = [],
 ): Promise<OcrResult> {
   const model = genAI.getGenerativeModel({
     model: GEMINI_MODEL,
@@ -174,7 +176,7 @@ export async function analyzeImage(
     },
   });
 
-  const prompt = SOURCE_TYPE_PROMPTS[sourceType];
+  const prompt = buildPrompt(sourceType, categoryNames);
   const base64Image = imageBuffer.toString("base64");
 
   const result = await model.generateContent([

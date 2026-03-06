@@ -1,7 +1,7 @@
 # Sokone 全Phase 実装計画
 
 > 作成日: 2026-02-26
-> 最終更新: 2026-03-06（Sprint 7 検索・フィルタ・ソート機能追加）
+> 最終更新: 2026-03-07（バッチアップロード強化・価格履歴編集・カテゴリDnD・OCR動的カテゴリ対応）
 >
 > **アーキテクチャ:** Next.js フルスタック + Prisma + Neon + Vercel
 
@@ -206,6 +206,7 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
   - `@google/generative-ai` SDK で Gemini 2.0 Flash API クライアント実装
   - 画像 → Base64 エンコード → API 送信
   - プロンプト設計: 商品名・価格・単位・容量を JSON で返すよう指示
+  - `buildPrompt(sourceType, categoryNames[])` 関数— DBカテゴリ一覧をプロンプト内の【カテゴリ一覧】セクションに動的注入
   - ソースタイプ別のプロンプト切り替え
   - レスポンスパース + バリデーション（Zod）
 - [x] `POST /api/images/{id}/analyze` — OCR 実行エンドポイント（`src/app/api/images/[id]/analyze/route.ts`）
@@ -456,6 +457,7 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 | DELETE | `/api/favorites/{product_id}` | 4 | お気に入り解除 |
 | PUT | `/api/favorites/order` | 4 | お気に入り表示順序変更 |
 | DELETE | `/api/prices/{id}` | 3 | 価格記録削除（誤登録修正） |
+| PATCH | `/api/prices/{id}` | 7 | 価格記録更新（編集） |
 | POST | `/api/products/{id}/merge` | 6 | 重複商品統合 |
 | PATCH | `/api/products/{id}` | 6 | 商品汎用更新（カテゴリ変更等） |
 | POST | `/api/products/auto-categorize` | 4 | 未分類商品をGeminiで一括カテゴリ設定 |
@@ -657,8 +659,14 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
 - [x] PWA 基本設定（manifest.json、アイコン）→ ホーム画面に追加可能に
 - [x] 同一画像の重複アップロード検出（SHA-256 + localStorage + 確認ダイアログ）
 - [x] 重複検知強化: fileHashをDBに保存・`GET /api/images/hashes`でサーバー側ハッシュをseed
-- [x] カテゴリ管理: ↑↓ボタンで表示順を変更（displayOrder入れ替え）
+- [x] カテゴリ管理: ↑↓ボタンで表示順を変更（displayOrder入れ替え）→ **DnD操作に置換済み**
+- [x] カテゴリ管理: ドラッグ&ドロップで表示順を変更（@dnd-kit/sortable + `PUT /api/categories/reorder`）
 - [x] 商品一覧: 底値を商品名横に表示（肉類＋volumeがXgの場合 ¥Y/100g 表示）
+- [x] バッチアップロード（5枚/リクエスト）— Vercel 4.5MB制限回避のため複数ファイルを分割送信
+- [x] アップロード10枚制限UX — onDropRejected でファイル数超過・サイズ超過・形式エラーを日本語メッセージ表示
+- [x] OCRプロンプト改善: 「商談時使用売価」等の業者向け価格を除外するよう指示追加
+- [x] 価格履歴インライン編集・削除（商品詳細ページ）— 日付・店舗・価格を編集フォームで修正可能
+- [x] OCR `category_hint` 動的化 — DBのカテゴリ一覧を取得してプロンプトに注入（`buildPrompt()` 関数追加）
 
 ### 追加 API（Phase 2）
 
@@ -666,11 +674,13 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
 |---|---|---|---|
 | POST | `/api/products/{id}/merge` | 6 | 商品マージ |
 | POST | `/api/categories` | 6 | カテゴリ追加 ✅ |
-| PUT | `/api/categories/{id}` | 6 | カテゴリ編集・並び順変更 ✅ |
+| PUT | `/api/categories/{id}` | 6 | カテゴリ編集 ✅ |
 | DELETE | `/api/categories/{id}` | 6 | カテゴリ削除 ✅ |
 | DELETE | `/api/images/{id}` | 6 | 画像個別削除 ✅ |
 | DELETE | `/api/images/cleanup` | 6 | 未登録画像一括削除 ✅ |
 | GET | `/api/images/hashes` | 6 | ユーザーの既存ファイルハッシュ一覧 ✅ |
+| PUT | `/api/categories/reorder` | 7 | カテゴリ並び替え（DnD） ✅ |
+| PATCH | `/api/prices/{id}` | 7 | 価格記録更新（編集）✅ |
 
 ### 成功基準（Phase 2 完了条件）
 
@@ -1132,6 +1142,13 @@ sokone/
 | 2 | POST | `/api/products/{id}/merge` | 商品マージ |
 | 2 | POST | `/api/categories` | カテゴリ追加 |
 | 2 | PUT | `/api/categories/{id}` | カテゴリ編集 |
+| 2 | DELETE | `/api/categories/{id}` | カテゴリ削除 |
+| 2 | DELETE | `/api/images/{id}` | 画像個別削除 |
+| 2 | DELETE | `/api/images/cleanup` | 未登録画像一括削除 |
+| 2 | GET | `/api/images/hashes` | 既存ファイルハッシュ一覧 |
+| 2 | DELETE | `/api/prices/{id}` | 価格記録削除 |
+| 2 | PATCH | `/api/prices/{id}` | 価格記録更新（編集） |
+| 2 | PUT | `/api/categories/reorder` | カテゴリ並び替え（DnD） |
 | 3 | GET | `/api/notifications` | 通知一覧 |
 | 3 | PUT | `/api/notifications/{id}/read` | 通知既読 |
 | 3 | GET | `/api/notifications/unread-count` | 未読数 |
@@ -1146,3 +1163,41 @@ sokone/
 | 4 | GET | `/api/stores/{id}/scraping/status` | スクレイピング状況 |
 | 5 | POST | `/api/devices` | デバイストークン登録 |
 | 5 | DELETE | `/api/devices/{token}` | デバイストークン削除 |
+
+---
+---
+
+# 将来構想（Phase 6以降 / 検討中）
+
+下記は現時点では実装予定なしだが、将来的に検討する構想として残す。
+
+## Amazon / Rakuten 自動価格ウォッチ（Q1）
+
+### 概要
+
+Amazon・Rakuten 等のオンラインショッピングサイトの商品ページを定期的に取得し、
+実店の底値データとクロスチェックできるようにする。
+
+### 検討事項
+
+- [ ] Amazon Product Advertising API 利用資格要件の確認
+  - アソシエイトプログラムへの登録が必要
+  - 電商アフィリエイト報酬の制度上の制約を調査
+- [ ] Rakuten API （楽天商品検索 API）での価格取得可能性調査
+- [ ] スクレイピングと API どちらが実現性が高いか检討
+
+### 実装イメージ（検討後）
+
+**Server:**
+- [ ] オンライン価格取得サービス（`src/lib/online-price.ts`）
+  - Amazon / Rakuten から商品の現在価格を取得
+  - `OnlinePrice` モデル — product_id, source (amazon/rakuten), url, price, fetched_at
+- [ ] 定期バッチ取得（Vercel Cron Jobs）
+  - お気に入り商品を毎日自動取得
+- [ ] 実店底値との比較表示 API
+  - `GET /api/products/{id}/online-prices` — オンライン価格履歴
+
+**UI:**
+- [ ] 商品詳細ページに「Amazon/Rakuten 最安値」表示カード追加
+- [ ] 実店底値 vs オンライン価格の比較グラフ
+- [ ] 「オンラインの方が安い!」アラート通知
