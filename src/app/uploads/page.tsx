@@ -156,7 +156,9 @@ export default function UploadsPage() {
         setImages((prev) => prev.map(updated));
         setLightboxImage((prev) => (prev?.id === id ? updated(prev) : prev));
       } else {
-        alert(data.error || "OCRに失敗しました");
+        const msg = data.error || "OCRに失敗しました";
+        const detail = data.details ? `\n\n詳細: ${data.details}` : "";
+        alert(msg + detail);
       }
     } catch {
       alert("通信エラーが発生しました");
