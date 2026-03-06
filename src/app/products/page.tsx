@@ -11,6 +11,8 @@ import {
   X,
   Check,
   Wand2,
+  ArrowUpDown,
+  SlidersHorizontal,
 } from "lucide-react";
 import { Header } from "@/components/header";
 import { Button } from "@/components/ui/button";
@@ -42,14 +44,24 @@ interface Category {
   _count: { products: number };
 }
 
+interface StoreItem {
+  id: string;
+  name: string;
+}
+
 export default function ProductsPage() {
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [stores, setStores] = useState<StoreItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState("");
+  const [selectedStore, setSelectedStore] = useState("");
+  const [sortBy, setSortBy] = useState("name");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [showFilters, setShowFilters] = useState(false);
 
   // Merge dialog state
   const [mergeSource, setMergeSource] = useState<ProductItem | null>(null);
@@ -77,12 +89,23 @@ export default function ProductsPage() {
       .catch(() => {});
   }, []);
 
+  // Fetch stores
+  useEffect(() => {
+    fetch("/api/stores")
+      .then((r) => r.json())
+      .then((data) => setStores(Array.isArray(data) ? data : []))
+      .catch(() => {});
+  }, []);
+
   // Fetch products
   const fetchProducts = useCallback(async () => {
     setIsLoading(true);
     const params = new URLSearchParams();
     if (debouncedQuery) params.set("q", debouncedQuery);
     if (selectedCategory) params.set("categoryId", selectedCategory);
+    if (selectedStore) params.set("storeId", selectedStore);
+    if (sortBy !== "name") params.set("sortBy", sortBy);
+    if (sortOrder !== "asc") params.set("sortOrder", sortOrder);
     params.set("limit", "30");
 
     try {
@@ -97,7 +120,7 @@ export default function ProductsPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [debouncedQuery, selectedCategory]);
+  }, [debouncedQuery, selectedCategory, selectedStore, sortBy, sortOrder]);
 
   useEffect(() => {
     fetchProducts();
@@ -110,6 +133,9 @@ export default function ProductsPage() {
     const params = new URLSearchParams();
     if (debouncedQuery) params.set("q", debouncedQuery);
     if (selectedCategory) params.set("categoryId", selectedCategory);
+    if (selectedStore) params.set("storeId", selectedStore);
+    if (sortBy !== "name") params.set("sortBy", sortBy);
+    if (sortOrder !== "asc") params.set("sortOrder", sortOrder);
     params.set("cursor", nextCursor);
     params.set("limit", "30");
 
@@ -273,16 +299,70 @@ export default function ProductsPage() {
           </div>
         </div>
 
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="商品名で検索..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
+        {/* Search + Sort + Filter toggle */}
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="商品名で検索..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <Button
+            variant={showFilters ? "default" : "outline"}
+            size="icon"
+            className="shrink-0"
+            onClick={() => setShowFilters((v) => !v)}
+            title="フィルタ・並び替え"
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+          </Button>
         </div>
+
+        {/* Expandable filters: Sort + Store */}
+        {showFilters && (
+          <div className="flex flex-col sm:flex-row gap-3 rounded-lg border bg-muted/30 p-3">
+            <div className="flex items-center gap-2">
+              <ArrowUpDown className="h-4 w-4 text-muted-foreground shrink-0" />
+              <select
+                className="text-sm border rounded px-2 py-1.5 bg-background flex-1 sm:w-auto"
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+              >
+                <option value="name">名前順</option>
+                <option value="price">底値順</option>
+                <option value="recordCount">記録数順</option>
+              </select>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="px-2 text-xs"
+                onClick={() => setSortOrder((v) => (v === "asc" ? "desc" : "asc"))}
+              >
+                {sortOrder === "asc" ? "↑ 昇順" : "↓ 降順"}
+              </Button>
+            </div>
+            {stores.length > 0 && (
+              <div className="flex items-center gap-2 sm:border-l sm:pl-3">
+                <span className="text-sm text-muted-foreground shrink-0">店舗:</span>
+                <select
+                  className="text-sm border rounded px-2 py-1.5 bg-background flex-1 sm:w-auto"
+                  value={selectedStore}
+                  onChange={(e) => setSelectedStore(e.target.value)}
+                >
+                  <option value="">すべての店舗</option>
+                  {stores.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Category filter */}
         <div className="flex gap-2 overflow-x-auto pb-1 -mb-1 scrollbar-none">
@@ -293,6 +373,14 @@ export default function ProductsPage() {
             onClick={() => setSelectedCategory("")}
           >
             すべて
+          </Button>
+          <Button
+            variant={selectedCategory === "uncategorized" ? "default" : "outline"}
+            size="sm"
+            className="shrink-0"
+            onClick={() => setSelectedCategory("uncategorized")}
+          >
+            未分類
           </Button>
           {categories.map((cat) => (
             <Button
