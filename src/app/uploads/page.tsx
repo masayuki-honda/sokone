@@ -206,7 +206,7 @@ export default function UploadsPage() {
     }
     setRegisteringId(image.id);
     try {
-      const res = await fetch("/api/prices/bulk", {
+      const res = await fetch("/api/prices", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -219,7 +219,7 @@ export default function UploadsPage() {
       });
       const data = await res.json();
       if (res.ok) {
-        const registeredCount = (data.results?.length ?? 0) as number;
+        const registeredCount = (data.registered?.length ?? 0) as number;
         setRegisterResult({ registered: registeredCount, errors: data.errors?.length ?? 0 });
         setImages((prev) =>
           prev.map((img) =>
