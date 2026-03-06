@@ -18,6 +18,7 @@ import {
   X,
   AlertTriangle,
   ScanText,
+  PlusCircle,
 } from "lucide-react";
 import { Header } from "@/components/header";
 import { Button } from "@/components/ui/button";
@@ -53,11 +54,18 @@ interface UploadedImage {
   _count: { priceRecords: number };
 }
 
+interface OcrItem {
+  name: string;
+  price: number;
+  unit?: string | null;
+  volume?: string | null;
+  category_hint?: string | null;
+  is_tax_included?: boolean;
+  confidence?: number;
+}
+
 interface OcrResult {
-  items?: Array<{
-    name: string;
-    price: number;
-  }>;
+  items?: OcrItem[];
 }
 
 const SOURCE_TYPE_LABELS: Record<string, { label: string; icon: typeof Camera }> = {
@@ -94,6 +102,20 @@ export default function UploadsPage() {
 
   // OCR state
   const [analyzingId, setAnalyzingId] = useState<string | null>(null);
+  // Registration state
+  const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set());
+  const [registeringId, setRegisteringId] = useState<string | null>(null);
+  const [registerResult, setRegisterResult] = useState<{ registered: number; errors: number } | null>(null);
+
+  // Pre-select all items when lightbox opens or changes
+  useEffect(() => {
+    if (lightboxImage?.ocrResultJson?.items?.length) {
+      setSelectedItems(new Set(lightboxImage.ocrResultJson.items.map((_, i) => i)));
+    } else {
+      setSelectedItems(new Set());
+    }
+    setRegisterResult(null);
+  }, [lightboxImage?.id]);
 
   const fetchImages = useCallback(
     async (cursor?: string | null) => {
@@ -155,6 +177,10 @@ export default function UploadsPage() {
             : img;
         setImages((prev) => prev.map(updated));
         setLightboxImage((prev) => (prev?.id === id ? updated(prev) : prev));
+        // Pre-select all newly extracted items
+        const count = (data.ocrResult?.items?.length ?? 0) as number;
+        setSelectedItems(new Set(Array.from({ length: count }, (_, i) => i)));
+        setRegisterResult(null);
       } else {
         const msg = data.error || "OCRに失敗しました";
         const detail = data.details ? `\n\n詳細: ${data.details}` : "";
@@ -164,6 +190,56 @@ export default function UploadsPage() {
       alert("通信エラーが発生しました");
     } finally {
       setAnalyzingId(null);
+    }
+  };
+
+  const handleRegister = async (image: UploadedImage) => {
+    if (!image.store) {
+      alert("店舗情報が設定されていません。画像の再アップロードか、アップロード時に店舗を選択してください");
+      return;
+    }
+    const allItems = image.ocrResultJson?.items ?? [];
+    const selected = allItems.filter((_, i) => selectedItems.has(i));
+    if (selected.length === 0) {
+      alert("登録する品目を選択してください");
+      return;
+    }
+    setRegisteringId(image.id);
+    try {
+      const res = await fetch("/api/prices/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: selected,
+          storeId: image.store.id,
+          sourceType: image.sourceType,
+          sourceImageId: image.id,
+          recordedAt: image.takenAt ?? image.createdAt,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        const registeredCount = (data.results?.length ?? 0) as number;
+        setRegisterResult({ registered: registeredCount, errors: data.errors?.length ?? 0 });
+        setImages((prev) =>
+          prev.map((img) =>
+            img.id === image.id
+              ? { ...img, _count: { priceRecords: img._count.priceRecords + registeredCount } }
+              : img,
+          ),
+        );
+        setLightboxImage((prev) =>
+          prev?.id === image.id
+            ? { ...prev, _count: { priceRecords: prev._count.priceRecords + registeredCount } }
+            : prev,
+        );
+      } else {
+        alert(data.error || "登録に失敗しました");
+      }
+    } catch {
+      alert("通信エラーが発生しました");
+    } finally {
+      setRegisteringId(null);
     }
   };
 
@@ -499,28 +575,105 @@ export default function UploadsPage() {
                     )}
                   </div>
 
-                  {/* OCR results summary */}
+                  {/* OCR results with checkboxes */}
                   {lightboxImage.ocrResultJson?.items &&
                     lightboxImage.ocrResultJson.items.length > 0 && (
                       <div className="mt-3 border-t pt-3">
-                        <h4 className="text-sm font-medium mb-2">
-                          <Eye className="h-4 w-4 inline mr-1" />
-                          抽出結果（{lightboxImage.ocrResultJson.items.length}品目）
-                        </h4>
-                        <div className="space-y-1 max-h-40 overflow-y-auto">
-                          {lightboxImage.ocrResultJson.items.map((item, i) => (
-                            <div
-                              key={i}
-                              className="flex items-center justify-between text-sm"
+                        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                          <h4 className="text-sm font-medium">
+                            <Eye className="mr-1 inline h-4 w-4" />
+                            抽出結果（{lightboxImage.ocrResultJson.items.length}品目）
+                          </h4>
+                          <div className="flex items-center gap-3 text-xs">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setSelectedItems(
+                                  new Set(
+                                    lightboxImage.ocrResultJson!.items!.map((_, i) => i),
+                                  ),
+                                )
+                              }
+                              className="text-blue-600 underline hover:no-underline dark:text-blue-400"
                             >
-                              <span className="truncate flex-1">
-                                {item.name}
-                              </span>
-                              <span className="font-medium ml-2 text-green-700 dark:text-green-400">
+                              全選択
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedItems(new Set())}
+                              className="text-zinc-500 underline hover:no-underline"
+                            >
+                              全解除
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="max-h-64 space-y-0.5 overflow-y-auto rounded-lg border border-zinc-200 p-1 dark:border-zinc-700">
+                          {lightboxImage.ocrResultJson.items.map((item, i) => (
+                            <label
+                              key={i}
+                              className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selectedItems.has(i)}
+                                onChange={(e) => {
+                                  setSelectedItems((prev) => {
+                                    const next = new Set(prev);
+                                    if (e.target.checked) next.add(i);
+                                    else next.delete(i);
+                                    return next;
+                                  });
+                                }}
+                                className="h-4 w-4 rounded"
+                              />
+                              <span className="min-w-0 flex-1 truncate">{item.name}</span>
+                              {item.unit && (
+                                <span className="shrink-0 text-xs text-zinc-400">{item.unit}</span>
+                              )}
+                              <span className="shrink-0 font-medium text-green-700 dark:text-green-400">
                                 ¥{item.price.toLocaleString()}
                               </span>
-                            </div>
+                            </label>
                           ))}
+                        </div>
+
+                        {registerResult && (
+                          <p className="mt-2 text-xs text-green-600 dark:text-green-400">
+                            ✓ {registerResult.registered}品目を登録しました
+                            {registerResult.errors > 0 && (
+                              <span className="ml-1 text-red-500">
+                                （失敗: {registerResult.errors}件）
+                              </span>
+                            )}
+                          </p>
+                        )}
+                        {!lightboxImage.store && (
+                          <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+                            ⚠️ 店舗が設定されていないため登録できません
+                          </p>
+                        )}
+
+                        <div className="mt-2 flex items-center justify-between gap-2">
+                          <span className="text-xs text-zinc-500">
+                            {selectedItems.size}品目を選択中
+                          </span>
+                          <Button
+                            size="sm"
+                            onClick={() => handleRegister(lightboxImage)}
+                            disabled={
+                              !lightboxImage.store ||
+                              selectedItems.size === 0 ||
+                              registeringId === lightboxImage.id
+                            }
+                          >
+                            {registeringId === lightboxImage.id ? (
+                              <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                            ) : (
+                              <PlusCircle className="mr-1 h-4 w-4" />
+                            )}
+                            選択した {selectedItems.size} 品目を登録
+                          </Button>
                         </div>
                       </div>
                     )}
