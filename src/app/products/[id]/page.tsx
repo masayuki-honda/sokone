@@ -14,7 +14,10 @@ import {
   Pencil,
   Check,
   X,
+  Trash2,
+  Save,
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { Header } from "@/components/header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -93,6 +96,13 @@ export default function ProductDetailPage({
   const [categories, setCategories] = useState<Array<{ id: string; name: string }>>([])
   const [editingCategory, setEditingCategory] = useState(false);
   const [pendingCategoryId, setPendingCategoryId] = useState<string>("");
+  const [stores, setStores] = useState<Array<{ id: string; name: string }>>([]);
+  const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
+  const [editPrice, setEditPrice] = useState("");
+  const [editStoreId, setEditStoreId] = useState("");
+  const [editDate, setEditDate] = useState("");
+  const [isSavingRecord, setIsSavingRecord] = useState(false);
+  const [deletingRecordId, setDeletingRecordId] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchData() {
@@ -122,11 +132,15 @@ export default function ProductDetailPage({
     fetchData();
   }, [id, period]);
 
-  // Fetch categories for the selector
+  // Fetch categories and stores for selectors
   useEffect(() => {
     fetch("/api/categories")
       .then((r) => r.json())
       .then((data) => setCategories(data.categories || []))
+      .catch(() => {});
+    fetch("/api/stores")
+      .then((r) => r.json())
+      .then((data) => setStores(Array.isArray(data) ? data : (data.stores || [])))
       .catch(() => {});
   }, []);
 
@@ -166,6 +180,86 @@ export default function ProductDetailPage({
       console.error("Failed to update category:", error);
     } finally {
       setEditingCategory(false);
+    }
+  }
+
+  function handleStartEditRecord(record: ProductDetail["priceRecords"][number]) {
+    setEditingRecordId(record.id);
+    setEditPrice(String(record.price));
+    setEditStoreId(record.store.id);
+    setEditDate(record.recordedAt.slice(0, 10));
+  }
+
+  function handleCancelEditRecord() {
+    setEditingRecordId(null);
+  }
+
+  async function handleSaveRecord(recordId: string) {
+    const price = parseInt(editPrice, 10);
+    if (!price || price <= 0) return;
+    setIsSavingRecord(true);
+    try {
+      const res = await fetch(`/api/prices/${recordId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          price,
+          storeId: editStoreId,
+          recordedAt: new Date(editDate).toISOString(),
+        }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setProduct((prev) =>
+          prev
+            ? {
+                ...prev,
+                priceRecords: prev.priceRecords.map((r) =>
+                  r.id === recordId
+                    ? { ...r, price: updated.price, store: updated.store, recordedAt: updated.recordedAt }
+                    : r,
+                ),
+              }
+            : prev,
+        );
+        setEditingRecordId(null);
+        // Refetch stats
+        const [prodRes, histRes] = await Promise.all([
+          fetch(`/api/products/${id}`),
+          fetch(`/api/products/${id}/price-history?period=${period}`),
+        ]);
+        if (prodRes.ok) setProduct(await prodRes.json());
+        if (histRes.ok) setHistory(await histRes.json());
+      }
+    } catch (error) {
+      console.error("Failed to save record:", error);
+    } finally {
+      setIsSavingRecord(false);
+    }
+  }
+
+  async function handleDeleteRecord(recordId: string) {
+    setDeletingRecordId(recordId);
+    try {
+      const res = await fetch(`/api/prices/${recordId}`, { method: "DELETE" });
+      if (res.ok) {
+        setProduct((prev) =>
+          prev
+            ? { ...prev, priceRecords: prev.priceRecords.filter((r) => r.id !== recordId) }
+            : prev,
+        );
+        // Refetch stats
+        const [prodRes, histRes] = await Promise.all([
+          fetch(`/api/products/${id}`),
+          fetch(`/api/products/${id}/price-history?period=${period}`),
+        ]);
+        if (prodRes.ok) setProduct(await prodRes.json());
+        if (histRes.ok) setHistory(await histRes.json());
+      }
+    } catch (error) {
+      console.error("Failed to delete record:", error);
+    } finally {
+      setDeletingRecordId(null);
     }
   }
 
@@ -461,12 +555,9 @@ export default function ProductDetailPage({
                     <tr className="border-b text-left text-muted-foreground">
                       <th className="pb-2 pr-4 font-medium">日付</th>
                       <th className="pb-2 pr-4 font-medium">店舗</th>
-                      <th className="pb-2 pr-4 font-medium text-right">
-                        価格
-                      </th>
-                      <th className="pb-2 font-medium hidden sm:table-cell">
-                        ソース
-                      </th>
+                      <th className="pb-2 pr-4 font-medium text-right">価格</th>
+                      <th className="pb-2 font-medium hidden sm:table-cell">ソース</th>
+                      <th className="pb-2 font-medium w-16"></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -474,47 +565,121 @@ export default function ProductDetailPage({
                       const isBottomPrice =
                         product.stats &&
                         record.price === product.stats.bottomPrice;
+                      const isEditing = editingRecordId === record.id;
+                      const isDeleting = deletingRecordId === record.id;
+
+                      if (isEditing) {
+                        return (
+                          <tr key={record.id} className="border-b last:border-0 bg-blue-50 dark:bg-blue-950/20">
+                            <td className="py-2 pr-2">
+                              <Input
+                                type="date"
+                                value={editDate}
+                                onChange={(e) => setEditDate(e.target.value)}
+                                className="h-7 text-xs w-32"
+                              />
+                            </td>
+                            <td className="py-2 pr-2">
+                              <select
+                                value={editStoreId}
+                                onChange={(e) => setEditStoreId(e.target.value)}
+                                className="h-7 text-xs border rounded px-1 bg-background w-full max-w-[140px]"
+                              >
+                                {stores.map((s) => (
+                                  <option key={s.id} value={s.id}>{s.name}</option>
+                                ))}
+                              </select>
+                            </td>
+                            <td className="py-2 pr-2">
+                              <Input
+                                type="number"
+                                value={editPrice}
+                                onChange={(e) => setEditPrice(e.target.value)}
+                                className="h-7 text-xs text-right w-24"
+                                min={1}
+                              />
+                            </td>
+                            <td className="py-2 hidden sm:table-cell text-xs text-muted-foreground">
+                              {sourceTypeLabels[record.sourceType] || record.sourceType}
+                            </td>
+                            <td className="py-2">
+                              <div className="flex gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-blue-600 hover:text-blue-700"
+                                  onClick={() => handleSaveRecord(record.id)}
+                                  disabled={isSavingRecord}
+                                  title="保存"
+                                >
+                                  {isSavingRecord ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7"
+                                  onClick={handleCancelEditRecord}
+                                  title="キャンセル"
+                                >
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      }
+
                       return (
                         <tr
                           key={record.id}
                           className={`border-b last:border-0 ${isBottomPrice ? "bg-green-50 dark:bg-green-950/20" : ""}`}
                         >
                           <td className="py-2 pr-4">
-                            {new Date(
-                              record.recordedAt,
-                            ).toLocaleDateString("ja-JP")}
+                            {new Date(record.recordedAt).toLocaleDateString("ja-JP")}
                           </td>
                           <td className="py-2 pr-4">{record.store.name}</td>
-                          <td
-                            className={`py-2 pr-4 text-right font-medium ${isBottomPrice ? "text-green-600 font-bold" : ""}`}
-                          >
+                          <td className={`py-2 pr-4 text-right font-medium ${isBottomPrice ? "text-green-600 font-bold" : ""}`}>
                             ¥{record.price.toLocaleString()}
-                            {isBottomPrice && (
-                              <span className="ml-1 text-xs">🏆</span>
-                            )}
+                            {isBottomPrice && <span className="ml-1 text-xs">🏆</span>}
                           </td>
                           <td className="py-2 hidden sm:table-cell">
                             {record.sourceImageId ? (
                               <button
-                                onClick={() =>
-                                  handleImageClick(record.sourceImageId!)
-                                }
+                                onClick={() => handleImageClick(record.sourceImageId!)}
                                 className="cursor-pointer"
                               >
-                                <Badge
-                                  variant="outline"
-                                  className="text-xs underline decoration-dotted hover:bg-accent"
-                                >
-                                  {sourceTypeLabels[record.sourceType] ||
-                                    record.sourceType}
+                                <Badge variant="outline" className="text-xs underline decoration-dotted hover:bg-accent">
+                                  {sourceTypeLabels[record.sourceType] || record.sourceType}
                                 </Badge>
                               </button>
                             ) : (
                               <Badge variant="outline" className="text-xs">
-                                {sourceTypeLabels[record.sourceType] ||
-                                  record.sourceType}
+                                {sourceTypeLabels[record.sourceType] || record.sourceType}
                               </Badge>
                             )}
+                          </td>
+                          <td className="py-2">
+                            <div className="flex gap-1 justify-end">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                                onClick={() => handleStartEditRecord(record)}
+                                title="編集"
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                onClick={() => handleDeleteRecord(record.id)}
+                                disabled={isDeleting}
+                                title="削除"
+                              >
+                                {isDeleting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                              </Button>
+                            </div>
                           </td>
                         </tr>
                       );
