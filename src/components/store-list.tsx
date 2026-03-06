@@ -188,10 +188,14 @@ export function StoreList() {
     }
   };
 
-  const handleScrape = async (store: Store) => {
+  const handleScrape = async (store: Store, force = false) => {
     setScrapingId(store.id);
     try {
-      const res = await fetch(`/api/stores/${store.id}/scrape`, { method: "POST" });
+      const res = await fetch(`/api/stores/${store.id}/scrape`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ force }),
+      });
       const data = await res.json();
       if (!res.ok) {
         toast.error(data.error || "スクレイピングに失敗しました");
@@ -445,6 +449,15 @@ export function StoreList() {
                         <span className="ml-1 text-red-500">
                           （エラー {scrapeResults[store.id].errors.length} 件）
                         </span>
+                      )}
+                      {scrapeResults[store.id].scraped === 0 && scrapeResults[store.id].alreadyExists > 0 && (
+                        <button
+                          onClick={() => handleScrape(store, true)}
+                          disabled={scrapingId === store.id}
+                          className="ml-2 text-blue-600 underline hover:no-underline disabled:opacity-50 dark:text-blue-400"
+                        >
+                          🔄 履歴クリアして再取得
+                        </button>
                       )}
                     </p>
                   )}

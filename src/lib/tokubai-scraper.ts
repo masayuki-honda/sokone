@@ -60,8 +60,9 @@ async function fetchHtml(url: string): Promise<string | null> {
  * Scrape a tokubai shop page and return current leaflet information.
  *
  * @param shopUrl e.g. "https://tokubai.co.jp/ライフ/2330"
+ * @param maxLeaflets maximum number of leaflets to fetch (newest first, default 1)
  */
-export async function scrapeShopLeaflets(shopUrl: string): Promise<LeafletInfo[]> {
+export async function scrapeShopLeaflets(shopUrl: string, maxLeaflets = 1): Promise<LeafletInfo[]> {
   // Normalize URL: strip trailing slash
   const normalizedUrl = shopUrl.replace(/\/$/, "");
 
@@ -98,13 +99,16 @@ export async function scrapeShopLeaflets(shopUrl: string): Promise<LeafletInfo[]
   }
 
   const leaflets: LeafletInfo[] = [];
+  let fetchedCount = 0;
 
   for (const [leafletId, { url: leafletUrl, title }] of leafletMap) {
+    if (fetchedCount >= maxLeaflets) break;
     await delay(INTER_REQUEST_DELAY_MS);
 
     const imageUrls = await extractLeafletImages(leafletUrl);
     if (imageUrls.length > 0) {
       leaflets.push({ leafletId, title, imageUrls, pageUrl: leafletUrl });
+      fetchedCount++;
     }
   }
 

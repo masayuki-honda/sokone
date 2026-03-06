@@ -28,6 +28,15 @@ export async function POST(_request: NextRequest, { params }: Params) {
 
   const { id } = await params;
 
+  // Accept optional force flag to clear scraped history before re-fetching
+  let force = false;
+  try {
+    const body = await _request.json();
+    if (body?.force === true) force = true;
+  } catch {
+    // body is optional
+  }
+
   const store = await prisma.store.findFirst({
     where: { id, userId: session.user.id },
     include: { scrapedLeaflets: true },
@@ -44,13 +53,21 @@ export async function POST(_request: NextRequest, { params }: Params) {
     );
   }
 
-  // IDs already scraped for this store
-  const alreadyScrapedIds = new Set(store.scrapedLeaflets.map((l) => l.leafletId));
+  // If force, delete existing ScrapedLeaflet records so everything is re-fetched
+  if (force) {
+    await prisma.scrapedLeaflet.deleteMany({ where: { storeId: store.id } });
+  }
 
-  // --- Scrape tokubai ---
+  // IDs already scraped for this store (re-query after potential deletion)
+  const existingLeaflets = force
+    ? []
+    : await prisma.scrapedLeaflet.findMany({ where: { storeId: store.id } });
+  const alreadyScrapedIds = new Set(existingLeaflets.map((l) => l.leafletId));
+
+  // --- Scrape tokubai --- (limit to 1 most recent leaflet per scrape)
   let leaflets;
   try {
-    leaflets = await scrapeShopLeaflets(store.tokubaiShopUrl);
+    leaflets = await scrapeShopLeaflets(store.tokubaiShopUrl, 1);
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "スクレイピングに失敗しました" },
