@@ -14,6 +14,9 @@ import {
   Eye,
   ChevronDown,
   Filter,
+  Trash2,
+  X,
+  AlertTriangle,
 } from "lucide-react";
 import { Header } from "@/components/header";
 import { Button } from "@/components/ui/button";
@@ -29,6 +32,11 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogTitle,
+  DialogClose,
+  DialogHeader,
+  DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
 
 interface UploadedImage {
@@ -41,6 +49,7 @@ interface UploadedImage {
   takenAt: string | null;
   store: { id: string; name: string } | null;
   ocrResultJson: OcrResult | null;
+  _count: { priceRecords: number };
 }
 
 interface OcrResult {
@@ -76,6 +85,11 @@ export default function UploadsPage() {
 
   // Lightbox
   const [lightboxImage, setLightboxImage] = useState<UploadedImage | null>(null);
+
+  // Delete / cleanup state
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
+  const [isCleaningUp, setIsCleaningUp] = useState(false);
+  const [cleanupConfirm, setCleanupConfirm] = useState(false);
 
   const fetchImages = useCallback(
     async (cursor?: string | null) => {
@@ -124,6 +138,48 @@ export default function UploadsPage() {
     setIsLoadingMore(false);
   };
 
+  const handleDelete = async (id: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setDeletingIds((prev) => new Set(prev).add(id));
+    try {
+      const res = await fetch(`/api/images/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        setImages((prev) => prev.filter((img) => img.id !== id));
+        if (lightboxImage?.id === id) setLightboxImage(null);
+      }
+    } finally {
+      setDeletingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
+  };
+
+  const handleCleanup = async () => {
+    setIsCleaningUp(true);
+    try {
+      const res = await fetch("/api/images/cleanup", { method: "DELETE" });
+      if (res.ok) {
+        const data = await res.json() as { deleted: number };
+        setCleanupConfirm(false);
+        setIsLoading(true);
+        const fresh = await fetchImages();
+        if (fresh) {
+          setImages(fresh.images || []);
+          setNextCursor(fresh.nextCursor || null);
+          setHasMore(fresh.hasMore || false);
+        }
+        setIsLoading(false);
+        if (data.deleted === 0) {
+          alert("削除対象の画像はありませんでした");
+        }
+      }
+    } finally {
+      setIsCleaningUp(false);
+    }
+  };
+
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr);
     return d.toLocaleDateString("ja-JP", {
@@ -140,6 +196,8 @@ export default function UploadsPage() {
     return img.ocrResultJson.items.length;
   };
 
+  const unregisteredCount = images.filter((img) => img._count.priceRecords === 0).length;
+
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
       <Header />
@@ -154,12 +212,25 @@ export default function UploadsPage() {
               過去にアップロードした画像とOCR結果を確認できます
             </p>
           </div>
-          <Link href="/upload">
-            <Button size="sm">
-              <Camera className="h-4 w-4 mr-1" />
-              新しくアップロード
-            </Button>
-          </Link>
+          <div className="flex items-center gap-2">
+            {unregisteredCount > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCleanupConfirm(true)}
+                className="text-red-600 border-red-300 hover:bg-red-50 dark:hover:bg-red-950/30"
+              >
+                <Trash2 className="h-4 w-4 mr-1" />
+                未登録を一括削除
+              </Button>
+            )}
+            <Link href="/upload">
+              <Button size="sm">
+                <Camera className="h-4 w-4 mr-1" />
+                新しくアップロード
+              </Button>
+            </Link>
+          </div>
         </div>
 
         {/* Filters */}
@@ -217,12 +288,14 @@ export default function UploadsPage() {
                 const statusInfo = STATUS_LABELS[img.status];
                 const SourceIcon = sourceInfo?.icon || Camera;
                 const itemCount = getOcrItemCount(img);
+                const isDeleting = deletingIds.has(img.id);
+                const isUnregistered = img._count.priceRecords === 0;
 
                 return (
                   <Card
                     key={img.id}
-                    className="overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
-                    onClick={() => setLightboxImage(img)}
+                    className="overflow-hidden hover:shadow-md transition-shadow cursor-pointer relative"
+                    onClick={() => !isDeleting && setLightboxImage(img)}
                   >
                     {/* Thumbnail */}
                     <div className="relative aspect-[4/3] bg-zinc-100 dark:bg-zinc-800">
@@ -250,6 +323,19 @@ export default function UploadsPage() {
                           {statusInfo?.label}
                         </Badge>
                       </div>
+                      {/* Per-card delete button */}
+                      <button
+                        className="absolute bottom-2 right-2 rounded-full bg-black/60 p-1.5 text-white hover:bg-red-600 transition-colors"
+                        onClick={(e) => handleDelete(img.id, e)}
+                        disabled={isDeleting}
+                        title="削除"
+                      >
+                        {isDeleting ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-3.5 w-3.5" />
+                        )}
+                      </button>
                     </div>
 
                     <CardContent className="p-3">
@@ -258,9 +344,11 @@ export default function UploadsPage() {
                           <Clock className="h-3 w-3" />
                           {formatDate(img.createdAt)}
                         </span>
-                        {itemCount > 0 && (
+                        {isUnregistered ? (
+                          <span className="text-zinc-400 dark:text-zinc-500 font-medium">未登録</span>
+                        ) : (
                           <span className="text-green-600 dark:text-green-400 font-medium">
-                            {itemCount}品目抽出
+                            {itemCount > 0 ? `${itemCount}品目抽出` : `${img._count.priceRecords}件登録済み`}
                           </span>
                         )}
                       </div>
@@ -301,37 +389,59 @@ export default function UploadsPage() {
           open={!!lightboxImage}
           onOpenChange={(open) => !open && setLightboxImage(null)}
         >
-          <DialogContent className="max-w-3xl p-0 overflow-hidden">
+          {/* Hide shadcn's auto-rendered close button — we render our own on the dark bg */}
+          <DialogContent className="max-w-3xl p-0 overflow-hidden max-h-[90vh] [&>button:last-child]:hidden">
+            <DialogTitle className="sr-only">アップロード画像の詳細</DialogTitle>
             {lightboxImage && (
-              <div>
-                {/* Full image */}
-                <div className="relative bg-black">
+              <div className="flex flex-col max-h-[90vh]">
+                {/* Image section with custom close button */}
+                <div className="relative bg-zinc-900 flex-shrink-0">
+                  <DialogClose className="absolute top-2 right-2 z-50 rounded-full bg-black/60 p-1.5 text-white hover:bg-black/90 transition-colors focus:outline-none focus:ring-2 focus:ring-white">
+                    <X className="h-4 w-4" />
+                    <span className="sr-only">閉じる</span>
+                  </DialogClose>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={lightboxImage.signedUrl}
                     alt="アップロード画像"
-                    className="w-full max-h-[70vh] object-contain"
+                    className="w-full max-h-[60vh] object-contain"
                   />
                 </div>
 
-                {/* Details */}
-                <div className="p-4 space-y-2">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Badge variant="secondary">
-                      {SOURCE_TYPE_LABELS[lightboxImage.sourceType]?.label}
-                    </Badge>
-                    <Badge
-                      variant="secondary"
-                      className={STATUS_LABELS[lightboxImage.status]?.color}
-                    >
-                      {STATUS_LABELS[lightboxImage.status]?.label}
-                    </Badge>
-                    {lightboxImage.store && (
-                      <Badge variant="outline">
-                        <MapPin className="h-3 w-3 mr-1" />
-                        {lightboxImage.store.name}
+                {/* Details — scrollable */}
+                <div className="p-4 space-y-2 overflow-y-auto bg-background">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge variant="secondary">
+                        {SOURCE_TYPE_LABELS[lightboxImage.sourceType]?.label}
                       </Badge>
-                    )}
+                      <Badge
+                        variant="secondary"
+                        className={STATUS_LABELS[lightboxImage.status]?.color}
+                      >
+                        {STATUS_LABELS[lightboxImage.status]?.label}
+                      </Badge>
+                      {lightboxImage.store && (
+                        <Badge variant="outline">
+                          <MapPin className="h-3 w-3 mr-1" />
+                          {lightboxImage.store.name}
+                        </Badge>
+                      )}
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30"
+                      onClick={() => handleDelete(lightboxImage.id)}
+                      disabled={deletingIds.has(lightboxImage.id)}
+                    >
+                      {deletingIds.has(lightboxImage.id) ? (
+                        <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                      ) : (
+                        <Trash2 className="h-4 w-4 mr-1" />
+                      )}
+                      削除
+                    </Button>
                   </div>
 
                   <div className="text-sm text-zinc-600 dark:text-zinc-400">
@@ -375,6 +485,43 @@ export default function UploadsPage() {
                 </div>
               </div>
             )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Cleanup confirmation dialog */}
+        <Dialog open={cleanupConfirm} onOpenChange={setCleanupConfirm}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-red-500" />
+                未登録画像の一括削除
+              </DialogTitle>
+              <DialogDescription>
+                価格が登録されていない画像を{unregisteredCount}件削除します。
+                この操作は取り消せません。
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setCleanupConfirm(false)}
+                disabled={isCleaningUp}
+              >
+                キャンセル
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleCleanup}
+                disabled={isCleaningUp}
+              >
+                {isCleaningUp ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                ) : (
+                  <Trash2 className="h-4 w-4 mr-1" />
+                )}
+                削除する
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </main>

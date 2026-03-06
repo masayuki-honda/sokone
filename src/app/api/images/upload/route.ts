@@ -138,6 +138,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Save to database (including EXIF metadata)
+        const fileHash = formData.get(`fileHash_${fileIndex}`) as string | null;
         const uploadedImage = await prisma.uploadedImage.create({
           data: {
             userId: session.user.id,
@@ -145,6 +146,7 @@ export async function POST(request: NextRequest) {
             imageUrl: key,
             sourceType: sourceType as SourceType,
             status: "pending",
+            fileHash: fileHash || null,
             takenAt: processed.exif.takenAt,
             gpsLatitude,
             gpsLongitude,

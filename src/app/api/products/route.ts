@@ -57,6 +57,11 @@ export async function GET(request: NextRequest) {
       _count: {
         select: { priceRecords: true },
       },
+      priceRecords: {
+        select: { price: true, store: { select: { name: true } } },
+        orderBy: { price: "asc" },
+        take: 1,
+      },
     },
   });
 
