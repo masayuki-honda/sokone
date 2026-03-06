@@ -9,8 +9,17 @@ interface Store {
   address: string | null;
   latitude: number | null;
   longitude: number | null;
+  tokubaiShopUrl: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+interface ScrapeResult {
+  message: string;
+  scraped: number;
+  alreadyExists: number;
+  imageIds: string[];
+  errors: string[];
 }
 
 export function StoreList() {
@@ -27,8 +36,11 @@ export function StoreList() {
   const [formAddress, setFormAddress] = useState("");
   const [formLatitude, setFormLatitude] = useState("");
   const [formLongitude, setFormLongitude] = useState("");
+  const [formTokubaiShopUrl, setFormTokubaiShopUrl] = useState("");
   const [gettingLocation, setGettingLocation] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [scrapingId, setScrapingId] = useState<string | null>(null);
+  const [scrapeResults, setScrapeResults] = useState<Record<string, ScrapeResult>>({});
 
   const fetchStores = useCallback(async () => {
     try {
@@ -53,6 +65,7 @@ export function StoreList() {
     setFormAddress("");
     setFormLatitude("");
     setFormLongitude("");
+    setFormTokubaiShopUrl("");
     setShowForm(true);
   };
 
@@ -62,6 +75,7 @@ export function StoreList() {
     setFormAddress(store.address || "");
     setFormLatitude(store.latitude != null ? String(store.latitude) : "");
     setFormLongitude(store.longitude != null ? String(store.longitude) : "");
+    setFormTokubaiShopUrl(store.tokubaiShopUrl || "");
     setShowForm(true);
   };
 
@@ -72,6 +86,7 @@ export function StoreList() {
     setFormAddress("");
     setFormLatitude("");
     setFormLongitude("");
+    setFormTokubaiShopUrl("");
   };
 
   const handleGetCurrentLocation = () => {
@@ -116,6 +131,7 @@ export function StoreList() {
           address: formAddress || null,
           latitude: parsedLat != null && isFinite(parsedLat) ? parsedLat : null,
           longitude: parsedLng != null && isFinite(parsedLng) ? parsedLng : null,
+          tokubaiShopUrl: formTokubaiShopUrl.trim() || null,
         }),
       });
 
@@ -167,6 +183,28 @@ export function StoreList() {
       setGeocodeError("通信エラーが発生しました");
     } finally {
       setGeocodingId(null);
+    }
+  };
+
+  const handleScrape = async (store: Store) => {
+    setScrapingId(store.id);
+    try {
+      const res = await fetch(`/api/stores/${store.id}/scrape`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "スクレイピングに失敗しました");
+      } else {
+        setScrapeResults((prev) => ({ ...prev, [store.id]: data }));
+        if (data.scraped > 0) {
+          toast.success(`${data.scraped} 枚の画像を取り込みました。アップロード履歴からOCRを実行してください。`);
+        } else {
+          toast.info(data.message || "新しいチラシはありませんでした");
+        }
+      }
+    } catch {
+      toast.error("通信エラーが発生しました");
+    } finally {
+      setScrapingId(null);
     }
   };
 
@@ -306,6 +344,25 @@ export function StoreList() {
                 で右クリック→コピーでも確認できます。
               </p>
             </div>
+            <div>
+              <label
+                htmlFor="store-tokubai-url"
+                className="mb-1 block text-sm font-medium"
+              >
+                チラシ取得URL（トクバイ）
+              </label>
+              <input
+                id="store-tokubai-url"
+                type="url"
+                value={formTokubaiShopUrl}
+                onChange={(e) => setFormTokubaiShopUrl(e.target.value)}
+                placeholder="例: https://tokubai.co.jp/ライフ/2330"
+                className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-zinc-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800"
+              />
+              <p className="mt-1 text-xs text-zinc-500">
+                tokubai.co.jp の店舗ページURLを入力すると「チラシ取得」ボタンでチラシ画像を自動取り込みできます。
+              </p>
+            </div>
           </div>
           <div className="mt-6 flex gap-3">
             <button
@@ -365,9 +422,41 @@ export function StoreList() {
                       </span>
                     )}
                   </p>
+                  {store.tokubaiShopUrl && (
+                    <p className="mt-0.5 text-xs text-blue-600 dark:text-blue-400 break-all">
+                      🗞️{" "}
+                      <a
+                        href={store.tokubaiShopUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline hover:no-underline"
+                      >
+                        {store.tokubaiShopUrl}
+                      </a>
+                    </p>
+                  )}
+                  {scrapeResults[store.id] && (
+                    <p className="mt-1 text-xs text-zinc-500">
+                      前回取得: {scrapeResults[store.id].scraped} 枚
+                      {scrapeResults[store.id].errors.length > 0 && (
+                        <span className="ml-1 text-red-500">
+                          （エラー {scrapeResults[store.id].errors.length} 件）
+                        </span>
+                      )}
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
+                {store.tokubaiShopUrl && (
+                  <button
+                    onClick={() => handleScrape(store)}
+                    disabled={scrapingId === store.id}
+                    className="rounded-md px-3 py-1.5 text-sm text-purple-600 hover:bg-purple-50 disabled:opacity-50 dark:text-purple-400 dark:hover:bg-purple-900/20"
+                  >
+                    {scrapingId === store.id ? "取得中..." : "🗞️ チラシ取得"}
+                  </button>
+                )}
                 <button
                   onClick={() => openEditForm(store)}
                   className="rounded-md px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"

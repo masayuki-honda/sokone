@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { name, address, latitude, longitude } = body;
+  const { name, address, latitude, longitude, tokubaiShopUrl } = body;
 
   if (!name || typeof name !== "string" || name.trim().length === 0) {
     return NextResponse.json(
@@ -64,6 +64,7 @@ export async function POST(request: NextRequest) {
       latitude: resolvedLat,
       longitude: resolvedLng,
       userId: session.user.id,
+      tokubaiShopUrl: tokubaiShopUrl?.trim() || null,
     },
   });
 
