@@ -1,7 +1,7 @@
 # Sokone 全Phase 実装計画
 
 > 作成日: 2026-02-26
-> 最終更新: 2026-03-06（カテゴリCRUD・アップロード履歴ページ追加）
+> 最終更新: 2026-03-06（カテゴリCRUD・アップロード履歴ページ追加・履歴ページ削除機能・カテゴリ並び順・商品価格表示・fileHashDB保存）
 >
 > **アーキテクチャ:** Next.js フルスタック + Prisma + Neon + Vercel
 
@@ -652,9 +652,15 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
 - [x] ローディング表示の統一（Skeleton UI）
 - [x] エラーハンドリングの統一（Toast通知）
 - [x] 画像アップロード履歴ページ（`/uploads`）— フィルタ（ソースタイプ・ステータス）・ライトボックス・OCR結果サマリ表示
+- [x] アップロード履歴: 画像削除ボタン（個別 `DELETE /api/images/{id}`）
+- [x] アップロード履歴: 未登録画像を一括削除（`DELETE /api/images/cleanup`）
+- [x] アップロード履歴: Radix DialogTitle アクセシビリティ修正・縦長画像でも見える閉じるボタン
 - [ ] 「最近見た商品」セクション追加
 - [x] PWA 基本設定（manifest.json、アイコン）→ ホーム画面に追加可能に
 - [x] 同一画像の重複アップロード検出（SHA-256 + localStorage + 確認ダイアログ）
+- [x] 重複検知強化: fileHashをDBに保存・`GET /api/images/hashes`でサーバー側ハッシュをseed
+- [x] カテゴリ管理: ↑↓ボタンで表示順を変更（displayOrder入れ替え）
+- [x] 商品一覧: 底値を商品名横に表示（肉類＋volumeがXgの場合 ¥Y/100g 表示）
 
 ### 追加 API（Phase 2）
 
@@ -662,8 +668,11 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
 |---|---|---|---|
 | POST | `/api/products/{id}/merge` | 6 | 商品マージ |
 | POST | `/api/categories` | 6 | カテゴリ追加 ✅ |
-| PUT | `/api/categories/{id}` | 6 | カテゴリ編集 ✅ |
+| PUT | `/api/categories/{id}` | 6 | カテゴリ編集・並び順変更 ✅ |
 | DELETE | `/api/categories/{id}` | 6 | カテゴリ削除 ✅ |
+| DELETE | `/api/images/{id}` | 6 | 画像個別削除 ✅ |
+| DELETE | `/api/images/cleanup` | 6 | 未登録画像一括削除 ✅ |
+| GET | `/api/images/hashes` | 6 | ユーザーの既存ファイルハッシュ一覧 ✅ |
 
 ### 成功基準（Phase 2 完了条件）
 
