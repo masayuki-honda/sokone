@@ -10,6 +10,8 @@ import {
   X,
   Check,
   FolderTree,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 import { Header } from "@/components/header";
 import { Button } from "@/components/ui/button";
@@ -51,6 +53,9 @@ export default function CategoriesPage() {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
+
+  // Reordering state: tracks id being moved
+  const [reorderingId, setReorderingId] = useState<string | null>(null);
 
   const fetchCategories = useCallback(async () => {
     try {
@@ -161,6 +166,39 @@ export default function CategoriesPage() {
     setEditName("");
   };
 
+  const handleReorder = async (index: number, direction: "up" | "down") => {
+    const otherIndex = direction === "up" ? index - 1 : index + 1;
+    if (otherIndex < 0 || otherIndex >= categories.length) return;
+
+    const catA = categories[index];
+    const catB = categories[otherIndex];
+
+    // Swap displayOrders
+    const orderA = catA.displayOrder;
+    const orderB = catB.displayOrder;
+
+    setReorderingId(catA.id);
+    try {
+      await Promise.all([
+        fetch(`/api/categories/${catA.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ displayOrder: orderB }),
+        }),
+        fetch(`/api/categories/${catB.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ displayOrder: orderA }),
+        }),
+      ]);
+      await fetchCategories();
+    } catch {
+      setError("並び順の変更に失敗しました");
+    } finally {
+      setReorderingId(null);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
       <Header />
@@ -251,7 +289,7 @@ export default function CategoriesPage() {
           </div>
         ) : (
           <div className="mt-6 space-y-2">
-            {categories.map((cat) => (
+            {categories.map((cat, index) => (
               <Card key={cat.id}>
                 <CardContent className="py-3 px-4">
                   {editingId === cat.id ? (
@@ -287,6 +325,25 @@ export default function CategoriesPage() {
                     /* Display mode */
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
+                        {/* Reorder up/down */}
+                        <div className="flex flex-col gap-0.5">
+                          <button
+                            className="rounded p-0.5 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 disabled:opacity-30"
+                            onClick={() => handleReorder(index, "up")}
+                            disabled={index === 0 || reorderingId !== null}
+                            title="上に移動"
+                          >
+                            <ChevronUp className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            className="rounded p-0.5 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 disabled:opacity-30"
+                            onClick={() => handleReorder(index, "down")}
+                            disabled={index === categories.length - 1 || reorderingId !== null}
+                            title="下に移動"
+                          >
+                            <ChevronDown className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                         <span className="font-medium">{cat.name}</span>
                         <span className="flex items-center gap-1 text-xs text-zinc-500">
                           <Package className="h-3 w-3" />
@@ -294,6 +351,9 @@ export default function CategoriesPage() {
                         </span>
                       </div>
                       <div className="flex items-center gap-1">
+                        {reorderingId === cat.id && (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin text-zinc-400" />
+                        )}
                         <Button
                           size="sm"
                           variant="ghost"

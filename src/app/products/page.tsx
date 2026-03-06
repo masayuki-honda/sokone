@@ -33,6 +33,7 @@ interface ProductItem {
   volume: string | null;
   category: { id: string; name: string } | null;
   _count: { priceRecords: number };
+  priceRecords: Array<{ price: number; store: { name: string } | null }>;
 }
 
 interface Category {
@@ -196,6 +197,16 @@ export default function ProductsPage() {
     setMergeError(null);
   }
 
+  /** Compute per-100g price if volume is in grams (e.g. "300g"). Returns null otherwise. */
+  function computePer100gPrice(price: number, volume: string | null): number | null {
+    if (!volume) return null;
+    const match = volume.match(/^(\d+(?:\.\d+)?)\s*g$/i);
+    if (!match) return null;
+    const grams = parseFloat(match[1]);
+    if (grams <= 0) return null;
+    return Math.round((price * 100) / grams);
+  }
+
   async function handleAutoCategorize() {
     setIsAutoCategorizing(true);
     setAutoCategorizeResult(null);
@@ -321,7 +332,14 @@ export default function ProductsPage() {
           </Card>
         ) : (
           <div className="space-y-2">
-            {products.map((product) => (
+            {products.map((product) => {
+                const bottomRecord = product.priceRecords[0];
+                const isMeat = product.category?.name === "肉類";
+                const per100g = isMeat && bottomRecord
+                  ? computePer100gPrice(bottomRecord.price, product.volume)
+                  : null;
+
+                return (
               <Card key={product.id} className="transition-shadow hover:shadow-md">
                 <CardContent className="pt-4 pb-4 flex items-center gap-3">
                   <Link
@@ -329,7 +347,7 @@ export default function ProductsPage() {
                     className="flex-1 min-w-0"
                   >
                     <h3 className="font-medium truncate">{product.name}</h3>
-                    <div className="mt-1 flex items-center gap-2">
+                    <div className="mt-1 flex items-center gap-2 flex-wrap">
                       {product.category && (
                         <Badge variant="outline" className="text-xs">
                           {product.category.name}
@@ -343,6 +361,13 @@ export default function ProductsPage() {
                       {product.volume && (
                         <span className="text-xs text-muted-foreground">
                           {product.volume}
+                        </span>
+                      )}
+                      {bottomRecord && (
+                        <span className="text-xs font-semibold text-green-700 dark:text-green-400">
+                          {per100g !== null
+                            ? `¥${per100g.toLocaleString()}/100g`
+                            : `¥${bottomRecord.price.toLocaleString()}`}
                         </span>
                       )}
                     </div>
@@ -363,7 +388,8 @@ export default function ProductsPage() {
                   </div>
                 </CardContent>
               </Card>
-            ))}
+                );
+              })}
 
             {nextCursor && (
               <div className="text-center pt-4">

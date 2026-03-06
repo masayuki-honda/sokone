@@ -165,6 +165,29 @@ export default function UploadPage() {
     ]).finally(() => setIsWarmingUp(false));
   }, []);
 
+  // Seed localStorage duplicate-detection cache with hashes already stored in the DB.
+  // This ensures duplicate detection works even after localStorage is cleared.
+  useEffect(() => {
+    fetch("/api/images/hashes")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { hashes: string[] } | null) => {
+        if (!data?.hashes?.length) return;
+        const existing = loadUploadedHashes();
+        let changed = false;
+        for (const h of data.hashes) {
+          if (!existing.has(h)) {
+            existing.add(h);
+            changed = true;
+          }
+        }
+        if (changed) {
+          const arr = Array.from(existing).slice(-500);
+          localStorage.setItem(HASH_STORAGE_KEY, JSON.stringify(arr));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   // Add files to state (called directly or after duplicate confirmation)
   function addFilesToState(selectedFiles: File[]) {
     const newFiles: UploadedFile[] = selectedFiles.map((file) => ({
@@ -363,6 +386,9 @@ export default function UploadPage() {
       }
       const compressed = await compressImageForUpload(files[i].file);
       formData.append("files", compressed);
+      // Send pre-computed SHA-256 hash so server can persist it for duplicate detection
+      const hash = fileHashesRef.current.get(files[i].file);
+      if (hash) formData.append(`fileHash_${i}`, hash);
     }
 
     // Helper: upload with automatic retries + exponential backoff (cold-start recovery)

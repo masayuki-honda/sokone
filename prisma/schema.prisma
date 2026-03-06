@@ -155,6 +155,7 @@ model UploadedImage {
   ocrRawText     String?     @map("ocr_raw_text") @db.Text
   ocrResultJson  Json?       @map("ocr_result_json")
   status         ImageStatus @default(pending)
+  fileHash       String?     @map("file_hash")
   takenAt        DateTime?   @map("taken_at")
   gpsLatitude    Float?      @map("gps_latitude")
   gpsLongitude   Float?      @map("gps_longitude")
