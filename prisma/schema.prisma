@@ -75,20 +75,36 @@ model User {
 }
 
 model Store {
-  id        String   @id @default(uuid())
-  name      String
-  address   String?
-  latitude  Float?
-  longitude Float?
-  userId    String   @map("user_id")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id             String   @id @default(uuid())
+  name           String
+  address        String?
+  latitude       Float?
+  longitude      Float?
+  userId         String   @map("user_id")
+  tokubaiShopUrl String?  @map("tokubai_shop_url")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
-  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  priceRecords   PriceRecord[]
-  uploadedImages UploadedImage[]
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  priceRecords    PriceRecord[]
+  uploadedImages  UploadedImage[]
+  scrapedLeaflets ScrapedLeaflet[]
 
   @@map("stores")
+}
+
+model ScrapedLeaflet {
+  id        String   @id @default(uuid())
+  storeId   String   @map("store_id")
+  leafletId String   @map("leaflet_id")
+  title     String?
+  pageCount Int      @default(0) @map("page_count")
+  scrapedAt DateTime @default(now()) @map("scraped_at")
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, leafletId])
+  @@map("scraped_leaflets")
 }
 
 model ProductCategory {

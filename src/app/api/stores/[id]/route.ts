@@ -49,7 +49,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
   }
 
   const body = await request.json();
-  const { name, address, latitude, longitude } = body;
+  const { name, address, latitude, longitude, tokubaiShopUrl } = body;
 
   if (name !== undefined) {
     if (typeof name !== "string" || name.trim().length === 0) {
@@ -91,6 +91,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
       ...(address !== undefined && { address: address?.trim() || null }),
       ...(resolvedLat !== undefined && { latitude: resolvedLat }),
       ...(resolvedLng !== undefined && { longitude: resolvedLng }),
+      ...(tokubaiShopUrl !== undefined && { tokubaiShopUrl: tokubaiShopUrl?.trim() || null }),
     },
   });
 
