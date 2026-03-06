@@ -201,6 +201,17 @@ export default function UploadPage() {
 
   // Handle file selection — compute hashes and warn about duplicates
   const handleFilesSelected = useCallback(async (selectedFiles: File[]) => {
+    // Check total count limit (existing + new)
+    if (files.length + selectedFiles.length > 10) {
+      const remaining = Math.max(0, 10 - files.length);
+      setUploadError(
+        remaining > 0
+          ? `一度にアップロードできるのは10枚までです。あと${remaining}枚追加できます。`
+          : `一度にアップロードできるのは10枚までです。現在の画像を削除してから追加してください。`,
+      );
+      return;
+    }
+
     const knownHashes = loadUploadedHashes();
     const duplicateNames: string[] = [];
 
@@ -217,11 +228,8 @@ export default function UploadPage() {
     } else {
       addFilesToState(selectedFiles);
     }
-  }, []);
+  }, [files.length]);
 
-  // Extract GPS coordinates from original file before Canvas compression strips EXIF.
-  // NOTE: iOS Safari strips GPS from File objects for privacy — returns null on iOS.
-  /** Convert raw DMS array + ref to decimal degrees */
   function dmsToDecimal(dms: number[], ref: string): number | null {
     if (!Array.isArray(dms) || dms.length < 3) return null;
     const decimal = dms[0] + dms[1] / 60 + dms[2] / 3600;
@@ -363,35 +371,22 @@ export default function UploadPage() {
     setIsUploading(true);
     setUploadError(null);
 
-    // Step 1: Upload files
-    const formData = new FormData();
-    formData.append("sourceType", sourceType);
-    if (storeId) {
-      formData.append("storeId", storeId);
-    }
-
     // Mark all files as uploading
     setFiles((prev) =>
       prev.map((f) => ({ ...f, status: "uploading" as const, progress: 30 })),
     );
 
-    // Collect GPS coordinates per file (before compression strips EXIF)
+    // Step 1: Pre-process ALL files first (GPS + client-side compression)
+    const compressedFiles: File[] = [];
     const fileGpsList: Array<{ lat: number | null; lng: number | null; debugNote?: string }> = [];
     for (let i = 0; i < files.length; i++) {
       const gps = await extractGpsFromFile(files[i].file);
       fileGpsList.push(gps);
-      if (gps.lat !== null && gps.lng !== null) {
-        formData.append(`gps_client_lat_${i}`, String(gps.lat));
-        formData.append(`gps_client_lng_${i}`, String(gps.lng));
-      }
       const compressed = await compressImageForUpload(files[i].file);
-      formData.append("files", compressed);
-      // Send pre-computed SHA-256 hash so server can persist it for duplicate detection
-      const hash = fileHashesRef.current.get(files[i].file);
-      if (hash) formData.append(`fileHash_${i}`, hash);
+      compressedFiles.push(compressed);
     }
 
-    // Helper: upload with automatic retries + exponential backoff (cold-start recovery)
+    // Helper: retry on network failure (not on HTTP errors like 4xx/5xx)
     async function doUpload(fd: FormData): Promise<Response> {
       const MAX_RETRIES = 2;
       let lastError: unknown;
@@ -401,7 +396,6 @@ export default function UploadPage() {
         } catch (err) {
           lastError = err;
           if (attempt < MAX_RETRIES) {
-            // Exponential backoff: 2s, 4s
             await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
           }
         }
@@ -409,210 +403,228 @@ export default function UploadPage() {
       throw lastError;
     }
 
-    try {
-      const uploadRes = await doUpload(formData);
+    // Helper: upload one batch and return parsed response
+    async function uploadBatch(batchStart: number, batchFiles: File[]): Promise<UploadApiResponse> {
+      const batchFormData = new FormData();
+      batchFormData.append("sourceType", sourceType);
+      if (storeId) batchFormData.append("storeId", storeId);
 
-      // Guard against non-JSON responses (e.g. Vercel 413 / 5xx HTML pages)
-      let uploadData: UploadApiResponse;
+      for (let i = 0; i < batchFiles.length; i++) {
+        const globalIdx = batchStart + i;
+        const gps = fileGpsList[globalIdx];
+        if (gps.lat !== null && gps.lng !== null) {
+          batchFormData.append(`gps_client_lat_${i}`, String(gps.lat));
+          batchFormData.append(`gps_client_lng_${i}`, String(gps.lng));
+        }
+        batchFormData.append("files", batchFiles[i]);
+        const hash = fileHashesRef.current.get(files[globalIdx].file);
+        if (hash) batchFormData.append(`fileHash_${i}`, hash);
+      }
+
+      const res = await doUpload(batchFormData);
+      let data: UploadApiResponse;
       try {
-        uploadData = await uploadRes.json() as UploadApiResponse;
+        data = await res.json() as UploadApiResponse;
       } catch {
-        if (uploadRes.status === 413) {
+        if (res.status === 413) {
           throw new Error(
             "画像サイズが大きすぎます。別の画像を使用するか、もう少し近づいて撮影した写真をお試しください。",
           );
         }
         throw new Error(
-          `サーバーエラーが発生しました (HTTP ${uploadRes.status})。しばらくしてから再試行してください。`,
+          `サーバーエラーが発生しました (HTTP ${res.status})。しばらくしてから再試行してください。`,
         );
       }
-
-      if (!uploadRes.ok) {
-        const errorMsg = uploadData.error || "アップロードに失敗しました";
-        setFiles((prev) =>
-          prev.map((f) => ({
-            ...f,
-            status: "error" as const,
-            error: errorMsg,
-          })),
-        );
-        setUploadError(errorMsg);
-        setIsUploading(false);
-        return;
+      if (!res.ok) {
+        throw new Error(data.error || "アップロードに失敗しました");
       }
+      return data;
+    }
 
-      // Save hashes of successfully-uploaded files to localStorage
-      for (let i = 0; i < files.length; i++) {
-        const uploaded = uploadData.uploaded[i];
-        if (uploaded) {
-          const hash = fileHashesRef.current.get(files[i].file);
-          if (hash) saveUploadedHash(hash);
-        }
-      }
+    // Step 2: Upload in batches of 5 (to stay within Vercel 4.5MB body limit)
+    const BATCH_SIZE = 5;
+    const allUploaded: UploadedImageResult[] = [];
+    const allApiErrors: Array<{ name: string; error: string }> = [];
 
-      // Update file statuses
-      setFiles((prev) =>
-        prev.map((f, i) => {
-          const uploaded = uploadData.uploaded[i];
-          const error = uploadData.errors.find(
-            (e: { name: string }) => e.name === f.file.name,
-          );
-          if (error) {
-            return { ...f, status: "error" as const, error: error.error };
-          }
-          return {
-            ...f,
-            id: uploaded?.id,
-            status: "success" as const,
-            progress: 100,
-          };
-        }),
-      );
-
-      // Auto-suggest store from GPS if no store selected
-      if (!storeId && uploadData.uploaded.length > 0) {
-        // Use server-extracted EXIF GPS; fall back to client-extracted EXIF (Android Chrome)
-        const imageWithGps = uploadData.uploaded.find(
-          (img) => img.gpsLatitude != null && img.gpsLongitude != null,
-        );
-        const clientGps = fileGpsList.find((g) => g.lat !== null && g.lng !== null);
-        const coordsToUse = imageWithGps
-          ? { lat: imageWithGps.gpsLatitude!, lng: imageWithGps.gpsLongitude! }
-          : clientGps && clientGps.lat !== null && clientGps.lng !== null
-          ? { lat: clientGps.lat, lng: clientGps.lng }
-          : null;
-
-        // Build a verbose debug message to help diagnose issues
-        const serverGps = imageWithGps ? `サーバー(${imageWithGps.gpsLatitude!.toFixed(4)},${imageWithGps.gpsLongitude!.toFixed(4)})` : "サーバーnull";
-        const clientGpsNote = clientGps && clientGps.lat !== null && clientGps.lng !== null ? `クライアント(${clientGps.lat.toFixed(4)},${clientGps.lng.toFixed(4)})` : `クライアントnull${fileGpsList[0]?.debugNote ? `[${fileGpsList[0].debugNote}]` : ""}`;
-        if (coordsToUse) {
-          setGpsDebugMsg(`📡 GPS取得済み: ${coordsToUse.lat.toFixed(4)}, ${coordsToUse.lng.toFixed(4)} [${serverGps} / ${clientGpsNote}]`);
-          try {
-            const nearbyRes = await fetch(
-              `/api/stores/nearby?lat=${coordsToUse.lat}&lng=${coordsToUse.lng}`,
-            );
-            if (nearbyRes.ok) {
-              const nearbyData = await nearbyRes.json();
-              if (nearbyData.store) {
-                setStoreId(nearbyData.store.id);
-                setGpsSuggestedStore(nearbyData.store.name);
-                setGpsNoStoreFound(null);
-              } else {
-                setGpsNoStoreFound({ lat: coordsToUse.lat, lng: coordsToUse.lng });
-              }
-            }
-          } catch {
-            // GPS store suggestion is best-effort
-          }
-        } else {
-          setGpsDebugMsg(`📡 GPS情報なし [${serverGps} / ${clientGpsNote}]`);
-        }
-      }
-
-      setIsUploading(false);
-
-      // Step 2: Run OCR on each uploaded image
-      if (uploadData.uploaded.length > 0) {
-        setIsAnalyzing(true);
-        const results: OcrResult[] = [];
-        const ocrErrors: string[] = [];
-
-        for (const image of uploadData.uploaded) {
-          geminiUsage.recordCall();
-          try {
-            const analyzeRes = await fetch(
-              `/api/images/${image.id}/analyze`,
-              { method: "POST" },
-            );
-
-            if (analyzeRes.ok) {
-              const analyzeData = await analyzeRes.json();
-
-              // Use signed URL from analyze response
-              let signedUrl = analyzeData.signedUrl || "";
-
-              // Fallback: get signed URL from image detail API
-              if (!signedUrl) {
-                try {
-                  const imageDetailRes = await fetch(`/api/images/${image.id}`);
-                  if (imageDetailRes.ok) {
-                    const imageDetail = await imageDetailRes.json();
-                    signedUrl = imageDetail.signedUrl || "";
-                  }
-                } catch {
-                  // Proceed without signed URL - the result is still usable
-                }
-              }
-
-              results.push({
-                imageId: image.id,
-                signedUrl,
-                items: analyzeData.ocrResult?.items || [],
-                store_name: analyzeData.ocrResult?.store_name,
-                takenAt: analyzeData.takenAt || image.takenAt || null,
-              });
-            } else {
-              const errorData = await analyzeRes.json().catch(() => ({}));
-              const rateLimitType = errorData.rateLimitType as string | null;
-              if (rateLimitType === "per_minute") {
-                ocrErrors.push(
-                  "Gemini APIの1分あたりの制限（1,000回/分）に達しました。少し待ってから再試行してください。"
-                );
-              } else if (rateLimitType === "daily") {
-                ocrErrors.push(
-                  "Gemini APIの1日あたりの上限（10,000回/日）に達しました。翌日（日本時間9時頃）にリセットされます。"
-                );
-              } else if (rateLimitType === "quota_zero") {
-                ocrErrors.push(
-                  "Gemini APIの無料枠が利用できません（limit: 0）。Google AI Studioでクォータ設定を確認するか、有料プランに切り替えてください。"
-                );
-              } else {
-                // Show details for non-rate-limit errors to help debugging
-                const detail = errorData.details || errorData.error ||
-                  (analyzeRes.status === 404 ? "画像が見つかりません（再読み込みして試してください）" :
-                   analyzeRes.status === 401 ? "認証エラー（再ログインしてください）" :
-                   `解析サーバーエラー (HTTP ${analyzeRes.status})`);
-                ocrErrors.push(`OCR解析エラー: ${detail}`);
-              }
-            }
-          } catch (error) {
-            console.error(`OCR failed for image ${image.id}:`, error);
-            ocrErrors.push(`画像の解析中にネットワークエラーが発生しました`);
-          }
-        }
-
-        setOcrResults(results);
-        setIsAnalyzing(false);
-
-        // Show error if OCR completely failed
-        if (results.length === 0 && ocrErrors.length > 0) {
-          // Rate limit messages are already user-friendly, don't prefix them
-          const firstError = ocrErrors[0];
-          const isRateLimit =
-            firstError.includes("制限") ||
-            firstError.includes("上限") ||
-            firstError.includes("リセット") ||
-            firstError.includes("無料枠");
-          setUploadError(
-            isRateLimit ? firstError : `AI解析に失敗しました: ${firstError}`,
-          );
-        } else if (ocrErrors.length > 0) {
-          setUploadError(
-            `${ocrErrors.length}件の画像の解析に失敗しました`,
-          );
-        }
+    try {
+      for (let batchStart = 0; batchStart < compressedFiles.length; batchStart += BATCH_SIZE) {
+        const batch = compressedFiles.slice(batchStart, batchStart + BATCH_SIZE);
+        const batchData = await uploadBatch(batchStart, batch);
+        allUploaded.push(...batchData.uploaded);
+        allApiErrors.push(...(batchData.errors || []));
       }
     } catch (error) {
-      console.error("Upload error:", error);
+      const errorMsg = error instanceof Error
+        ? error.message
+        : "ネットワークエラーが発生しました。通信環境を確認してください。";
       setFiles((prev) =>
         prev.map((f) => ({
           ...f,
           status: "error" as const,
-          error: "ネットワークエラー",
+          error: errorMsg,
         })),
       );
-      setUploadError("ネットワークエラーが発生しました。通信環境を確認してください。");
+      setUploadError(errorMsg);
       setIsUploading(false);
+      return;
+    }
+
+    // Step 3: Save hashes of successfully-uploaded files to localStorage
+    for (let i = 0; i < files.length; i++) {
+      const uploaded = allUploaded[i];
+      if (uploaded) {
+        const hash = fileHashesRef.current.get(files[i].file);
+        if (hash) saveUploadedHash(hash);
+      }
+    }
+
+    // Update file statuses
+    setFiles((prev) =>
+      prev.map((f, i) => {
+        const uploaded = allUploaded[i];
+        const error = allApiErrors.find(
+          (e: { name: string }) => e.name === f.file.name,
+        );
+        if (error) {
+          return { ...f, status: "error" as const, error: error.error };
+        }
+        return {
+          ...f,
+          id: uploaded?.id,
+          status: "success" as const,
+          progress: 100,
+        };
+      }),
+    );
+
+    // Auto-suggest store from GPS if no store selected
+    if (!storeId && allUploaded.length > 0) {
+      const imageWithGps = allUploaded.find(
+        (img) => img.gpsLatitude != null && img.gpsLongitude != null,
+      );
+      const clientGps = fileGpsList.find((g) => g.lat !== null && g.lng !== null);
+      const coordsToUse = imageWithGps
+        ? { lat: imageWithGps.gpsLatitude!, lng: imageWithGps.gpsLongitude! }
+        : clientGps && clientGps.lat !== null && clientGps.lng !== null
+        ? { lat: clientGps.lat, lng: clientGps.lng }
+        : null;
+
+      const serverGps = imageWithGps ? `サーバー(${imageWithGps.gpsLatitude!.toFixed(4)},${imageWithGps.gpsLongitude!.toFixed(4)})` : "サーバーnull";
+      const clientGpsNote = clientGps && clientGps.lat !== null && clientGps.lng !== null ? `クライアント(${clientGps.lat.toFixed(4)},${clientGps.lng.toFixed(4)})` : `クライアントnull${fileGpsList[0]?.debugNote ? `[${fileGpsList[0].debugNote}]` : ""}`;
+      if (coordsToUse) {
+        setGpsDebugMsg(`📡 GPS取得済み: ${coordsToUse.lat.toFixed(4)}, ${coordsToUse.lng.toFixed(4)} [${serverGps} / ${clientGpsNote}]`);
+        try {
+          const nearbyRes = await fetch(
+            `/api/stores/nearby?lat=${coordsToUse.lat}&lng=${coordsToUse.lng}`,
+          );
+          if (nearbyRes.ok) {
+            const nearbyData = await nearbyRes.json();
+            if (nearbyData.store) {
+              setStoreId(nearbyData.store.id);
+              setGpsSuggestedStore(nearbyData.store.name);
+              setGpsNoStoreFound(null);
+            } else {
+              setGpsNoStoreFound({ lat: coordsToUse.lat, lng: coordsToUse.lng });
+            }
+          }
+        } catch {
+          // GPS store suggestion is best-effort
+        }
+      } else {
+        setGpsDebugMsg(`📡 GPS情報なし [${serverGps} / ${clientGpsNote}]`);
+      }
+    }
+
+    setIsUploading(false);
+
+    // Step 4: Run OCR on each uploaded image
+    if (allUploaded.length > 0) {
+      setIsAnalyzing(true);
+      const results: OcrResult[] = [];
+      const ocrErrors: string[] = [];
+
+      for (const image of allUploaded) {
+        geminiUsage.recordCall();
+        try {
+          const analyzeRes = await fetch(
+            `/api/images/${image.id}/analyze`,
+            { method: "POST" },
+          );
+
+          if (analyzeRes.ok) {
+            const analyzeData = await analyzeRes.json();
+
+            // Use signed URL from analyze response
+            let signedUrl = analyzeData.signedUrl || "";
+
+            // Fallback: get signed URL from image detail API
+            if (!signedUrl) {
+              try {
+                const imageDetailRes = await fetch(`/api/images/${image.id}`);
+                if (imageDetailRes.ok) {
+                  const imageDetail = await imageDetailRes.json();
+                  signedUrl = imageDetail.signedUrl || "";
+                }
+              } catch {
+                // Proceed without signed URL - the result is still usable
+              }
+            }
+
+            results.push({
+              imageId: image.id,
+              signedUrl,
+              items: analyzeData.ocrResult?.items || [],
+              store_name: analyzeData.ocrResult?.store_name,
+              takenAt: analyzeData.takenAt || image.takenAt || null,
+            });
+          } else {
+            const errorData = await analyzeRes.json().catch(() => ({}));
+            const rateLimitType = errorData.rateLimitType as string | null;
+            if (rateLimitType === "per_minute") {
+              ocrErrors.push(
+                "Gemini APIの1分あたりの制限（1,000回/分）に達しました。少し待ってから再試行してください。"
+              );
+            } else if (rateLimitType === "daily") {
+              ocrErrors.push(
+                "Gemini APIの1日あたりの上限（10,000回/日）に達しました。翌日（日本時間9時頃）にリセットされます。"
+              );
+            } else if (rateLimitType === "quota_zero") {
+              ocrErrors.push(
+                "Gemini APIの無料枠が利用できません（limit: 0）。Google AI Studioでクォータ設定を確認するか、有料プランに切り替えてください。"
+              );
+            } else {
+              const detail = errorData.details || errorData.error ||
+                (analyzeRes.status === 404 ? "画像が見つかりません（再読み込みして試してください）" :
+                 analyzeRes.status === 401 ? "認証エラー（再ログインしてください）" :
+                 `解析サーバーエラー (HTTP ${analyzeRes.status})`);
+              ocrErrors.push(`OCR解析エラー: ${detail}`);
+            }
+          }
+        } catch (error) {
+          console.error(`OCR failed for image ${image.id}:`, error);
+          ocrErrors.push(`画像の解析中にネットワークエラーが発生しました`);
+        }
+      }
+
+      setOcrResults(results);
+      setIsAnalyzing(false);
+
+      // Show error if OCR completely failed
+      if (results.length === 0 && ocrErrors.length > 0) {
+        const firstError = ocrErrors[0];
+        const isRateLimit =
+          firstError.includes("制限") ||
+          firstError.includes("上限") ||
+          firstError.includes("リセット") ||
+          firstError.includes("無料枠");
+        setUploadError(
+          isRateLimit ? firstError : `AI解析に失敗しました: ${firstError}`,
+        );
+      } else if (ocrErrors.length > 0) {
+        setUploadError(
+          `${ocrErrors.length}件の画像の解析に失敗しました`,
+        );
+      }
     }
   }
 
