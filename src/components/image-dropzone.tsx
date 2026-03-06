@@ -67,16 +67,40 @@ export function ImageDropzone({
       );
       if (all.length > 0 && imageFiles.length === 0) {
         setFileTypeError("画像ファイル（JPEG・PNG・HEIC・WebP）を選択してください");
+      } else if (uploadedFiles.length + imageFiles.length > maxFiles) {
+        const remaining = Math.max(0, maxFiles - uploadedFiles.length);
+        setFileTypeError(
+          remaining > 0
+            ? `画像は最大${maxFiles}枚まで選択できます（あと${remaining}枚追加できます）`
+            : `画像は最大${maxFiles}枚まで選択できます`,
+        );
       } else {
         if (imageFiles.length > 0) onFilesSelected(imageFiles);
       }
       e.target.value = "";
     },
-    [onFilesSelected],
+    [onFilesSelected, uploadedFiles.length, maxFiles],
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
+    onDropRejected: (rejectedFiles) => {
+      const hasTooMany = rejectedFiles.some((r) =>
+        r.errors.some((e) => e.code === "too-many-files"),
+      );
+      const hasTooLarge = rejectedFiles.some((r) =>
+        r.errors.some((e) => e.code === "file-too-large"),
+      );
+      if (hasTooMany) {
+        setFileTypeError(`画像は最大${maxFiles}枚まで選択できます`);
+      } else if (hasTooLarge) {
+        setFileTypeError("ファイルサイズが10MBを超えています");
+      } else {
+        setFileTypeError(
+          "対応していないファイルです（JPEG・PNG・HEIC・WebP）",
+        );
+      }
+    },
     accept: {
       "image/jpeg": [".jpg", ".jpeg"],
       "image/png": [".png"],
