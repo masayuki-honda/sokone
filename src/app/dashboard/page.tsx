@@ -14,6 +14,7 @@ import {
   Loader2,
   StarOff,
   Database,
+  ArrowUpDown,
 } from "lucide-react";
 import { Header } from "@/components/header";
 import { Button } from "@/components/ui/button";
@@ -82,14 +83,23 @@ interface DbStorage {
   status: "ok" | "warning" | "critical";
 }
 
+interface StoreItem {
+  id: string;
+  name: string;
+}
+
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentPrices, setRecentPrices] = useState<RecentPrice[]>([]);
   const [favorites, setFavorites] = useState<FavoriteItem[]>([]);
   const [bottomPrices, setBottomPrices] = useState<BottomPriceItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [stores, setStores] = useState<StoreItem[]>([]);
   const [dbStorage, setDbStorage] = useState<DbStorage | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>("");
+  const [selectedStore, setSelectedStore] = useState<string>("");
+  const [sortBy, setSortBy] = useState<string>("name");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -108,11 +118,12 @@ export default function DashboardPage() {
     async function fetchAll() {
       setIsLoading(true);
       try {
-        const [dashRes, favsRes, catsRes, storageRes] = await Promise.all([
+        const [dashRes, favsRes, catsRes, storageRes, storesRes] = await Promise.all([
           fetch("/api/dashboard"),
           fetch("/api/favorites"),
           fetch("/api/categories"),
           fetch("/api/admin/db-storage"),
+          fetch("/api/stores"),
         ]);
 
         if (dashRes.ok) {
@@ -135,6 +146,11 @@ export default function DashboardPage() {
           const data = await storageRes.json();
           setDbStorage(data);
         }
+
+        if (storesRes.ok) {
+          const data = await storesRes.json();
+          setStores(Array.isArray(data) ? data : []);
+        }
       } catch (error) {
         console.error("Failed to load dashboard:", error);
       } finally {
@@ -144,13 +160,16 @@ export default function DashboardPage() {
     fetchAll();
   }, []);
 
-  // Fetch bottom prices (with search/filter)
+  // Fetch bottom prices (with search/filter/sort)
   const fetchBottomPrices = useCallback(async () => {
     setIsSearching(true);
     try {
       const params = new URLSearchParams();
       if (selectedCategory) params.set("categoryId", selectedCategory);
       if (debouncedQuery) params.set("q", debouncedQuery);
+      if (selectedStore) params.set("storeId", selectedStore);
+      if (sortBy !== "name") params.set("sortBy", sortBy);
+      if (sortOrder !== "asc") params.set("sortOrder", sortOrder);
       params.set("limit", "20");
 
       const res = await fetch(`/api/dashboard/products?${params}`);
@@ -163,7 +182,7 @@ export default function DashboardPage() {
     } finally {
       setIsSearching(false);
     }
-  }, [selectedCategory, debouncedQuery]);
+  }, [selectedCategory, debouncedQuery, selectedStore, sortBy, sortOrder]);
 
   useEffect(() => {
     fetchBottomPrices();
@@ -401,16 +420,54 @@ export default function DashboardPage() {
         <section>
           <h2 className="text-lg font-semibold mb-4">底値一覧</h2>
 
-          {/* Search + Category Filter */}
-          <div className="flex flex-col gap-3 mb-4 sm:flex-row">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="商品名で検索..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
-              />
+          {/* Search + Category Filter + Sort + Store */}
+          <div className="flex flex-col gap-3 mb-4">
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="商品名で検索..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <div className="flex gap-2">
+                <div className="flex items-center gap-1">
+                  <ArrowUpDown className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <select
+                    className="text-sm border rounded px-2 py-1.5 bg-background"
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                  >
+                    <option value="name">名前順</option>
+                    <option value="price">底値順</option>
+                    <option value="recordCount">記録数順</option>
+                  </select>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="px-2 text-xs"
+                    onClick={() => setSortOrder((v) => (v === "asc" ? "desc" : "asc"))}
+                  >
+                    {sortOrder === "asc" ? "↑" : "↓"}
+                  </Button>
+                </div>
+                {stores.length > 0 && (
+                  <select
+                    className="text-sm border rounded px-2 py-1.5 bg-background"
+                    value={selectedStore}
+                    onChange={(e) => setSelectedStore(e.target.value)}
+                  >
+                    <option value="">全店舗</option>
+                    {stores.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
             </div>
             <div className="flex gap-2 overflow-x-auto pb-1 -mb-1 scrollbar-none">
               <Button
