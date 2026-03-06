@@ -17,6 +17,7 @@ import {
   Trash2,
   X,
   AlertTriangle,
+  ScanText,
 } from "lucide-react";
 import { Header } from "@/components/header";
 import { Button } from "@/components/ui/button";
@@ -91,6 +92,9 @@ export default function UploadsPage() {
   const [isCleaningUp, setIsCleaningUp] = useState(false);
   const [cleanupConfirm, setCleanupConfirm] = useState(false);
 
+  // OCR state
+  const [analyzingId, setAnalyzingId] = useState<string | null>(null);
+
   const fetchImages = useCallback(
     async (cursor?: string | null) => {
       const params = new URLSearchParams();
@@ -136,6 +140,29 @@ export default function UploadsPage() {
       setHasMore(data.hasMore || false);
     }
     setIsLoadingMore(false);
+  };
+
+  const handleAnalyze = async (id: string) => {
+    setAnalyzingId(id);
+    try {
+      const res = await fetch(`/api/images/${id}/analyze`, { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        // Update both the list and the currently open lightbox
+        const updated = (img: UploadedImage): UploadedImage =>
+          img.id === id
+            ? { ...img, status: "processed", ocrResultJson: data.ocrResult }
+            : img;
+        setImages((prev) => prev.map(updated));
+        setLightboxImage((prev) => (prev?.id === id ? updated(prev) : prev));
+      } else {
+        alert(data.error || "OCRに失敗しました");
+      }
+    } catch {
+      alert("通信エラーが発生しました");
+    } finally {
+      setAnalyzingId(null);
+    }
   };
 
   const handleDelete = async (id: string, e?: React.MouseEvent) => {
@@ -428,6 +455,19 @@ export default function UploadsPage() {
                         </Badge>
                       )}
                     </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleAnalyze(lightboxImage.id)}
+                      disabled={analyzingId === lightboxImage.id}
+                    >
+                      {analyzingId === lightboxImage.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                      ) : (
+                        <ScanText className="h-4 w-4 mr-1" />
+                      )}
+                      {lightboxImage.status === "processed" ? "OCR再実行" : "OCR実行"}
+                    </Button>
                     <Button
                       variant="ghost"
                       size="sm"
