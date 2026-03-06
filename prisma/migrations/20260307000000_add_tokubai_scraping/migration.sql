@@ -4,12 +4,12 @@ ALTER TABLE stores ADD COLUMN IF NOT EXISTS tokubai_shop_url VARCHAR(500);
 
 -- Create scraped_leaflets table for tracking processed flyers
 CREATE TABLE IF NOT EXISTS scraped_leaflets (
-  id          UUID        NOT NULL DEFAULT gen_random_uuid(),
-  store_id    UUID        NOT NULL,
+  id          TEXT        NOT NULL DEFAULT gen_random_uuid()::text,
+  store_id    TEXT        NOT NULL,
   leaflet_id  VARCHAR(50) NOT NULL,
   title       TEXT,
   page_count  INTEGER     NOT NULL DEFAULT 0,
-  scraped_at  TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  scraped_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
   CONSTRAINT scraped_leaflets_pkey PRIMARY KEY (id),
   CONSTRAINT scraped_leaflets_store_id_fkey FOREIGN KEY (store_id)
