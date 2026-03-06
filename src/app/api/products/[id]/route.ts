@@ -125,3 +125,27 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
   return NextResponse.json(updated);
 }
+
+/**
+ * DELETE /api/products/[id] — Delete product and all its price records
+ */
+export async function DELETE(_request: NextRequest, { params }: Params) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { id } = await params;
+
+  const product = await prisma.product.findUnique({ where: { id } });
+  if (!product) {
+    return NextResponse.json({ error: "商品が見つかりません" }, { status: 404 });
+  }
+
+  // PriceRecord has no onDelete cascade, so delete explicitly
+  await prisma.priceRecord.deleteMany({ where: { productId: id } });
+  // ProductAlias and FavoriteProduct have onDelete: Cascade, auto-deleted
+  await prisma.product.delete({ where: { id } });
+
+  return NextResponse.json({ success: true });
+}

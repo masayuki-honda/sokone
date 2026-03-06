@@ -15,12 +15,21 @@ import {
   StarOff,
   Database,
   ArrowUpDown,
+  Trash2,
 } from "lucide-react";
 import { Header } from "@/components/header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 interface DashboardStats {
   productCount: number;
@@ -105,6 +114,11 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSearching, setIsSearching] = useState(false);
 
+  // Delete state
+  const [deleteTarget, setDeleteTarget] = useState<{ productId: string; productName: string; recordCount: number } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
   // Debounce search query
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -187,6 +201,27 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchBottomPrices();
   }, [fetchBottomPrices]);
+
+  async function handleDeleteProduct() {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      const res = await fetch(`/api/products/${deleteTarget.productId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json();
+        setDeleteError(data.error || "削除に失敗しました");
+        return;
+      }
+      setBottomPrices((prev) => prev.filter((p) => p.productId !== deleteTarget.productId));
+      setFavorites((prev) => prev.filter((f) => f.productId !== deleteTarget.productId));
+      setDeleteTarget(null);
+    } catch {
+      setDeleteError("削除中にエラーが発生しました");
+    } finally {
+      setIsDeleting(false);
+    }
+  }
 
   // Toggle favorite
   async function handleToggleFavorite(productId: string, isFavorite: boolean) {
@@ -542,6 +577,7 @@ export default function DashboardPage() {
                       <th className="pb-3 font-medium text-center w-10">
                         ☆
                       </th>
+                      <th className="pb-3 font-medium text-center w-8"></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -611,6 +647,18 @@ export default function DashboardPage() {
                               )}
                             </button>
                           </td>
+                          <td className="py-3 text-center">
+                            <button
+                              onClick={() => {
+                                setDeleteTarget({ productId: item.productId, productName: item.productName, recordCount: item.recordCount });
+                                setDeleteError(null);
+                              }}
+                              className="hover:text-destructive transition-colors text-muted-foreground"
+                              title="削除"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </td>
                         </tr>
                       );
                     })}
@@ -643,6 +691,41 @@ export default function DashboardPage() {
           />
         </div>
       </main>
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>商品を削除</DialogTitle>
+            <DialogDescription>
+              「{deleteTarget?.productName}」を削除します。この操作は取り消せません。
+              <br />
+              関連する{deleteTarget?.recordCount}件の価格記録もすべて削除されます。
+            </DialogDescription>
+          </DialogHeader>
+          {deleteError && (
+            <p className="text-sm text-destructive">{deleteError}</p>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={isDeleting}>
+              キャンセル
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteProduct} disabled={isDeleting}>
+              {isDeleting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  削除中...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  削除する
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
