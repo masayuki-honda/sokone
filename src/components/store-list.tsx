@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
 
 interface Store {
@@ -41,6 +41,7 @@ export function StoreList() {
   const [submitting, setSubmitting] = useState(false);
   const [scrapingId, setScrapingId] = useState<string | null>(null);
   const [scrapeResults, setScrapeResults] = useState<Record<string, ScrapeResult>>({});
+  const formRef = useRef<HTMLFormElement>(null);
 
   const fetchStores = useCallback(async () => {
     try {
@@ -77,6 +78,7 @@ export function StoreList() {
     setFormLongitude(store.longitude != null ? String(store.longitude) : "");
     setFormTokubaiShopUrl(store.tokubaiShopUrl || "");
     setShowForm(true);
+    setTimeout(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
   };
 
   const closeForm = () => {
@@ -257,6 +259,7 @@ export function StoreList() {
       {/* Add/Edit Form */}
       {showForm && (
         <form
+          ref={formRef}
           onSubmit={handleSubmit}
           className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
         >
@@ -353,7 +356,7 @@ export function StoreList() {
               </label>
               <input
                 id="store-tokubai-url"
-                type="url"
+                type="text"
                 value={formTokubaiShopUrl}
                 onChange={(e) => setFormTokubaiShopUrl(e.target.value)}
                 placeholder="例: https://tokubai.co.jp/ライフ/2330"
