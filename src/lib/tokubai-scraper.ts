@@ -135,7 +135,15 @@ async function extractLeafletImages(leafletUrl: string): Promise<string[]> {
 
     $("img").each((_, el) => {
       const src = $(el).attr("src") || $(el).attr("data-src") || "";
-      if (!src.includes("image.tokubai.co.jp/images/bargain_office_leaflets")) return;
+      // Accept both image URL patterns:
+      //   bargain_office_leaflets — classic pattern (always full-res)
+      //   bargain_leaflets        — newer pattern used by some chains (e.g. ロピア)
+      // For bargain_leaflets, exclude resize/thumbnail variants (path contains "w=")
+      const isLeafletImg =
+        src.includes("image.tokubai.co.jp/images/bargain_office_leaflets") ||
+        (src.includes("image.tokubai.co.jp/images/bargain_leaflets") &&
+          !/\/bargain_leaflets\/w=/.test(src));
+      if (!isLeafletImg) return;
       // Strip cache-busting query strings
       const clean = src.split("?")[0];
       if (!allImages.includes(clean)) {
