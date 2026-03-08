@@ -693,6 +693,9 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
 | PATCH | `/api/prices/{id}` | 7 | 価格記録更新（編集）✅ |
 | POST | `/api/stores/{id}/scrape` | 7 | tokubaiチラシ自動取得 ✅ |
 | GET | `/api/stores/{id}/scrape` | 7 | 取得済みチラシ一覧 ✅ |
+| GET | `/api/watch-keywords` | - | ウォッチキーワード一覧 ✅ |
+| POST | `/api/watch-keywords` | - | ウォッチキーワード追加 ✅ |
+| DELETE | `/api/watch-keywords/{id}` | - | ウォッチキーワード削除 ✅ |
 
 ### 成功基準（Phase 2 完了条件）
 

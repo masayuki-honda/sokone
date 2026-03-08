@@ -70,6 +70,7 @@ model User {
   priceRecords     PriceRecord[]
   uploadedImages   UploadedImage[]
   favoriteProducts FavoriteProduct[]
+  watchKeywords    WatchKeyword[]
 
   @@map("users")
 }
@@ -217,4 +218,16 @@ model FavoriteProduct {
 
   @@unique([userId, productId])
   @@map("favorite_products")
+}
+
+model WatchKeyword {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  keyword   String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, keyword])
+  @@map("watch_keywords")
 }
