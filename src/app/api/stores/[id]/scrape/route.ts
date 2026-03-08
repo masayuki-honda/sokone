@@ -64,10 +64,12 @@ export async function POST(_request: NextRequest, { params }: Params) {
     : await prisma.scrapedLeaflet.findMany({ where: { storeId: store.id } });
   const alreadyScrapedIds = new Set(existingLeaflets.map((l) => l.leafletId));
 
-  // --- Scrape tokubai --- (limit to 1 most recent leaflet per scrape)
+  // --- Scrape tokubai ---
+  // Use up to 5 leaflets to handle stores where each flyer page is a distinct leaflet ID (e.g. ロピア).
+  // Stores that use ?page=N pagination still work because extractLeafletImages handles that internally.
   let leaflets;
   try {
-    leaflets = await scrapeShopLeaflets(store.tokubaiShopUrl, 1);
+    leaflets = await scrapeShopLeaflets(store.tokubaiShopUrl, 5);
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "スクレイピングに失敗しました" },
