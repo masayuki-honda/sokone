@@ -18,6 +18,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { Header } from "@/components/header";
+import { WatchKeywordsManager } from "@/components/watch-keywords-manager";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -667,6 +668,19 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
           )}
+        </section>
+
+        {/* Watch Keywords Section */}
+        <section>
+          <div className="flex items-center gap-2 mb-4">
+            <span className="text-lg">🏷️</span>
+            <h2 className="text-lg font-semibold">登録フィルタ（ウォッチキーワード）</h2>
+          </div>
+          <Card>
+            <CardContent className="pt-6">
+              <WatchKeywordsManager />
+            </CardContent>
+          </Card>
         </section>
 
         {/* Quick Links */}

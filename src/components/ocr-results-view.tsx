@@ -32,6 +32,8 @@ interface OcrItem {
   identified_by: string;
   /** If set, this item is linked to an existing product (skips findOrCreate, auto-saves alias) */
   productId?: string | null;
+  /** When true, this item is excluded from registration (watch-keyword filter) */
+  excluded?: boolean;
 }
 
 interface OcrResult {
@@ -105,10 +107,14 @@ function EditableItem({
   item,
   onUpdate,
   onDelete,
+  excluded,
+  onExcludeChange,
 }: {
   item: OcrItem;
   onUpdate: (updated: OcrItem) => void;
   onDelete: () => void;
+  excluded: boolean;
+  onExcludeChange: (excluded: boolean) => void;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(item.name);
@@ -259,9 +265,16 @@ function EditableItem({
   }
 
   return (
-    <div className="group rounded-lg border px-3 py-3 transition-colors hover:bg-muted/50">
-      {/* 上段: 商品名 + 操作ボタン */}
+    <div className={`group rounded-lg border px-3 py-3 transition-colors hover:bg-muted/50 ${excluded ? "opacity-50" : ""}`}>
+      {/* 上段: チェックボックス + 商品名 + 操作ボタン */}
       <div className="flex items-start gap-2">
+        <input
+          type="checkbox"
+          checked={!excluded}
+          onChange={(e) => onExcludeChange(!e.target.checked)}
+          className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-primary"
+          aria-label={`${item.name}を登録対象に含める`}
+        />
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-1">
             <span className="font-medium break-words">{item.name}</span>
@@ -312,7 +325,7 @@ function EditableItem({
         </div>
       </div>
       {/* 下段: 価格 */}
-      <div className="mt-1 flex items-center gap-1">
+      <div className="mt-1 pl-6 flex items-center gap-1">
         {item.confidence < 0.6 && (
           <span
             className="flex items-center gap-0.5 text-xs text-amber-600 dark:text-amber-400"
@@ -357,6 +370,75 @@ export function OcrResultsView({
     null,
   );
   const [registrationSuccess, setRegistrationSuccess] = useState(false);
+  const [watchKeywords, setWatchKeywords] = useState<string[]>([]);
+  const [keywordsLoaded, setKeywordsLoaded] = useState(false);
+
+  // Load watch-keywords and apply filter to initial results
+  useEffect(() => {
+    fetch("/api/watch-keywords")
+      .then((r) => r.json())
+      .then((data) => {
+        const kws: string[] = (data.keywords ?? []).map(
+          (k: { keyword: string }) => k.keyword
+        );
+        setWatchKeywords(kws);
+        if (kws.length > 0) {
+          setEditableResults((prev) =>
+            prev.map((r) => ({
+              ...r,
+              items: r.items.map((item) => ({
+                ...item,
+                excluded: !matchesKeywords(item.name, kws),
+              })),
+            }))
+          );
+        }
+        setKeywordsLoaded(true);
+      })
+      .catch(() => setKeywordsLoaded(true));
+  }, []);
+
+  function matchesKeywords(name: string, keywords: string[]): boolean {
+    if (keywords.length === 0) return true;
+    const normalized = name.toLowerCase();
+    return keywords.some((kw) => normalized.includes(kw.toLowerCase()));
+  }
+
+  function handleToggleItem(
+    resultIndex: number,
+    itemIndex: number,
+    excluded: boolean,
+  ) {
+    setEditableResults((prev) =>
+      prev.map((r, ri) => {
+        if (ri !== resultIndex) return r;
+        return {
+          ...r,
+          items: r.items.map((item, ii) =>
+            ii === itemIndex ? { ...item, excluded } : item
+          ),
+        };
+      })
+    );
+  }
+
+  function handleSelectAll() {
+    setEditableResults((prev) =>
+      prev.map((r) => ({
+        ...r,
+        items: r.items.map((item) => ({ ...item, excluded: false })),
+      }))
+    );
+  }
+
+  function handleDeselectAll() {
+    setEditableResults((prev) =>
+      prev.map((r) => ({
+        ...r,
+        items: r.items.map((item) => ({ ...item, excluded: true })),
+      }))
+    );
+  }
 
   function handleUpdateItem(
     resultIndex: number,
@@ -414,9 +496,9 @@ export function OcrResultsView({
 
   // Register prices via API
   async function handleRegisterPrices() {
-    // Validate each image with items has a store selected
+    // Validate each image with active items has a store selected
     const missingStore = editableResults.some(
-      (r) => r.items.length > 0 && !storeIdMap[r.imageId]
+      (r) => r.items.some((item) => !item.excluded) && !storeIdMap[r.imageId]
     );
     if (missingStore) {
       setRegistrationError("各画像の店舗を選択してください");
@@ -424,7 +506,9 @@ export function OcrResultsView({
     }
 
     const allItems = editableResults.flatMap((r) =>
-      r.items.map((item) => ({
+      r.items
+        .filter((item) => !item.excluded)
+        .map((item) => ({
         name: item.name,
         price: item.price,
         unit: item.unit,
@@ -455,13 +539,14 @@ export function OcrResultsView({
       const allErrors = [];
 
       for (const result of editableResults) {
-        if (result.items.length === 0) continue;
+        const activeItems = result.items.filter((item) => !item.excluded);
+        if (activeItems.length === 0) continue;
 
         const res = await fetch("/api/prices", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            items: result.items.map((item) => ({
+            items: activeItems.map((item) => ({
               name: item.name,
               price: item.price,
               unit: item.unit,
@@ -510,8 +595,12 @@ export function OcrResultsView({
     }
   }
 
-  const totalItems = editableResults.reduce(
+  const totalDetected = editableResults.reduce(
     (sum, r) => sum + r.items.length,
+    0,
+  );
+  const totalItems = editableResults.reduce(
+    (sum, r) => sum + r.items.filter((item) => !item.excluded).length,
     0,
   );
 
@@ -526,8 +615,8 @@ export function OcrResultsView({
           <div>
             <h2 className="text-xl font-bold">解析結果</h2>
             <p className="text-sm text-muted-foreground">
-              {editableResults.length}枚の画像から{totalItems}
-              件の商品を検出しました
+              {editableResults.length}枚の画像から{totalDetected}
+              件の商品を検出（{totalItems}件を登録対象）
             </p>
           </div>
         </div>
@@ -554,6 +643,46 @@ export function OcrResultsView({
           )}
         </Button>
       </div>
+
+      {/* Filter banner + select-all controls */}
+      {keywordsLoaded && (
+        <div className="rounded-lg border bg-muted/40 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {watchKeywords.length > 0 ? (
+                <>
+                  <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                    フィルタ適用中:
+                  </span>
+                  {watchKeywords.map((kw) => (
+                    <Badge key={kw} variant="secondary" className="text-xs">
+                      {kw}
+                    </Badge>
+                  ))}
+                </>
+              ) : (
+                <span className="text-sm text-muted-foreground">
+                  登録フィルタ未設定 — 全{totalDetected}件が登録対象です
+                </span>
+              )}
+            </div>
+            <div className="flex gap-1">
+              <Button variant="outline" size="sm" onClick={handleSelectAll}>
+                全選択
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleDeselectAll}>
+                全解除
+              </Button>
+            </div>
+          </div>
+          {watchKeywords.length > 0 && totalDetected > 0 && (
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              {totalDetected - totalItems}件を除外中 — {totalItems}/{totalDetected}件が登録対象です
+              （チェックボックスで変更可）
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Store selection — apply all convenience (shown when multiple images) */}
       {editableResults.length > 1 && (
@@ -665,7 +794,7 @@ export function OcrResultsView({
                   画像 {resultIndex + 1}
                 </CardTitle>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  {result.items.length}件の商品を検出
+                  {result.items.filter((i) => !i.excluded).length}/{result.items.length}件が登録対象
                 </p>
                 {result.store_name && (
                   <Badge variant="secondary" className="mt-1">
@@ -708,6 +837,10 @@ export function OcrResultsView({
                   }
                   onDelete={() =>
                     handleDeleteItem(resultIndex, itemIndex)
+                  }
+                  excluded={item.excluded ?? false}
+                  onExcludeChange={(ex) =>
+                    handleToggleItem(resultIndex, itemIndex, ex)
                   }
                 />
               ))
