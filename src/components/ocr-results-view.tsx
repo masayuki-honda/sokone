@@ -484,7 +484,7 @@ export function OcrResultsView({
           continue;
         }
 
-        allResults.push(...(data.results || []));
+        allResults.push(...(data.registered || []));
         allErrors.push(...(data.errors || []));
       }
 
