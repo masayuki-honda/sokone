@@ -1,7 +1,7 @@
 # Sokone 全Phase 実装計画
 
 > 作成日: 2026-02-26
-> 最終更新: 2026-03-07（tokubai チラシ自動スクレイピング実装）
+> 最終更新: 2026-03-09（ウォッチリスト・お買い得バッジ・マイグレーションスクリプト汎用化）
 >
 > **アーキテクチャ:** Next.js フルスタック + Prisma + Neon + Vercel
 
@@ -748,11 +748,13 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
 #### 9-1. 底値アラート
 
 **Server:**
-- [ ] 底値ウォッチリスト
+- [x] 底値ウォッチリスト
   - `PriceWatch` モデル — user_id, product_id, target_price (nullable), enabled
   - `POST /api/watches` — ウォッチ登録
   - `GET /api/watches` — ウォッチ一覧
   - `DELETE /api/watches/{id}` — ウォッチ解除
+  - `PATCH /api/watches/{id}` — ウォッチ更新（targetPrice, enabled）
+  - `GET /api/watches/check?productId=xxx` — ウォッチ状態確認
 - [ ] 底値判定ロジック
   - 価格登録時に自動チェック: `新価格 <= 既存底値` なら底値更新通知
   - ウォッチ対象商品なら個別通知
@@ -761,8 +763,8 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
   - 通知内容: 「{商品名}が{店舗名}で底値更新！ ¥{価格}（前回底値: ¥{旧価格}）」
 
 **UI:**
-- [ ] 商品詳細ページに「ウォッチする」ボタン追加
-- [ ] ウォッチリスト管理ページ
+- [x] 商品詳細ページに「ウォッチする」ボタン追加
+- [x] ウォッチリスト管理ページ（`/watches`）
 - [ ] 底値更新のハイライト表示（ダッシュボード上）
 
 #### 9-2. 特売情報通知
@@ -778,7 +780,7 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
 **UI:**
 - [x] ダッシュボードに「今週のお買い得」セクション追加
 - [ ] お買い得商品一覧ページ
-- [ ] 価格登録時に「お買い得！」バッジ表示
+- [x] 価格登録時に「お買い得！」バッジ表示（トースト通知でお買い得件数表示）
 
 ### Sprint 10: 価格推移グラフ充実＋店舗間比較（〜1週間）
 
@@ -812,9 +814,11 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
 | GET | `/api/notifications` | 8 | 通知一覧 |
 | PUT | `/api/notifications/{id}/read` | 8 | 通知既読 |
 | GET | `/api/notifications/unread-count` | 8 | 未読数 |
-| POST | `/api/watches` | 9 | ウォッチ登録 |
-| GET | `/api/watches` | 9 | ウォッチ一覧 |
-| DELETE | `/api/watches/{id}` | 9 | ウォッチ解除 |
+| POST | `/api/watches` | 9 | ウォッチ登録 ✅ |
+| GET | `/api/watches` | 9 | ウォッチ一覧 ✅ |
+| DELETE | `/api/watches/{id}` | 9 | ウォッチ解除 ✅ |
+| PATCH | `/api/watches/{id}` | 9 | ウォッチ更新 ✅ |
+| GET | `/api/watches/check` | 9 | ウォッチ状態確認 ✅ |
 | GET | `/api/deals` | 9 | お買い得商品一覧 ✅ |
 | GET | `/api/products/{id}/compare` | 10 | 店舗間比較 ✅ |
 

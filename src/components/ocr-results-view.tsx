@@ -580,7 +580,13 @@ export function OcrResultsView({
         toast.error("価格登録に失敗しました");
       } else {
         setRegistrationSuccess(true);
-        toast.success(`${allResults.length}件の価格を登録しました`);
+        const dealCount = allResults.filter(
+          (r: { isDeal?: boolean }) => r.isDeal
+        ).length;
+        const message = dealCount > 0
+          ? `${allResults.length}件の価格を登録しました（${dealCount}件がお買い得！）`
+          : `${allResults.length}件の価格を登録しました`;
+        toast.success(message);
         // Navigate to dashboard after short delay
         setTimeout(() => {
           router.push("/dashboard");

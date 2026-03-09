@@ -71,6 +71,7 @@ model User {
   uploadedImages   UploadedImage[]
   favoriteProducts FavoriteProduct[]
   watchKeywords    WatchKeyword[]
+  priceWatches     PriceWatch[]
 
   @@map("users")
 }
@@ -134,6 +135,7 @@ model Product {
   aliases          ProductAlias[]
   priceRecords     PriceRecord[]
   favoriteProducts FavoriteProduct[]
+  priceWatches     PriceWatch[]
 
   @@map("products")
 }
@@ -230,4 +232,19 @@ model WatchKeyword {
 
   @@unique([userId, keyword])
   @@map("watch_keywords")
+}
+
+model PriceWatch {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  productId   String   @map("product_id")
+  targetPrice Int?     @map("target_price")
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@map("price_watches")
 }

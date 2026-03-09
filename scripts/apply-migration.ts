@@ -1,68 +1,76 @@
 /**
- * Apply migration via Neon WebSocket (TCP port 5432 is blocked on Neon free tier)
+ * Apply pending Prisma migrations via Neon HTTP driver.
+ * TCP port 5432 is blocked on Neon free tier, so we use the serverless HTTP driver.
  * Usage: npx tsx scripts/apply-migration.ts
  */
 import { neon } from "@neondatabase/serverless";
 import * as dotenv from "dotenv";
+import * as fs from "fs";
+import * as path from "path";
 
 dotenv.config();
 
 const sql = neon(process.env.DATABASE_URL!);
+const migrationsDir = path.join(__dirname, "..", "prisma", "migrations");
 
 async function run() {
-  console.log("Applying migration: 20260304000000_add_watch_keywords");
+  // Find all migration directories (sorted by name = chronological order)
+  const dirs = fs
+    .readdirSync(migrationsDir, { withFileTypes: true })
+    .filter((d) => d.isDirectory() && d.name !== "migration_lock.toml")
+    .map((d) => d.name)
+    .sort();
 
-  // Check if already applied
-  const existing = await sql`
-    SELECT id FROM "_prisma_migrations"
-    WHERE migration_name = '20260304000000_add_watch_keywords'
-    LIMIT 1
-  `;
+  let applied = 0;
 
-  // Check if table actually exists
-  const tableExists = await sql`
-    SELECT 1 FROM information_schema.tables
-    WHERE table_schema = 'public' AND table_name = 'watch_keywords'
-    LIMIT 1
-  `;
+  for (const migrationName of dirs) {
+    const sqlFile = path.join(migrationsDir, migrationName, "migration.sql");
+    if (!fs.existsSync(sqlFile)) continue;
 
-  if (existing.length > 0 && tableExists.length > 0) {
-    console.log("Migration already fully applied. Skipping.");
-    return;
-  }
+    // Check if already applied
+    const existing = await sql`
+      SELECT id FROM "_prisma_migrations"
+      WHERE migration_name = ${migrationName}
+      LIMIT 1
+    `;
 
-  try {
-    if (tableExists.length === 0) {
-      // 1. Create table
-      await sql`
-        CREATE TABLE "watch_keywords" (
-          "id" TEXT NOT NULL,
-          "user_id" TEXT NOT NULL,
-          "keyword" TEXT NOT NULL,
-          "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          CONSTRAINT "watch_keywords_pkey" PRIMARY KEY ("id")
-        )
-      `;
-
-      // 2. Create unique index
-      await sql`
-        CREATE UNIQUE INDEX "watch_keywords_user_id_keyword_key"
-        ON "watch_keywords"("user_id", "keyword")
-      `;
-
-      // 3. Add foreign key
-      await sql`
-        ALTER TABLE "watch_keywords"
-        ADD CONSTRAINT "watch_keywords_user_id_fkey"
-        FOREIGN KEY ("user_id") REFERENCES "users"("id")
-        ON DELETE CASCADE ON UPDATE CASCADE
-      `;
-    } else {
-      console.log("Table already exists (partial migration), skipping DDL.");
+    if (existing.length > 0) {
+      continue; // Already applied
     }
 
-    // 4. Record in Prisma migrations table (if not already there)
-    if (existing.length === 0) {
+    console.log(`Applying migration: ${migrationName}`);
+
+    const sqlContent = fs.readFileSync(sqlFile, "utf-8");
+
+    // Split into individual statements (split on semicolons, skip empty)
+    const statements = sqlContent
+      .split(";")
+      .map((s) => s.trim())
+      .filter((s) => {
+        // Remove comment-only lines, keep actual SQL
+        const withoutComments = s.replace(/--.*$/gm, "").trim();
+        return withoutComments.length > 0;
+      });
+
+    try {
+      for (const stmt of statements) {
+        // neon() only supports tagged template calls; simulate one for dynamic SQL
+        const tsa = Object.assign([stmt], { raw: [stmt] }) as TemplateStringsArray;
+        try {
+          await sql(tsa);
+        } catch (stmtErr: unknown) {
+          // Skip "already exists" errors (42P07=relation, 42710=constraint)
+          // This handles partially applied migrations
+          const code = (stmtErr as { code?: string }).code;
+          if (code === "42P07" || code === "42710") {
+            console.log(`  ⚠ Skipped (already exists): ${stmt.slice(0, 60)}...`);
+          } else {
+            throw stmtErr;
+          }
+        }
+      }
+
+      // Record in _prisma_migrations
       await sql`
         INSERT INTO "_prisma_migrations" (
           id, checksum, finished_at, migration_name, logs,
@@ -71,19 +79,26 @@ async function run() {
           gen_random_uuid()::text,
           'manual',
           now(),
-          '20260304000000_add_watch_keywords',
+          ${migrationName},
           NULL,
           NULL,
           now(),
           1
         )
       `;
-    }
 
-    console.log("Migration applied successfully.");
-  } catch (err) {
-    console.error("Migration failed:", err);
-    process.exit(1);
+      console.log(`  ✔ Applied successfully (${statements.length} statements)`);
+      applied++;
+    } catch (err) {
+      console.error(`  ✖ Migration failed:`, err);
+      process.exit(1);
+    }
+  }
+
+  if (applied === 0) {
+    console.log("All migrations are up to date.");
+  } else {
+    console.log(`\nDone: ${applied} migration(s) applied.`);
   }
 }
 
