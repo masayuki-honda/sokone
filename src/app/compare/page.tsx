@@ -91,9 +91,9 @@ export default function ComparePage() {
 
   // Auto-compare when products change
   useEffect(() => {
-    if (selectedProducts.length > 0) {
-      const ids = selectedProducts.map((p) => p.id).join(",");
-      const timer = setTimeout(() => {
+    const timer = setTimeout(() => {
+      if (selectedProducts.length > 0) {
+        const ids = selectedProducts.map((p) => p.id).join(",");
         setIsLoading(true);
         fetch(`/api/compare?productIds=${ids}`)
           .then((res) => (res.ok ? res.json() : null))
@@ -102,11 +102,11 @@ export default function ComparePage() {
           })
           .catch((error) => console.error("Failed to compare:", error))
           .finally(() => setIsLoading(false));
-      }, 0);
-      return () => clearTimeout(timer);
-    } else {
-      setResult(null);
-    }
+      } else {
+        setResult(null);
+      }
+    }, 0);
+    return () => clearTimeout(timer);
   }, [selectedProducts]);
 
   return (
