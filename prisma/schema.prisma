@@ -74,6 +74,7 @@ model User {
   priceWatches     PriceWatch[]
   notifications    Notification[]
   notificationPreferences NotificationPreference[]
+  scrapingJobs     ScrapingJob[]
 
   @@map("users")
 }
@@ -93,6 +94,7 @@ model Store {
   priceRecords    PriceRecord[]
   uploadedImages  UploadedImage[]
   scrapedLeaflets ScrapedLeaflet[]
+  scrapingJobs    ScrapingJob[]
 
   @@map("stores")
 }
@@ -159,6 +161,14 @@ enum SourceType {
   flyer
   instagram
   receipt
+  auto_flyer
+}
+
+enum JobStatus {
+  pending
+  running
+  completed
+  failed
 }
 
 enum NotificationType {
@@ -260,6 +270,26 @@ model PriceWatch {
 
   @@unique([userId, productId])
   @@map("price_watches")
+}
+
+model ScrapingJob {
+  id             String    @id @default(uuid())
+  storeId        String    @map("store_id")
+  userId         String    @map("user_id")
+  status         JobStatus @default(pending)
+  imagesScraped  Int       @default(0) @map("images_scraped")
+  imagesOcred    Int       @default(0) @map("images_ocred")
+  pricesRegistered Int     @default(0) @map("prices_registered")
+  errorLog       String?   @map("error_log") @db.Text
+  startedAt      DateTime? @map("started_at")
+  completedAt    DateTime? @map("completed_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, createdAt])
+  @@map("scraping_jobs")
 }
 
 model Notification {
