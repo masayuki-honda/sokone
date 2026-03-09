@@ -138,6 +138,7 @@ export default function ProductDetailPage({
       }
     }
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, period]);
 
   // Fetch categories and stores for selectors

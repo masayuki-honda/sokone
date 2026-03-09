@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import { GET } from "@/app/api/health/route";
 
 describe("GET /api/health", () => {
