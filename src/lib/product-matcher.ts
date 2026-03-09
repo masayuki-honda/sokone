@@ -101,9 +101,10 @@ export function normalizeProductName(name: string): string {
   normalized = normalized.toLowerCase();
 
   // Normalize pack/multipack notation: "6缶パック", "6本パック", "6個入" etc.
+  // Only normalize when count >= 2 (count of 1 is a single item, not a multi-pack)
   normalized = normalized.replace(
     /(\d+)\s*(?:缶|本|個|袋|枚|パック|入り?|p)\s*(?:パック|セット|入り?)?/g,
-    "×$1",
+    (_match, count) => (parseInt(count, 10) > 1 ? `×${count}` : _match),
   );
 
   // Normalize "×" variants
