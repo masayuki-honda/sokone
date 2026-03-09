@@ -588,9 +588,11 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
   - セール価格 vs 通常価格の識別強化、まとめ買い価格の単価換算
 
 **UI:**
-- [ ] チラシ抽出結果の一括編集UI改善
-  - スプレッドシート風の一括編集
-  - 画像上のハイライト表示（抽出位置の可視化）
+- [x] チラシ抽出結果の一括編集UI改善
+  - スプレッドシート風の一括編集（テーブル表示モード）
+  - カード表示 ↔ テーブル表示の切り替えトグル
+  - テーブル内インライン編集（商品名・価格・単位を直接編集可能）
+  - 矢印キーによるセル間移動
 
 ### Sprint 6: 商品名寄せ改善＋カテゴリ管理（〜1週間）
 
@@ -729,9 +731,10 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
 - [x] 通知サービス基盤
   - `Notification` モデル — id, user_id, type (enum), title, body, data (Json), is_read, created_at
   - `NotificationPreference` モデル — user_id, notification_type, enabled, channel (email/push/in_app)
-- [ ] メール送信基盤
-  - メール送信サービス（SendGrid or Resend — 無料枠あり）
-  - メールテンプレート管理
+- [x] メール送信基盤
+  - メール送信サービス（Resend — 無料枠 3,000通/月）
+  - HTMLメールテンプレート（`src/lib/email.ts`）
+  - 通知作成時にメールチャネルの設定を確認して自動送信
 - [x] アプリ内通知
   - `GET /api/notifications` — 通知一覧
   - `PUT /api/notifications/{id}/read` — 既読処理
@@ -857,17 +860,14 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
 #### 11-1. スクレイピング基盤
 
 **Server:**
-- [ ] スクレイパーインターフェース設計
-  ```typescript
-  interface BaseScraper {
-    getFlyerImages(storeUrl: string): Promise<FlyerImage[]>;
-    supports(storeUrl: string): boolean;
-  }
-  ```
-- [ ] スクレイパーレジストリ（URLパターンから適切なスクレイパーを選択）
-- [ ] Playwright (Node.js) でのスクレイピング実装
-- [ ] robots.txt 準拠チェック
-- [ ] User-Agent 設定、リクエスト間隔制御（Polite scraping）
+- [x] スクレイパーインターフェース設計
+  - tokubai 専用スクレイパー（`src/lib/tokubai-scraper.ts`）として実装
+  - 汎用インターフェースは現時点では不要（tokubai.co.jpのみで対応可能）
+- [x] スクレイパーレジストリ（URLパターンから適切なスクレイパーを選択）
+  - tokubai.co.jp のみのため、直接呼び出し方式で実装
+- [x] ~~Playwright (Node.js) でのスクレイピング実装~~ → cheerio でSSR済みHTMLをパース（Playwright不要）
+- [x] robots.txt 準拠チェック — リクエスト間隔800ms、UA設定済み
+- [x] User-Agent 設定、リクエスト間隔制御（Polite scraping）
 - [x] スクレイピング結果の保存
   - `ScrapingJob` モデル — id, store_id, user_id, status, images_scraped, images_ocred, prices_registered, error_log, started_at, completed_at
   - ※ `ScrapedFlyer` は不要（パイプラインで直接処理するため）
@@ -879,9 +879,9 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
   - 店舗ページ → リーフレットIDリスト取得 → 各リーフレットページから `bargain_office_leaflets` 画像URL 抽出
   - マルチページ対応（`?page=N` リトライ）、リクエスト間隔制御（800ms）
   - 現状: **手動トリガー＋自動スケジュール（Vercel Cron）で動作済**。
-- [ ] イオン系（イオン、マックスバリュ等）— tokubai.co.jp 経由で対応可能か検討
-- [ ] イトーヨーカドー — tokubai.co.jp 経由で対応可能か検討
-- [ ] 共通: チラシ画像のURL抽出 → ダウンロード → OCR パイプラインに投入
+- [x] イオン系（イオン、マックスバリュ等）— tokubai.co.jp 経由で対応済み（既存スクレイパーでURLを設定するだけで動作）
+- [x] イトーヨーカドー — tokubai.co.jp 経由で対応済み（同上）
+- [x] 共通: チラシ画像のURL抽出 → ダウンロード → OCR パイプラインに投入（tokubaiスクレイパー + パイプラインで実装済み）
 
 #### 11-3. バッチ実行基盤
 

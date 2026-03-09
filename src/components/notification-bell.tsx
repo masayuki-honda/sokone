@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { Bell, Check } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Button } from "@/components/ui/button";
 
 interface NotificationItem {
   id: string;
@@ -35,9 +34,16 @@ export function NotificationBell() {
 
   // Poll unread count every 30 seconds
   useEffect(() => {
-    fetchUnreadCount();
-    const interval = setInterval(fetchUnreadCount, 30000);
-    return () => clearInterval(interval);
+    let cancelled = false;
+    const poll = async () => {
+      if (!cancelled) await fetchUnreadCount();
+    };
+    poll();
+    const interval = setInterval(poll, 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, [fetchUnreadCount]);
 
   const fetchNotifications = useCallback(async () => {
@@ -55,7 +61,10 @@ export function NotificationBell() {
   // Fetch notifications when popover opens
   useEffect(() => {
     if (open) {
-      fetchNotifications();
+      const load = async () => {
+        await fetchNotifications();
+      };
+      load();
     }
   }, [open, fetchNotifications]);
 

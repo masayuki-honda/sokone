@@ -13,12 +13,15 @@ import {
   Image as ImageIcon,
   Loader2,
   AlertTriangle,
+  LayoutList,
+  Table,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StoreSelect } from "@/components/store-select";
+import { BulkEditTable } from "@/components/bulk-edit-table";
 import { toast } from "sonner";
 
 interface OcrItem {
@@ -372,6 +375,7 @@ export function OcrResultsView({
   const [registrationSuccess, setRegistrationSuccess] = useState(false);
   const [watchKeywords, setWatchKeywords] = useState<string[]>([]);
   const [keywordsLoaded, setKeywordsLoaded] = useState(false);
+  const [viewMode, setViewMode] = useState<"card" | "table">("card");
 
   // Load watch-keywords and apply filter to initial results
   useEffect(() => {
@@ -626,28 +630,50 @@ export function OcrResultsView({
             </p>
           </div>
         </div>
-        <Button
-          size="lg"
-          disabled={totalItems === 0 || isRegistering || registrationSuccess}
-          onClick={handleRegisterPrices}
-        >
-          {isRegistering ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              登録中...
-            </>
-          ) : registrationSuccess ? (
-            <>
-              <Check className="mr-2 h-4 w-4" />
-              登録完了！
-            </>
-          ) : (
-            <>
-              <Check className="mr-2 h-4 w-4" />
-              すべて確認して登録（{totalItems}件）
-            </>
-          )}
-        </Button>
+        <div className="flex items-center gap-2">
+          <div className="flex rounded-lg border p-0.5">
+            <Button
+              variant={viewMode === "card" ? "secondary" : "ghost"}
+              size="sm"
+              className="h-8 px-2"
+              onClick={() => setViewMode("card")}
+              title="カード表示"
+            >
+              <LayoutList className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={viewMode === "table" ? "secondary" : "ghost"}
+              size="sm"
+              className="h-8 px-2"
+              onClick={() => setViewMode("table")}
+              title="テーブル表示"
+            >
+              <Table className="h-4 w-4" />
+            </Button>
+          </div>
+          <Button
+            size="lg"
+            disabled={totalItems === 0 || isRegistering || registrationSuccess}
+            onClick={handleRegisterPrices}
+          >
+            {isRegistering ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                登録中...
+              </>
+            ) : registrationSuccess ? (
+              <>
+                <Check className="mr-2 h-4 w-4" />
+                登録完了！
+              </>
+            ) : (
+              <>
+                <Check className="mr-2 h-4 w-4" />
+                すべて確認して登録（{totalItems}件）
+              </>
+            )}
+          </Button>
+        </div>
       </div>
 
       {/* Filter banner + select-all controls */}
@@ -772,97 +798,107 @@ export function OcrResultsView({
       )}
 
       {/* Results per image */}
-      {editableResults.map((result, resultIndex) => (
-        <Card key={result.imageId}>
-          <CardHeader>
-            <div className="flex items-start gap-4">
-              {/* Image preview — click to enlarge */}
-              <div
-                className="relative h-24 w-24 flex-shrink-0 overflow-hidden rounded-lg border bg-muted cursor-zoom-in"
-                onClick={() => result.signedUrl && setLightboxUrl(result.signedUrl)}
-                title="クリックで拡大"
-              >
-                {result.signedUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={result.signedUrl}
-                    alt="アップロード画像"
-                    className="h-full w-full object-cover"
+      {viewMode === "table" ? (
+        <BulkEditTable
+          results={editableResults}
+          onUpdateItem={handleUpdateItem}
+          onDeleteItem={handleDeleteItem}
+          onAddItem={handleAddItem}
+          onToggleItem={handleToggleItem}
+        />
+      ) : (
+        editableResults.map((result, resultIndex) => (
+          <Card key={result.imageId}>
+            <CardHeader>
+              <div className="flex items-start gap-4">
+                {/* Image preview — click to enlarge */}
+                <div
+                  className="relative h-24 w-24 flex-shrink-0 overflow-hidden rounded-lg border bg-muted cursor-zoom-in"
+                  onClick={() => result.signedUrl && setLightboxUrl(result.signedUrl)}
+                  title="クリックで拡大"
+                >
+                  {result.signedUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={result.signedUrl}
+                      alt="アップロード画像"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center">
+                      <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1">
+                  <CardTitle className="text-base">
+                    画像 {resultIndex + 1}
+                  </CardTitle>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {result.items.filter((i) => !i.excluded).length}/{result.items.length}件が登録対象
+                  </p>
+                  {result.store_name && (
+                    <Badge variant="secondary" className="mt-1">
+                      店舗: {result.store_name}
+                    </Badge>
+                  )}
+                </div>
+              </div>
+              {/* Per-image store selector (shown when multiple images) */}
+              {editableResults.length > 1 && (
+                <div className={`mt-3 rounded-lg border p-3 ${
+                  registrationError === "各画像の店舗を選択してください" && !storeIdMap[result.imageId]
+                    ? "border-destructive bg-destructive/5"
+                    : "bg-muted/30"
+                }`}>
+                  <p className="mb-1.5 text-xs font-medium text-muted-foreground">この画像の店舗</p>
+                  <StoreSelect
+                    value={storeIdMap[result.imageId] ?? null}
+                    onChange={(id, name) => {
+                      setStoreIdMap((prev) => ({ ...prev, [result.imageId]: id }));
+                      if (registrationError) setRegistrationError(null);
+                      void name;
+                    }}
                   />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center">
-                    <ImageIcon className="h-8 w-8 text-muted-foreground" />
-                  </div>
-                )}
-              </div>
-              <div className="flex-1">
-                <CardTitle className="text-base">
-                  画像 {resultIndex + 1}
-                </CardTitle>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {result.items.filter((i) => !i.excluded).length}/{result.items.length}件が登録対象
+                </div>
+              )}
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {result.items.length === 0 ? (
+                <p className="py-4 text-center text-sm text-muted-foreground">
+                  この画像から商品を検出できませんでした
                 </p>
-                {result.store_name && (
-                  <Badge variant="secondary" className="mt-1">
-                    店舗: {result.store_name}
-                  </Badge>
-                )}
-              </div>
-            </div>
-            {/* Per-image store selector (shown when multiple images) */}
-            {editableResults.length > 1 && (
-              <div className={`mt-3 rounded-lg border p-3 ${
-                registrationError === "各画像の店舗を選択してください" && !storeIdMap[result.imageId]
-                  ? "border-destructive bg-destructive/5"
-                  : "bg-muted/30"
-              }`}>
-                <p className="mb-1.5 text-xs font-medium text-muted-foreground">この画像の店舗</p>
-                <StoreSelect
-                  value={storeIdMap[result.imageId] ?? null}
-                  onChange={(id, name) => {
-                    setStoreIdMap((prev) => ({ ...prev, [result.imageId]: id }));
-                    if (registrationError) setRegistrationError(null);
-                    void name;
-                  }}
-                />
-              </div>
-            )}
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {result.items.length === 0 ? (
-              <p className="py-4 text-center text-sm text-muted-foreground">
-                この画像から商品を検出できませんでした
-              </p>
-            ) : (
-              result.items.map((item, itemIndex) => (
-                <EditableItem
-                  key={`${resultIndex}-${itemIndex}`}
-                  item={item}
-                  onUpdate={(updated) =>
-                    handleUpdateItem(resultIndex, itemIndex, updated)
-                  }
-                  onDelete={() =>
-                    handleDeleteItem(resultIndex, itemIndex)
-                  }
-                  excluded={item.excluded ?? false}
-                  onExcludeChange={(ex) =>
-                    handleToggleItem(resultIndex, itemIndex, ex)
-                  }
-                />
-              ))
-            )}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-full text-muted-foreground"
-              onClick={() => handleAddItem(resultIndex)}
-            >
-              <Plus className="mr-1 h-3 w-3" />
-              商品を手動追加
-            </Button>
-          </CardContent>
-        </Card>
-      ))}
+              ) : (
+                result.items.map((item, itemIndex) => (
+                  <EditableItem
+                    key={`${resultIndex}-${itemIndex}`}
+                    item={item}
+                    onUpdate={(updated) =>
+                      handleUpdateItem(resultIndex, itemIndex, updated)
+                    }
+                    onDelete={() =>
+                      handleDeleteItem(resultIndex, itemIndex)
+                    }
+                    excluded={item.excluded ?? false}
+                    onExcludeChange={(ex) =>
+                      handleToggleItem(resultIndex, itemIndex, ex)
+                    }
+                  />
+                ))
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full text-muted-foreground"
+                onClick={() => handleAddItem(resultIndex)}
+              >
+                <Plus className="mr-1 h-3 w-3" />
+                商品を手動追加
+              </Button>
+            </CardContent>
+          </Card>
+        ))
+      )}
 
       {/* Register button (bottom) */}
       <Button
