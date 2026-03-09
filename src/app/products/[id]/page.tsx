@@ -561,6 +561,9 @@ export default function ProductDetailPage({
                   const prices = s.records.map((r) => r.price);
                   const min = Math.min(...prices);
                   const max = Math.max(...prices);
+                  const avg = Math.round(
+                    prices.reduce((a, b) => a + b, 0) / prices.length
+                  );
                   const latest = s.records[s.records.length - 1]?.price;
                   const isBottom =
                     history.stats && min === history.stats.bottomPrice;
@@ -590,6 +593,7 @@ export default function ProductDetailPage({
                       </div>
                       <div className="mt-2 flex gap-4 text-xs text-muted-foreground">
                         <span>最高: ¥{max.toLocaleString()}</span>
+                        <span>平均: ¥{avg.toLocaleString()}</span>
                         {latest && (
                           <span>最新: ¥{latest.toLocaleString()}</span>
                         )}
