@@ -371,6 +371,12 @@ export default function DashboardPage() {
               <Badge variant="secondary" className="text-xs">
                 {deals.length}件
               </Badge>
+              <Link
+                href="/deals"
+                className="ml-auto text-sm text-muted-foreground hover:text-foreground flex items-center gap-1"
+              >
+                すべて見る <ArrowRight className="h-3 w-3" />
+              </Link>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {deals.slice(0, 6).map((deal) => (
