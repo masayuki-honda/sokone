@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { findOrCreateProduct, normalizeProductName } from "@/lib/product-matcher";
 import { SourceType } from "@prisma/client";
+import { createNotification } from "@/lib/notification";
 
 interface PriceItem {
   name: string;
@@ -170,6 +171,51 @@ export async function POST(request: NextRequest) {
         });
         const bottomPrice = bottomRecord?.price ?? finalPrice;
         const isDeal = finalPrice <= bottomPrice * 1.1;
+
+        // --- Notification triggers ---
+        // Check if any user is watching this product
+        const watches = await prisma.priceWatch.findMany({
+          where: { productId, enabled: true },
+          select: { userId: true, targetPrice: true },
+        });
+
+        const productName = priceRecord.product.name;
+        const storeName = store.name;
+
+        for (const watch of watches) {
+          // Bottom price update: current price is the new lowest
+          if (finalPrice === bottomPrice) {
+            await createNotification({
+              userId: watch.userId,
+              type: "bottom_price_update",
+              title: `${productName}の底値更新！`,
+              body: `${storeName}で ¥${finalPrice.toLocaleString()} — 底値が更新されました`,
+              data: { productId, storeId, priceRecordId: priceRecord.id, price: finalPrice },
+            });
+          }
+
+          // Target price reached
+          if (watch.targetPrice && finalPrice <= watch.targetPrice) {
+            await createNotification({
+              userId: watch.userId,
+              type: "watch_target_reached",
+              title: `${productName}が目標価格以下！`,
+              body: `${storeName}で ¥${finalPrice.toLocaleString()}（目標: ¥${watch.targetPrice.toLocaleString()}）`,
+              data: { productId, storeId, priceRecordId: priceRecord.id, price: finalPrice, targetPrice: watch.targetPrice },
+            });
+          }
+
+          // Deal alert (only if not already covered by bottom price or target)
+          if (isDeal && finalPrice !== bottomPrice && (!watch.targetPrice || finalPrice > watch.targetPrice)) {
+            await createNotification({
+              userId: watch.userId,
+              type: "deal_alert",
+              title: `${productName}がお買い得！`,
+              body: `${storeName}で ¥${finalPrice.toLocaleString()}（底値: ¥${bottomPrice.toLocaleString()}）`,
+              data: { productId, storeId, priceRecordId: priceRecord.id, price: finalPrice, bottomPrice },
+            });
+          }
+        }
 
         results.push({
           priceRecordId: priceRecord.id,

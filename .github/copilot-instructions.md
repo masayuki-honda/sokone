@@ -140,12 +140,14 @@ sokone/
 │   ├── components/            # React components
 │   │   ├── ui/                # shadcn/ui
 │   │   ├── header.tsx
+│   │   ├── notification-bell.tsx
 │   │   ├── ocr-results-view.tsx   │   ├── store-list.tsx│   │   └── session-provider.tsx
 │   ├── lib/                   # サービスロジック、ユーティリティ
 │   │   ├── prisma.ts          # Prisma client
 │   │   ├── auth.ts            # NextAuth 設定
    │   ├── gemini.ts          # Geminiクライアント・モデルID一元管理 (GEMINI_MODEL)
    │   ├── ocr.ts             # OCR処理 (Gemini Flash)
+   │   ├── notification.ts    # 通知作成サービス
    │   ├── r2.ts              # Cloudflare R2 クライアント
    │   ├── product-matcher.ts # 商品名寄せ
    │   ├── bottom-price.ts    # 底値計算サービス
