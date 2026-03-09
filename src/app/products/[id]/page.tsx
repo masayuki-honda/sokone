@@ -16,6 +16,8 @@ import {
   X,
   Trash2,
   Save,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Header } from "@/components/header";
@@ -105,6 +107,8 @@ export default function ProductDetailPage({
   const [editDate, setEditDate] = useState("");
   const [isSavingRecord, setIsSavingRecord] = useState(false);
   const [deletingRecordId, setDeletingRecordId] = useState<string | null>(null);
+  const [isWatching, setIsWatching] = useState(false);
+  const [watchId, setWatchId] = useState<string | null>(null);
   const { addProduct } = useRecentlyViewed();
 
   useEffect(() => {
@@ -146,7 +150,14 @@ export default function ProductDetailPage({
       .then((r) => r.json())
       .then((data) => setStores(Array.isArray(data) ? data : (data.stores || [])))
       .catch(() => {});
-  }, []);
+    fetch(`/api/watches/check?productId=${id}`)
+      .then((r) => r.json())
+      .then((data) => {
+        setIsWatching(data.watching);
+        setWatchId(data.watchId ?? null);
+      })
+      .catch(() => {});
+  }, [id]);
 
   async function handleToggleFavorite() {
     try {
@@ -163,6 +174,29 @@ export default function ProductDetailPage({
       }
     } catch (error) {
       console.error("Failed to toggle favorite:", error);
+    }
+  }
+
+  async function handleToggleWatch() {
+    try {
+      if (isWatching && watchId) {
+        await fetch(`/api/watches/${watchId}`, { method: "DELETE" });
+        setIsWatching(false);
+        setWatchId(null);
+      } else {
+        const res = await fetch("/api/watches", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ productId: id }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setIsWatching(true);
+          setWatchId(data.id);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to toggle watch:", error);
     }
   }
 
@@ -393,18 +427,32 @@ export default function ProductDetailPage({
               </div>
             </div>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleToggleFavorite}
-            title={isFavorite ? "お気に入り解除" : "お気に入り登録"}
-          >
-            {isFavorite ? (
-              <Star className="h-5 w-5 text-yellow-500 fill-yellow-500" />
-            ) : (
-              <StarOff className="h-5 w-5" />
-            )}
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleToggleWatch}
+              title={isWatching ? "ウォッチ解除" : "ウォッチに追加"}
+            >
+              {isWatching ? (
+                <Eye className="h-5 w-5 text-blue-500" />
+              ) : (
+                <EyeOff className="h-5 w-5" />
+              )}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleToggleFavorite}
+              title={isFavorite ? "お気に入り解除" : "お気に入り登録"}
+            >
+              {isFavorite ? (
+                <Star className="h-5 w-5 text-yellow-500 fill-yellow-500" />
+              ) : (
+                <StarOff className="h-5 w-5" />
+              )}
+            </Button>
+          </div>
         </div>
 
         {/* Stats Cards */}

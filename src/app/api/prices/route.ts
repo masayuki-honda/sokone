@@ -162,12 +162,23 @@ export async function POST(request: NextRequest) {
           },
         });
 
+        // Check if this price is a deal (near bottom price)
+        const bottomRecord = await prisma.priceRecord.findFirst({
+          where: { productId },
+          orderBy: { price: "asc" },
+          select: { price: true },
+        });
+        const bottomPrice = bottomRecord?.price ?? finalPrice;
+        const isDeal = finalPrice <= bottomPrice * 1.1;
+
         results.push({
           priceRecordId: priceRecord.id,
           productId: priceRecord.productId,
           productName: priceRecord.product.name,
           price: priceRecord.price,
           isNewProduct,
+          isDeal,
+          bottomPrice,
         });
       } catch (itemError) {
         console.error(`Error processing item ${item.name}:`, itemError);
