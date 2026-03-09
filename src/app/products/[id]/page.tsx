@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useRecentlyViewed } from "@/hooks/use-recently-viewed";
+import { PriceChart } from "@/components/price-chart";
 
 interface ProductDetail {
   id: string;
@@ -467,12 +468,12 @@ export default function ProductDetailPage({
           </div>
         )}
 
-        {/* Store-based price comparison */}
-        {history && history.series.length > 0 && (
+        {/* Price History Chart */}
+        {history && history.series.length > 0 && history.records.length >= 2 && (
           <Card>
             <CardHeader>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <CardTitle className="text-base">店舗別価格比較</CardTitle>
+                <CardTitle className="text-base">価格推移グラフ</CardTitle>
                 <div className="flex gap-1 overflow-x-auto scrollbar-none">
                   {[
                     { value: "1m", label: "1ヶ月" },
@@ -493,6 +494,18 @@ export default function ProductDetailPage({
                   ))}
                 </div>
               </div>
+            </CardHeader>
+            <CardContent>
+              <PriceChart series={history.series} stats={history.stats} />
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Store-based price comparison */}
+        {history && history.series.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">店舗別価格比較</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
