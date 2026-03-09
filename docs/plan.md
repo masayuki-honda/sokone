@@ -75,7 +75,7 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
   - 野菜等テキストなし商品 1〜2枚
 - [ ] 各ソースタイプでの抽出精度を記録（商品名/価格の正答率）
 - [ ] 精度に問題があれば代替案（Cloud Vision + Gemini 2段構成）を検討
-- [ ] プロンプトテンプレートのドラフト作成
+- [x] プロンプトテンプレートのドラフト作成
 
 ### 0-4. CI/CD
 
@@ -91,7 +91,7 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 - [x] `http://localhost:3000/api/health` が JSON レスポンスを返す
 - [x] Prisma で Neon PostgreSQL に接続できる（マイグレーション適用済み）
 - [x] Vercel デプロイ完了（https://sokone-sigma.vercel.app）
-- [ ] R2 への画像アップロード・削除が動作する（Sprint 2 で実装）
+- [x] R2 への画像アップロード・削除が動作する（Sprint 2 で実装）
 - [ ] CI が Green で通る
 - [ ] OCR 精度の初期評価が完了している（Sprint 2 で実施）
 
