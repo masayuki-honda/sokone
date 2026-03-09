@@ -19,7 +19,7 @@ async function run() {
     LIMIT 1
   `;
 
-  // Check if table actually exists  
+  // Check if table actually exists
   const tableExists = await sql`
     SELECT 1 FROM information_schema.tables
     WHERE table_schema = 'public' AND table_name = 'watch_keywords'
@@ -88,4 +88,3 @@ async function run() {
 }
 
 run();
-

@@ -22,6 +22,7 @@ import { Header } from "@/components/header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { useRecentlyViewed } from "@/hooks/use-recently-viewed";
 
 interface ProductDetail {
   id: string;
@@ -103,6 +104,7 @@ export default function ProductDetailPage({
   const [editDate, setEditDate] = useState("");
   const [isSavingRecord, setIsSavingRecord] = useState(false);
   const [deletingRecordId, setDeletingRecordId] = useState<string | null>(null);
+  const { addProduct } = useRecentlyViewed();
 
   useEffect(() => {
     async function fetchData() {
@@ -117,6 +119,7 @@ export default function ProductDetailPage({
           const data = await prodRes.json();
           setProduct(data);
           setIsFavorite(data.isFavorite);
+          addProduct(data.id, data.name);
         }
 
         if (histRes.ok) {
