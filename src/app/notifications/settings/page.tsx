@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { ArrowLeft, Bell } from "lucide-react";
+import { ArrowLeft, Bell, Mail } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 
@@ -53,8 +53,9 @@ export default function NotificationSettingsPage() {
     const pref = preferences.find(
       (p) => p.notificationType === type && p.channel === channel
     );
-    // Default to enabled if no preference exists
-    return pref ? pref.enabled : true;
+    // in_app defaults to enabled, email defaults to disabled
+    if (!pref) return channel === "in_app";
+    return pref.enabled;
   };
 
   const togglePreference = async (
@@ -155,6 +156,48 @@ export default function NotificationSettingsPage() {
                     disabled={saving === key}
                     onCheckedChange={(checked) =>
                       togglePreference(nt.type, "in_app", checked)
+                    }
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div>
+          <div className="flex items-center gap-2 mb-4">
+            <Mail className="h-5 w-5" />
+            <h2 className="text-lg font-semibold">メール通知</h2>
+          </div>
+          <p className="text-sm text-zinc-500 mb-4">
+            登録メールアドレスに通知を送信します
+          </p>
+          <div className="space-y-4">
+            {NOTIFICATION_TYPES.map((nt) => {
+              const enabled = getEnabled(nt.type, "email");
+              const key = `${nt.type}_email`;
+              return (
+                <div
+                  key={key}
+                  className="flex items-center justify-between rounded-lg border border-zinc-200 dark:border-zinc-800 p-4"
+                >
+                  <div className="flex items-start gap-3">
+                    <span className="text-xl">{nt.icon}</span>
+                    <div>
+                      <Label htmlFor={key} className="text-sm font-medium">
+                        {nt.label}
+                      </Label>
+                      <p className="text-xs text-zinc-500 mt-0.5">
+                        {nt.description}
+                      </p>
+                    </div>
+                  </div>
+                  <Switch
+                    id={key}
+                    checked={enabled}
+                    disabled={saving === key}
+                    onCheckedChange={(checked) =>
+                      togglePreference(nt.type, "email", checked)
                     }
                   />
                 </div>

@@ -265,6 +265,7 @@ Gemini 2.5 Flash はマルチモーダルモデルであり、テキストの読
 | **データベース** | Neon (Free) | **無料** | PostgreSQL 16、0.5GB、サーバーレス |
 | **画像ストレージ** | Cloudflare R2 | **無料枠あり** | 10GB/月、Phase 1から使用 |
 | **スケジューラ** | Vercel Cron Jobs | **無料** | Hobbyプランは1つまで。毎日7時JST自動スクレイピング |
+| **メール送信** | Resend | **無料枠あり** | 3,000通/月、1日100通。通知メール送信 |
 | **CI/CD** | GitHub Actions | **無料** | テスト・デプロイ自動化 |
 
 > **月額コスト: $0（完全無料）** — Vercel (Hobby) + Neon (Free) + Cloudflare R2 (無料枠) + GitHub Actions (無料) の構成。バックエンドサーバー不要（Next.js Route Handlers で API を実装）。
@@ -286,6 +287,8 @@ Gemini 2.5 Flash はマルチモーダルモデルであり、テキストの読
 | `R2_BUCKET_NAME` | R2 バケット名 | ✅ | `.env.local`, Vercel |
 | `R2_PUBLIC_URL` | R2 パブリックURL | | `.env.local`, Vercel |
 | `CRON_SECRET` | Vercel Cron 認証トークン（`/api/cron/scrape` 保護） | ✅ | `.env.local`, Vercel |
+| `RESEND_API_KEY` | Resend メール送信 API キー | | `.env.local`, Vercel |
+| `EMAIL_FROM` | メール送信元アドレス | | `.env.local`, Vercel |
 
 ---
 

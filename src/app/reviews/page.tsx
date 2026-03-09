@@ -138,7 +138,6 @@ export default function ReviewsPage() {
         ) : (
           <div className="space-y-3">
             {reviews.map((review) => {
-              const edited = editedValues[review.id];
               return (
                 <div
                   key={review.id}

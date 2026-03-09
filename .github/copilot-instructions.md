@@ -21,6 +21,7 @@ Sokone（底値）は、チラシ・Instagram・店頭写真から商品価格�
 - **NextAuth.js (Auth.js)** — Google OAuth認証（セッションベース）
 - **@google/generative-ai** — Gemini 2.0 Flash API（OCR + 構造化抽出）
 - **sharp** — 画像リサイズ・HEIC→JPEG変換
+- **resend** — メール送信（通知メール）
 - **shadcn/ui** + **Tailwind CSS**
 - **Node.js 22 LTS**
 - パッケージマネージャ: npm
@@ -148,6 +149,7 @@ sokone/
 │   │   ├── header.tsx
 │   │   ├── notification-bell.tsx
 │   │   ├── ocr-results-view.tsx
+│   │   ├── bulk-edit-table.tsx
 │   │   ├── store-list.tsx
 │   │   └── session-provider.tsx
 │   ├── lib/                   # サービスロジック、ユーティリティ
@@ -155,7 +157,8 @@ sokone/
 │   │   ├── auth.ts            # NextAuth 設定
 │   │   ├── gemini.ts          # Geminiクライアント・モデルID一元管理 (GEMINI_MODEL)
 │   │   ├── ocr.ts             # OCR処理 (Gemini Flash)
-│   │   ├── notification.ts    # 通知作成サービス
+│   │   ├── notification.ts    # 通知作成サービス（アプリ内 + メール）
+│   │   ├── email.ts           # メール送信サービス（Resend）
 │   │   ├── r2.ts              # Cloudflare R2 クライアント
 │   │   ├── product-matcher.ts # 商品名寄せ
 │   │   ├── bottom-price.ts    # 底値計算サービス
