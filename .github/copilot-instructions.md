@@ -128,9 +128,14 @@ sokone/
 ├── src/
 │   ├── app/                   # App Router pages + API Routes
 │   │   ├── api/               # Route Handlers
+│   │   │   ├── cron/scrape/   # Vercel Cron 自動スクレイピング
+│   │   │   ├── jobs/          # ジョブ一覧 API
+│   │   │   └── stores/[id]/pipeline/ # パイプライン実行・履歴
 │   │   ├── auth/              # 認証関連ページ (signin/)
 │   │   ├── categories/        # カテゴリ管理
 │   │   ├── dashboard/         # ダッシュボード
+│   │   ├── jobs/              # ジョブ管理ダッシュボード
+│   │   ├── notifications/     # 通知一覧・設定
 │   │   ├── stores/            # 店舗管理
 │   │   ├── products/          # 商品一覧
 │   │   ├── products/[id]/     # 商品詳細
@@ -141,25 +146,29 @@ sokone/
 │   │   ├── ui/                # shadcn/ui
 │   │   ├── header.tsx
 │   │   ├── notification-bell.tsx
-│   │   ├── ocr-results-view.tsx   │   ├── store-list.tsx│   │   └── session-provider.tsx
+│   │   ├── ocr-results-view.tsx
+│   │   ├── store-list.tsx
+│   │   └── session-provider.tsx
 │   ├── lib/                   # サービスロジック、ユーティリティ
 │   │   ├── prisma.ts          # Prisma client
 │   │   ├── auth.ts            # NextAuth 設定
-   │   ├── gemini.ts          # Geminiクライアント・モデルID一元管理 (GEMINI_MODEL)
-   │   ├── ocr.ts             # OCR処理 (Gemini Flash)
-   │   ├── notification.ts    # 通知作成サービス
-   │   ├── r2.ts              # Cloudflare R2 クライアント
-   │   ├── product-matcher.ts # 商品名寄せ
-   │   ├── bottom-price.ts    # 底値計算サービス
-   │   ├── geocode.ts         # GPS座標・近辺店舐検索
-   │   ├── image-processing.ts # 画像リサイズ・HEIC変換 (sharp)
-   │   └── utils.ts           # 共通ユーティリティ
+│   │   ├── gemini.ts          # Geminiクライアント・モデルID一元管理 (GEMINI_MODEL)
+│   │   ├── ocr.ts             # OCR処理 (Gemini Flash)
+│   │   ├── notification.ts    # 通知作成サービス
+│   │   ├── r2.ts              # Cloudflare R2 クライアント
+│   │   ├── product-matcher.ts # 商品名寄せ
+│   │   ├── bottom-price.ts    # 底値計算サービス
+│   │   ├── scraping-pipeline.ts # 自動スクレイプ→OCR→価格登録パイプライン
+│   │   ├── geocode.ts         # GPS座標・近辺店舗検索
+│   │   ├── image-processing.ts # 画像リサイズ・HEIC変換 (sharp)
+│   │   └── utils.ts           # 共通ユーティリティ
 │   ├── hooks/                 # Custom hooks
 │   └── types/                 # TypeScript types
 ├── prisma/
 │   ├── schema.prisma          # DB スキーマ定義
 │   └── seed.ts                # 初期カテゴリデータ投入（`npx tsx prisma/seed.ts`）
 ├── public/
+├── vercel.json                # Vercel Cron 設定（毎日7時JST自動スクレイピング）
 ├── package.json
 ├── tsconfig.json
 └── .env.example

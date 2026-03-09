@@ -868,9 +868,9 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
 - [ ] Playwright (Node.js) でのスクレイピング実装
 - [ ] robots.txt 準拠チェック
 - [ ] User-Agent 設定、リクエスト間隔制御（Polite scraping）
-- [ ] スクレイピング結果の保存
-  - `ScrapingJob` モデル — id, store_id, status, started_at, completed_at, error_log
-  - `ScrapedFlyer` モデル — id, job_id, image_url, local_image_path, processed (bool)
+- [x] スクレイピング結果の保存
+  - `ScrapingJob` モデル — id, store_id, user_id, status, images_scraped, images_ocred, prices_registered, error_log, started_at, completed_at
+  - ※ `ScrapedFlyer` は不要（パイプラインで直接処理するため）
 
 #### 11-2. 主要スーパーのスクレイパー実装（初期2〜3店舗）
 
@@ -878,7 +878,7 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
   - `cheerio` でサーバーサイドレンダリング済みHTMLを直接パース（Playwright 不要）
   - 店舗ページ → リーフレットIDリスト取得 → 各リーフレットページから `bargain_office_leaflets` 画像URL 抽出
   - マルチページ対応（`?page=N` リトライ）、リクエスト間隔制御（800ms）
-  - 現状: **手動トリガーで動作済**。自動スケジュールは未実装。
+  - 現状: **手動トリガー＋自動スケジュール（Vercel Cron）で動作済**。
 - [ ] イオン系（イオン、マックスバリュ等）— tokubai.co.jp 経由で対応可能か検討
 - [ ] イトーヨーカドー — tokubai.co.jp 経由で対応可能か検討
 - [ ] 共通: チラシ画像のURL抽出 → ダウンロード → OCR パイプラインに投入
@@ -886,30 +886,31 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
 #### 11-3. バッチ実行基盤
 
 **Server:**
-- [ ] タスクキュー導入（BullMQ + Redis or Vercel Cron Jobs）
-  - チラシ取得ジョブ
-  - OCR 実行ジョブ
-  - 通知送信ジョブ
-- [ ] スケジューラー設定（Vercel Cron or 外部スケジューラ）
-  - チラシ自動取得: 毎日朝7時に実行
-  - 週次サマリ通知: 毎週月曜朝8時
-- [ ] ジョブ管理 API
-  - `GET /api/admin/jobs` — ジョブ一覧・実行状況
-  - `POST /api/admin/jobs/{id}/retry` — 失敗ジョブのリトライ
-- [ ] Redis 導入検討（Upstash 等のサーバーレスRedis）
+- [x] タスクキュー導入（Vercel Cron Jobs を採用。BullMQ + Redis は不要）
+  - チラシ取得→OCR→価格登録を一括パイプラインとして実行
+  - 通知送信はパイプライン内で同期実行
+- [x] スケジューラー設定（Vercel Cron — `vercel.json`）
+  - チラシ自動取得: 毎日朝7時JST（UTC 22:00）に実行
+  - `GET /api/cron/scrape` — CRON_SECRET で認証
+- [x] ジョブ管理 API
+  - `GET /api/jobs` — ユーザーのジョブ一覧
+  - `POST /api/stores/{id}/pipeline` — 手動パイプライン実行
+  - `GET /api/stores/{id}/pipeline` — 店舗のジョブ履歴
+- [x] ジョブ管理 UI（`/jobs` ページ — ジョブ一覧・ステータス・エラーログ表示）
+- ~~Redis 導入~~ → Vercel Cron で十分なため不要
 
 ### Sprint 12: 自動パイプライン＋Instagram API 検討（〜1.5週間）
 
 #### 12-1. 自動チラシ→OCR→登録パイプライン
 
 **Server:**
-- [ ] パイプラインオーケストレーション
-  1. スクレイパーでチラシ画像取得
-  2. 画像を R2 にアップロード
-  3. Gemini Flash で OCR＋構造化抽出
+- [x] パイプラインオーケストレーション（`src/lib/scraping-pipeline.ts`）
+  1. スクレイパーでチラシ画像取得（tokubai）
+  2. 画像をダウンロード
+  3. Gemini Flash で OCR＋構造化抽出（`analyzeImageWithSplit`）
   4. 商品名寄せ実行
-  5. 価格記録を PriceRecord に自動登録（source_type: "auto_flyer"）
-  6. 底値判定 → 該当商品のウォッチャーに通知
+  5. 価格記録を PriceRecord に自動登録（source_type: `auto_flyer`、confidence ≥ 0.7）
+  6. 底値判定 → PriceWatch 登録商品のウォッチャーに通知
 - [ ] 自動登録された価格の信頼度管理
   - confidence スコアに基づく自動承認/手動確認の振り分け
   - confidence < 0.7 の場合はユーザの確認待ちキューに入れる
@@ -939,8 +940,10 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
 
 | Method | Path | Sprint | 説明 |
 |---|---|---|---|
-| GET | `/api/admin/jobs` | 11 | ジョブ一覧 |
-| POST | `/api/admin/jobs/{id}/retry` | 11 | ジョブリトライ |
+| GET | `/api/jobs` | 11 | ジョブ一覧 |
+| POST | `/api/stores/{id}/pipeline` | 11 | パイプライン手動実行 |
+| GET | `/api/stores/{id}/pipeline` | 11 | 店舗のジョブ履歴 |
+| GET | `/api/cron/scrape` | 11 | Cron自動スクレイピング |
 | PUT | `/api/stores/{id}/scraping` | 12 | スクレイピング設定更新 |
 | GET | `/api/stores/{id}/scraping/status` | 12 | スクレイピング状況 |
 

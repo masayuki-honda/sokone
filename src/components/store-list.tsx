@@ -40,6 +40,7 @@ export function StoreList() {
   const [gettingLocation, setGettingLocation] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [scrapingId, setScrapingId] = useState<string | null>(null);
+  const [pipelineRunningId, setPipelineRunningId] = useState<string | null>(null);
   const [scrapeResults, setScrapeResults] = useState<Record<string, ScrapeResult>>({});
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -211,6 +212,32 @@ export function StoreList() {
       toast.error("通信エラーが発生しました");
     } finally {
       setScrapingId(null);
+    }
+  };
+
+  const handlePipeline = async (store: Store) => {
+    setPipelineRunningId(store.id);
+    try {
+      const res = await fetch(`/api/stores/${store.id}/pipeline`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "自動取得に失敗しました");
+      } else {
+        const msg = `画像 ${data.imagesScraped} 枚取得 → OCR ${data.imagesOcred} 枚処理 → 価格 ${data.pricesRegistered} 件登録`;
+        if (data.pricesRegistered > 0) {
+          toast.success(msg);
+        } else if (data.imagesScraped === 0) {
+          toast.info("新しいチラシはありませんでした");
+        } else {
+          toast.info(msg);
+        }
+      }
+    } catch {
+      toast.error("通信エラーが発生しました");
+    } finally {
+      setPipelineRunningId(null);
     }
   };
 
@@ -471,6 +498,15 @@ export function StoreList() {
                     className="rounded-md px-3 py-1.5 text-sm text-purple-600 hover:bg-purple-50 disabled:opacity-50 dark:text-purple-400 dark:hover:bg-purple-900/20"
                   >
                     {scrapingId === store.id ? "取得中..." : "🗞️ チラシ取得"}
+                  </button>
+                )}
+                {store.tokubaiShopUrl && (
+                  <button
+                    onClick={() => handlePipeline(store)}
+                    disabled={pipelineRunningId === store.id}
+                    className="rounded-md px-3 py-1.5 text-sm text-emerald-600 hover:bg-emerald-50 disabled:opacity-50 dark:text-emerald-400 dark:hover:bg-emerald-900/20"
+                  >
+                    {pipelineRunningId === store.id ? "処理中..." : "🤖 自動取得"}
                   </button>
                 )}
                 <button
