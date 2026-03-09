@@ -4,6 +4,7 @@ import { analyzeImageWithSplit, OcrSourceType } from "@/lib/ocr";
 import { getR2SignedUrl } from "@/lib/r2";
 import { findOrCreateProduct } from "@/lib/product-matcher";
 import { createNotification } from "@/lib/notification";
+import crypto from "crypto";
 
 const MIN_CONFIDENCE = 0.7;
 const INTER_OCR_DELAY_MS = 4500; // ~13 req/min (Gemini limit: 15/min)
@@ -17,6 +18,7 @@ interface PipelineResult {
   imagesScraped: number;
   imagesOcred: number;
   pricesRegistered: number;
+  pendingReviews: number;
   errors: string[];
 }
 
@@ -42,6 +44,7 @@ export async function runScrapingPipeline(
   let imagesScraped = 0;
   let imagesOcred = 0;
   let pricesRegistered = 0;
+  let pendingReviews = 0;
 
   try {
     // 1. Get store + tokubai URL
@@ -68,7 +71,7 @@ export async function runScrapingPipeline(
         where: { id: job.id },
         data: { status: "completed", completedAt: new Date() },
       });
-      return { jobId: job.id, imagesScraped: 0, imagesOcred: 0, pricesRegistered: 0, errors: [] };
+      return { jobId: job.id, imagesScraped: 0, imagesOcred: 0, pricesRegistered: 0, pendingReviews: 0, errors: [] };
     }
 
     // 3. Download images
@@ -117,6 +120,27 @@ export async function runScrapingPipeline(
         const res = await fetch(signedUrl);
         if (!res.ok) throw new Error(`R2 fetch failed: ${res.status}`);
         const imageBuffer = Buffer.from(await res.arrayBuffer());
+
+        // Duplicate detection via file hash
+        const fileHash = crypto.createHash("sha256").update(imageBuffer).digest("hex");
+        const existingByHash = await prisma.uploadedImage.findFirst({
+          where: { fileHash, id: { not: imageId }, status: "processed" },
+          select: { id: true },
+        });
+        if (existingByHash) {
+          // Skip duplicate — mark as processed to avoid re-processing
+          await prisma.uploadedImage.update({
+            where: { id: imageId },
+            data: { fileHash, status: "processed" },
+          });
+          continue;
+        }
+
+        // Save hash for future dedup
+        await prisma.uploadedImage.update({
+          where: { id: imageId },
+          data: { fileHash },
+        });
 
         // Run OCR
         const ocrResult = await analyzeImageWithSplit(
@@ -209,6 +233,34 @@ export async function runScrapingPipeline(
           }
         }
 
+        // 5b. Save low-confidence items to pending review queue
+        const lowConfItems = (ocrResult.items || []).filter(
+          (item) => item.confidence < MIN_CONFIDENCE && item.confidence > 0 && item.price > 0
+        );
+
+        for (const item of lowConfItems) {
+          try {
+            await prisma.pendingReview.create({
+              data: {
+                userId,
+                storeId,
+                sourceImageId: imageId,
+                jobId: job.id,
+                productName: item.name,
+                price: Math.round(item.price),
+                confidence: item.confidence,
+                categoryHint: item.category_hint || null,
+                unit: item.unit || null,
+                volume: item.volume || null,
+                isTaxIncluded: item.is_tax_included !== false,
+              },
+            });
+            pendingReviews++;
+          } catch (reviewErr) {
+            errors.push(`Review: ${item.name}: ${reviewErr instanceof Error ? reviewErr.message : String(reviewErr)}`);
+          }
+        }
+
         // Update job progress
         await prisma.scrapingJob.update({
           where: { id: job.id },
@@ -255,5 +307,5 @@ export async function runScrapingPipeline(
     });
   }
 
-  return { jobId: job.id, imagesScraped, imagesOcred, pricesRegistered, errors };
+  return { jobId: job.id, imagesScraped, imagesOcred, pricesRegistered, pendingReviews, errors };
 }

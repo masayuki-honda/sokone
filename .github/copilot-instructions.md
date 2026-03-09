@@ -136,6 +136,7 @@ sokone/
 │   │   ├── dashboard/         # ダッシュボード
 │   │   ├── jobs/              # ジョブ管理ダッシュボード
 │   │   ├── notifications/     # 通知一覧・設定
+│   │   ├── reviews/           # 確認待ちキュー（低信頼度OCR結果）
 │   │   ├── stores/            # 店舗管理
 │   │   ├── products/          # 商品一覧
 │   │   ├── products/[id]/     # 商品詳細

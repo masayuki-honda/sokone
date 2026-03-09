@@ -65,6 +65,12 @@ export function Header() {
               >
                 ジョブ
               </Link>
+              <Link
+                href="/reviews"
+                className="text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+              >
+                確認待ち
+              </Link>
               <NotificationBell />
               <div className="flex items-center gap-3">
                 {session.user.image && (
@@ -182,6 +188,13 @@ export function Header() {
               className="block rounded-md px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
             >
               ⚙️ ジョブ
+            </Link>
+            <Link
+              href="/reviews"
+              onClick={() => setMenuOpen(false)}
+              className="block rounded-md px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            >
+              📋 確認待ち
             </Link>
             <div className="border-t border-zinc-200 dark:border-zinc-800 mt-2 pt-2 flex items-center justify-between px-3 py-2">
               <div className="flex items-center gap-2">
