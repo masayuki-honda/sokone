@@ -55,6 +55,20 @@ describe("GET /api/stores", () => {
     expect(mockPrisma.store.findMany).toHaveBeenCalledWith({
       where: { userId: "user-1" },
       orderBy: { updatedAt: "desc" },
+      include: {
+        scrapingJobs: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: {
+            id: true,
+            status: true,
+            imagesScraped: true,
+            pricesRegistered: true,
+            completedAt: true,
+            createdAt: true,
+          },
+        },
+      },
     });
   });
 
@@ -70,6 +84,7 @@ describe("GET /api/stores", () => {
         userId: "user-1",
         createdAt: new Date(),
         updatedAt: new Date(),
+        scrapingJobs: [],
       },
       {
         id: "store-2",
@@ -80,6 +95,7 @@ describe("GET /api/stores", () => {
         userId: "user-1",
         createdAt: new Date(),
         updatedAt: new Date(),
+        scrapingJobs: [],
       },
     ];
     mockPrisma.store.findMany.mockResolvedValue(stores);

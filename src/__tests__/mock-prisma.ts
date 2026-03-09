@@ -58,6 +58,26 @@ export function createMockPrisma() {
       delete: vi.fn(),
       count: vi.fn(),
     },
+    priceWatch: {
+      findMany: vi.fn(),
+      findFirst: vi.fn(),
+      findUnique: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+    },
+    notificationPreference: {
+      findMany: vi.fn(),
+      findFirst: vi.fn(),
+      upsert: vi.fn(),
+    },
+    notification: {
+      findMany: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      updateMany: vi.fn(),
+      count: vi.fn(),
+    },
     $queryRaw: vi.fn(),
     $transaction: vi.fn((fns: unknown[]) => Promise.all(fns)),
   };
