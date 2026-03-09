@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useSession, signOut } from "next-auth/react";
 import Link from "next/link";
 import { Menu, X } from "lucide-react";
+import { NotificationBell } from "@/components/notification-bell";
 
 export function Header() {
   const { data: session, status } = useSession();
@@ -58,6 +59,7 @@ export function Header() {
               >
                 履歴
               </Link>
+              <NotificationBell />
               <div className="flex items-center gap-3">
                 {session.user.image && (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -160,6 +162,13 @@ export function Header() {
               className="block rounded-md px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
             >
               🖼️ 履歴
+            </Link>
+            <Link
+              href="/notifications"
+              onClick={() => setMenuOpen(false)}
+              className="block rounded-md px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            >
+              🔔 通知
             </Link>
             <div className="border-t border-zinc-200 dark:border-zinc-800 mt-2 pt-2 flex items-center justify-between px-3 py-2">
               <div className="flex items-center gap-2">

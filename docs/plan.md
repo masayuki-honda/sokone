@@ -726,22 +726,25 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
 #### 8-1. 通知基盤構築
 
 **Server:**
-- [ ] 通知サービス基盤
+- [x] 通知サービス基盤
   - `Notification` モデル — id, user_id, type (enum), title, body, data (Json), is_read, created_at
   - `NotificationPreference` モデル — user_id, notification_type, enabled, channel (email/push/in_app)
 - [ ] メール送信基盤
   - メール送信サービス（SendGrid or Resend — 無料枠あり）
   - メールテンプレート管理
-- [ ] アプリ内通知
+- [x] アプリ内通知
   - `GET /api/notifications` — 通知一覧
   - `PUT /api/notifications/{id}/read` — 既読処理
   - `GET /api/notifications/unread-count` — 未読数
+  - `POST /api/notifications/read-all` — 全件既読
+  - `GET /api/notifications/preferences` — 通知設定取得
+  - `PUT /api/notifications/preferences` — 通知設定更新
 
 **UI:**
-- [ ] ヘッダーに通知ベルアイコン + 未読バッジ
-- [ ] 通知ドロップダウン（最新通知一覧）
-- [ ] 通知一覧ページ
-- [ ] 通知設定ページ（メール通知 ON/OFF、通知対象カテゴリ設定）
+- [x] ヘッダーに通知ベルアイコン + 未読バッジ
+- [x] 通知ドロップダウン（最新通知一覧）
+- [x] 通知一覧ページ
+- [x] 通知設定ページ（通知タイプ別 ON/OFF）
 
 ### Sprint 9: 底値アラート＋特売情報通知（〜1週間）
 
@@ -755,12 +758,12 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
   - `DELETE /api/watches/{id}` — ウォッチ解除
   - `PATCH /api/watches/{id}` — ウォッチ更新（targetPrice, enabled）
   - `GET /api/watches/check?productId=xxx` — ウォッチ状態確認
-- [ ] 底値判定ロジック
+- [x] 底値判定ロジック
   - 価格登録時に自動チェック: `新価格 <= 既存底値` なら底値更新通知
   - ウォッチ対象商品なら個別通知
-- [ ] 底値更新通知
-  - アプリ内通知 + メール（ユーザ設定に応じて）
-  - 通知内容: 「{商品名}が{店舗名}で底値更新！ ¥{価格}（前回底値: ¥{旧価格}）」
+- [x] 底値更新通知
+  - アプリ内通知（ユーザ設定に応じて）
+  - 通知内容: 「{商品名}が{店舗名}で底値更新！ ¥{価格}」
 
 **UI:**
 - [x] 商品詳細ページに「ウォッチする」ボタン追加
