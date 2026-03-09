@@ -17,9 +17,29 @@ export async function GET() {
   const stores = await prisma.store.findMany({
     where: { userId: session.user.id },
     orderBy: { updatedAt: "desc" },
+    include: {
+      scrapingJobs: {
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: {
+          id: true,
+          status: true,
+          imagesScraped: true,
+          pricesRegistered: true,
+          completedAt: true,
+          createdAt: true,
+        },
+      },
+    },
   });
 
-  return NextResponse.json(stores);
+  const result = stores.map((store) => ({
+    ...store,
+    lastJob: store.scrapingJobs[0] || null,
+    scrapingJobs: undefined,
+  }));
+
+  return NextResponse.json(result);
 }
 
 // POST /api/stores — Create a new store

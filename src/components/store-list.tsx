@@ -12,6 +12,14 @@ interface Store {
   tokubaiShopUrl: string | null;
   createdAt: string;
   updatedAt: string;
+  lastJob?: {
+    id: string;
+    status: string;
+    imagesScraped: number;
+    pricesRegistered: number;
+    completedAt: string | null;
+    createdAt: string;
+  } | null;
 }
 
 interface ScrapeResult {
@@ -225,7 +233,8 @@ export function StoreList() {
       if (!res.ok) {
         toast.error(data.error || "自動取得に失敗しました");
       } else {
-        const msg = `画像 ${data.imagesScraped} 枚取得 → OCR ${data.imagesOcred} 枚処理 → 価格 ${data.pricesRegistered} 件登録`;
+        const msg = `画像 ${data.imagesScraped} 枚取得 → OCR ${data.imagesOcred} 枚処理 → 価格 ${data.pricesRegistered} 件登録` +
+          (data.pendingReviews > 0 ? ` / 確認待ち ${data.pendingReviews} 件` : "");
         if (data.pricesRegistered > 0) {
           toast.success(msg);
         } else if (data.imagesScraped === 0) {
@@ -490,6 +499,26 @@ export function StoreList() {
                   )}
                 </div>
               </div>
+              {store.lastJob && (
+                <div className="mt-2 flex items-center gap-2 text-xs text-zinc-500">
+                  <span>
+                    {store.lastJob.status === "completed" ? "✅" :
+                     store.lastJob.status === "failed" ? "❌" :
+                     store.lastJob.status === "running" ? "🔄" : "⏳"}
+                  </span>
+                  <span>
+                    最終自動取得: {new Date(store.lastJob.completedAt || store.lastJob.createdAt).toLocaleDateString("ja-JP", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                  </span>
+                  {store.lastJob.status === "completed" && (
+                    <span className="text-zinc-400">
+                      （画像{store.lastJob.imagesScraped} / 価格{store.lastJob.pricesRegistered}件）
+                    </span>
+                  )}
+                  {store.lastJob.status === "failed" && (
+                    <span className="text-red-500">失敗</span>
+                  )}
+                </div>
+              )}
               <div className="mt-3 flex flex-wrap gap-2">
                 {store.tokubaiShopUrl && (
                   <button
