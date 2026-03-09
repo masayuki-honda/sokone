@@ -3,11 +3,10 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getR2SignedUrl } from "@/lib/r2";
-import { analyzeImage, OcrSourceType } from "@/lib/ocr";
+import { analyzeImageWithSplit, OcrSourceType } from "@/lib/ocr";
 
-// Allow longer execution on Vercel (Gemini API + R2 fetch can take time)
-// gemini-2.5-flash can be slower than 2.0-flash; bump to 60s to avoid timeouts
-export const maxDuration = 60;
+// Allow longer execution on Vercel (split OCR = up to 4 sequential Gemini calls + R2 fetch)
+export const maxDuration = 120;
 
 interface Params {
   params: Promise<{ id: string }>;
@@ -64,8 +63,8 @@ export async function POST(_request: NextRequest, { params }: Params) {
     });
     const categoryNames = dbCategories.map((c) => c.name);
 
-    // Run OCR
-    const ocrResult = await analyzeImage(
+    // Run OCR (auto-splits large flyer images into quadrants)
+    const ocrResult = await analyzeImageWithSplit(
       imageBuffer,
       "image/jpeg", // Images are always converted to JPEG during upload
       image.sourceType as OcrSourceType,

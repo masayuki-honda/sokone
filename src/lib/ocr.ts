@@ -1,5 +1,6 @@
 import { SchemaType, type Schema } from "@google/generative-ai";
 import { genAI, GEMINI_MODEL } from "@/lib/gemini";
+import sharp from "sharp";
 
 // Note: use-gemini-usage.ts tracks free-tier limits for GEMINI_MODEL
 
@@ -271,4 +272,177 @@ export async function analyzeImage(
     console.error("Failed to parse OCR response:", text);
     throw new Error("OCR結果のパースに失敗しました");
   }
+}
+
+// === Flyer image splitting ===
+
+const SPLIT_THRESHOLD = 1200; // Split images larger than this in both dimensions
+const OVERLAP_RATIO = 0.1; // 10% overlap between quadrants
+
+/**
+ * Determine if an image should be split for better OCR accuracy.
+ * Large flyer images benefit from being split into quadrants.
+ */
+export function shouldSplitImage(
+  width: number,
+  height: number,
+  sourceType: OcrSourceType,
+): boolean {
+  return (
+    sourceType === "flyer" &&
+    width >= SPLIT_THRESHOLD &&
+    height >= SPLIT_THRESHOLD
+  );
+}
+
+/**
+ * Split an image buffer into 4 overlapping quadrants.
+ * Overlap prevents items at quadrant boundaries from being missed.
+ */
+async function splitIntoQuadrants(
+  imageBuffer: Buffer,
+): Promise<Buffer[]> {
+  const metadata = await sharp(imageBuffer).metadata();
+  const width = metadata.width!;
+  const height = metadata.height!;
+
+  const midX = Math.floor(width / 2);
+  const midY = Math.floor(height / 2);
+  const overlapX = Math.floor(width * OVERLAP_RATIO);
+  const overlapY = Math.floor(height * OVERLAP_RATIO);
+
+  const regions = [
+    // Top-left
+    { left: 0, top: 0, width: midX + overlapX, height: midY + overlapY },
+    // Top-right
+    { left: Math.max(0, midX - overlapX), top: 0, width: width - midX + overlapX, height: midY + overlapY },
+    // Bottom-left
+    { left: 0, top: Math.max(0, midY - overlapY), width: midX + overlapX, height: height - midY + overlapY },
+    // Bottom-right
+    { left: Math.max(0, midX - overlapX), top: Math.max(0, midY - overlapY), width: width - midX + overlapX, height: height - midY + overlapY },
+  ];
+
+  const quadrants: Buffer[] = [];
+  for (const region of regions) {
+    // Clamp region to image bounds
+    const clampedWidth = Math.min(region.width, width - region.left);
+    const clampedHeight = Math.min(region.height, height - region.top);
+
+    const buf = await sharp(imageBuffer)
+      .extract({
+        left: region.left,
+        top: region.top,
+        width: clampedWidth,
+        height: clampedHeight,
+      })
+      .jpeg({ quality: 85 })
+      .toBuffer();
+    quadrants.push(buf);
+  }
+
+  return quadrants;
+}
+
+/**
+ * Check if two items are duplicates (same product extracted from overlapping regions).
+ * Uses normalized name match + similar price.
+ */
+function isDuplicate(a: OcrItem, b: OcrItem): boolean {
+  const nameA = a.name.toLowerCase().replace(/[\s\u3000]/g, "");
+  const nameB = b.name.toLowerCase().replace(/[\s\u3000]/g, "");
+
+  // Exact name match
+  if (nameA === nameB && a.price === b.price) return true;
+
+  // Substring containment with same price (handles slight variations)
+  if (
+    a.price === b.price &&
+    (nameA.includes(nameB) || nameB.includes(nameA)) &&
+    Math.min(nameA.length, nameB.length) >= 2
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Merge OCR results from multiple quadrants, removing duplicates.
+ * When duplicates are found, keep the one with higher confidence.
+ */
+function mergeResults(results: OcrResult[]): OcrResult {
+  const merged: OcrItem[] = [];
+  let storeName: string | null = null;
+
+  for (const result of results) {
+    if (result.store_name && !storeName) {
+      storeName = result.store_name;
+    }
+
+    for (const item of result.items) {
+      const existingIdx = merged.findIndex((m) => isDuplicate(m, item));
+      if (existingIdx >= 0) {
+        // Keep the higher-confidence version
+        if (item.confidence > merged[existingIdx].confidence) {
+          merged[existingIdx] = item;
+        }
+      } else {
+        merged.push(item);
+      }
+    }
+  }
+
+  return { items: merged, store_name: storeName };
+}
+
+/**
+ * Analyze a flyer image by splitting into quadrants and merging results.
+ * Falls back to single-image analysis for small images.
+ */
+export async function analyzeImageWithSplit(
+  imageBuffer: Buffer,
+  mimeType: string,
+  sourceType: OcrSourceType,
+  categoryNames: string[] = [],
+  imageWidth?: number,
+  imageHeight?: number,
+): Promise<OcrResult> {
+  // Determine dimensions if not provided
+  let width = imageWidth;
+  let height = imageHeight;
+  if (!width || !height) {
+    const metadata = await sharp(imageBuffer).metadata();
+    width = metadata.width ?? 0;
+    height = metadata.height ?? 0;
+  }
+
+  if (!shouldSplitImage(width, height, sourceType)) {
+    return analyzeImage(imageBuffer, mimeType, sourceType, categoryNames);
+  }
+
+  console.log(
+    `[OCR Split] Splitting ${width}x${height} flyer into 4 quadrants`,
+  );
+
+  const quadrants = await splitIntoQuadrants(imageBuffer);
+  const results: OcrResult[] = [];
+
+  // Process quadrants sequentially to respect Gemini rate limits
+  for (let i = 0; i < quadrants.length; i++) {
+    console.log(`[OCR Split] Analyzing quadrant ${i + 1}/4`);
+    const result = await analyzeImage(
+      quadrants[i],
+      "image/jpeg",
+      sourceType,
+      categoryNames,
+    );
+    results.push(result);
+  }
+
+  const merged = mergeResults(results);
+  console.log(
+    `[OCR Split] Merged: ${results.reduce((s, r) => s + r.items.length, 0)} raw → ${merged.items.length} unique items`,
+  );
+
+  return merged;
 }

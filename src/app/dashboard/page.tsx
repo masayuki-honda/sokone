@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { Header } from "@/components/header";
 import { WatchKeywordsManager } from "@/components/watch-keywords-manager";
+import { useRecentlyViewed } from "@/hooks/use-recently-viewed";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -415,6 +416,9 @@ export default function DashboardPage() {
           </section>
         )}
 
+        {/* Recently Viewed Products */}
+        <RecentlyViewedSection />
+
         {/* Recent Prices */}
         {recentPrices.length > 0 && (
           <section>
@@ -767,6 +771,30 @@ function StatCard({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function RecentlyViewedSection() {
+  const { recentlyViewed } = useRecentlyViewed();
+  if (recentlyViewed.length === 0) return null;
+  return (
+    <section>
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-lg">🕐</span>
+        <h2 className="text-lg font-semibold">最近見た商品</h2>
+      </div>
+      <div className="flex gap-2 overflow-x-auto pb-2">
+        {recentlyViewed.map((p) => (
+          <Link key={p.id} href={`/products/${p.id}`}>
+            <Card className="min-w-[140px] transition-shadow hover:shadow-md">
+              <CardContent className="p-3">
+                <p className="text-sm font-medium truncate">{p.name}</p>
+              </CardContent>
+            </Card>
+          </Link>
+        ))}
+      </div>
+    </section>
   );
 }
 
