@@ -35,7 +35,7 @@ export async function GET() {
 
   const result = stores.map((store) => ({
     ...store,
-    lastJob: store.scrapingJobs[0] || null,
+    lastJob: store.scrapingJobs?.[0] || null,
     scrapingJobs: undefined,
   }));
 

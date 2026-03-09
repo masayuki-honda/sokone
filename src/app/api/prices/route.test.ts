@@ -24,6 +24,10 @@ vi.mock("@/lib/product-matcher", () => ({
   normalizeProductName: vi.fn((name: string) => name.toLowerCase()),
 }));
 
+vi.mock("@/lib/notification", () => ({
+  createNotification: vi.fn(() => Promise.resolve()),
+}));
+
 const { POST, GET } = await import("@/app/api/prices/route");
 
 // Access the mocked findOrCreateProduct
@@ -130,6 +134,8 @@ describe("POST /api/prices (bulk price registration)", () => {
       price: 100,
       product: { id: "prod-1", name: "りんご" },
     });
+    mockPrisma.priceRecord.findFirst.mockResolvedValue({ price: 100 });
+    mockPrisma.priceWatch.findMany.mockResolvedValue([]);
 
     const request = new NextRequest("http://localhost/api/prices", {
       method: "POST",
@@ -166,6 +172,8 @@ describe("POST /api/prices (bulk price registration)", () => {
       price: 110, // 100 * 1.1
       product: { id: "prod-1", name: "りんご" },
     });
+    mockPrisma.priceRecord.findFirst.mockResolvedValue({ price: 110 });
+    mockPrisma.priceWatch.findMany.mockResolvedValue([]);
 
     const request = new NextRequest("http://localhost/api/prices", {
       method: "POST",
