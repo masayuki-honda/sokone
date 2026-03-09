@@ -91,10 +91,12 @@ export function PriceChart({ series, stats }: PriceChartProps) {
           width={55}
         />
         <Tooltip
-          formatter={(value: string | number | (string | number)[]) => [
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          formatter={(value: any) => [
             `¥${Number(value).toLocaleString()}`,
           ]}
-          labelFormatter={(_label: string | number) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          labelFormatter={(_label: any) => {
             // Find the full date from the first data point
             const match = data.find((d) => d.date === _label);
             return match?.fullDate ? String(match.fullDate) : String(_label);
