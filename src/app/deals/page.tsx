@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
   TrendingDown,
@@ -38,11 +38,7 @@ export default function DealsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [period, setPeriod] = useState(7);
 
-  useEffect(() => {
-    fetchDeals();
-  }, [period]);
-
-  async function fetchDeals() {
+  const fetchDeals = useCallback(async () => {
     setIsLoading(true);
     try {
       const res = await fetch(`/api/deals?days=${period}`);
@@ -55,7 +51,11 @@ export default function DealsPage() {
     } finally {
       setIsLoading(false);
     }
-  }
+  }, [period]);
+
+  useEffect(() => {
+    fetchDeals();
+  }, [fetchDeals]);
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">

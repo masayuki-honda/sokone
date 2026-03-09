@@ -51,11 +51,11 @@ export default function ComparePage() {
 
   // Search products as user types
   useEffect(() => {
-    if (query.length < 2) {
-      setSuggestions([]);
-      return;
-    }
     const timer = setTimeout(async () => {
+      if (query.length < 2) {
+        setSuggestions([]);
+        return;
+      }
       try {
         const res = await fetch(
           `/api/products?q=${encodeURIComponent(query)}&limit=8`
@@ -93,14 +93,17 @@ export default function ComparePage() {
   useEffect(() => {
     if (selectedProducts.length > 0) {
       const ids = selectedProducts.map((p) => p.id).join(",");
-      setIsLoading(true);
-      fetch(`/api/compare?productIds=${ids}`)
-        .then((res) => (res.ok ? res.json() : null))
-        .then((data) => {
-          if (data) setResult(data);
-        })
-        .catch((error) => console.error("Failed to compare:", error))
-        .finally(() => setIsLoading(false));
+      const timer = setTimeout(() => {
+        setIsLoading(true);
+        fetch(`/api/compare?productIds=${ids}`)
+          .then((res) => (res.ok ? res.json() : null))
+          .then((data) => {
+            if (data) setResult(data);
+          })
+          .catch((error) => console.error("Failed to compare:", error))
+          .finally(() => setIsLoading(false));
+      }, 0);
+      return () => clearTimeout(timer);
     } else {
       setResult(null);
     }

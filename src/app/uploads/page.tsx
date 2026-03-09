@@ -115,6 +115,7 @@ export default function UploadsPage() {
       setSelectedItems(new Set());
     }
     setRegisterResult(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lightboxImage?.id]);
 
   const fetchImages = useCallback(

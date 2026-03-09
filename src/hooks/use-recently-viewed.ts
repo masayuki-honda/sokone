@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 
 const STORAGE_KEY = "sokone_recently_viewed";
 const MAX_ITEMS = 10;
@@ -12,18 +12,15 @@ export interface RecentlyViewedProduct {
 }
 
 export function useRecentlyViewed() {
-  const [items, setItems] = useState<RecentlyViewedProduct[]>([]);
-
-  useEffect(() => {
+  const [items, setItems] = useState<RecentlyViewedProduct[]>(() => {
+    if (typeof window === "undefined") return [];
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        setItems(JSON.parse(stored));
-      }
+      return stored ? JSON.parse(stored) : [];
     } catch {
-      // localStorage not available or corrupt
+      return [];
     }
-  }, []);
+  });
 
   const addProduct = useCallback((id: string, name: string) => {
     setItems((prev) => {
