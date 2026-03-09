@@ -99,6 +99,22 @@ interface StoreItem {
   name: string;
 }
 
+interface DealItem {
+  priceRecordId: string;
+  product: {
+    id: string;
+    name: string;
+    unit: string | null;
+    category: { id: string; name: string } | null;
+  };
+  store: { id: string; name: string };
+  price: number;
+  bottomPrice: number;
+  isBottomPrice: boolean;
+  discount: number;
+  recordedAt: string;
+}
+
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentPrices, setRecentPrices] = useState<RecentPrice[]>([]);
@@ -107,6 +123,7 @@ export default function DashboardPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [stores, setStores] = useState<StoreItem[]>([]);
   const [dbStorage, setDbStorage] = useState<DbStorage | null>(null);
+  const [deals, setDeals] = useState<DealItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>("");
   const [selectedStore, setSelectedStore] = useState<string>("");
   const [sortBy, setSortBy] = useState<string>("name");
@@ -134,12 +151,13 @@ export default function DashboardPage() {
     async function fetchAll() {
       setIsLoading(true);
       try {
-        const [dashRes, favsRes, catsRes, storageRes, storesRes] = await Promise.all([
+        const [dashRes, favsRes, catsRes, storageRes, storesRes, dealsRes] = await Promise.all([
           fetch("/api/dashboard"),
           fetch("/api/favorites"),
           fetch("/api/categories"),
           fetch("/api/admin/db-storage"),
           fetch("/api/stores"),
+          fetch("/api/deals"),
         ]);
 
         if (dashRes.ok) {
@@ -166,6 +184,11 @@ export default function DashboardPage() {
         if (storesRes.ok) {
           const data = await storesRes.json();
           setStores(Array.isArray(data) ? data : []);
+        }
+
+        if (dealsRes.ok) {
+          const data = await dealsRes.json();
+          setDeals(data.deals || []);
         }
       } catch (error) {
         console.error("Failed to load dashboard:", error);
@@ -337,6 +360,56 @@ export default function DashboardPage() {
               value={stats.totalRecords}
             />
           </div>
+        )}
+
+        {/* Deals Section */}
+        {deals.length > 0 && (
+          <section>
+            <div className="flex items-center gap-2 mb-4">
+              <TrendingDown className="h-5 w-5 text-green-600" />
+              <h2 className="text-lg font-semibold">今週のお買い得</h2>
+              <Badge variant="secondary" className="text-xs">
+                {deals.length}件
+              </Badge>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {deals.slice(0, 6).map((deal) => (
+                <Card key={deal.priceRecordId}>
+                  <CardContent className="pt-6">
+                    <Link
+                      href={`/products/${deal.product.id}`}
+                      className="block"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <h3 className="font-medium truncate">
+                            {deal.product.name}
+                          </h3>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {deal.store.name}
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-lg font-bold text-green-600">
+                            ¥{deal.price.toLocaleString()}
+                          </p>
+                          {deal.isBottomPrice ? (
+                            <Badge className="bg-green-600 text-white text-xs">
+                              🏆 底値
+                            </Badge>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">
+                              底値 ¥{deal.bottomPrice.toLocaleString()}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </Link>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </section>
         )}
 
         {/* Favorites Section */}
