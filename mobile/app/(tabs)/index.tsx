@@ -1,9 +1,10 @@
 import { View, ScrollView, StyleSheet, RefreshControl } from "react-native";
-import { Text, Card, useTheme } from "react-native-paper";
+import { Text, Card, useTheme, Button } from "react-native-paper";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useState, useCallback } from "react";
+import { useRouter } from "expo-router";
 
 interface DashboardData {
   totalProducts: number;
@@ -18,21 +19,41 @@ interface DashboardData {
   bottomPriceUpdates: number;
 }
 
+interface BottomPriceProduct {
+  productId: string;
+  productName: string;
+  categoryName: string | null;
+  bottomPrice: number;
+  storeName: string;
+  recordedAt: string;
+}
+
+interface BottomPriceResult {
+  items: BottomPriceProduct[];
+  total: number;
+}
+
 export default function DashboardScreen() {
   const { user } = useAuth();
   const theme = useTheme();
+  const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
 
   const { data, refetch, isLoading } = useQuery({
     queryKey: ["dashboard"],
-    queryFn: () => api.get<DashboardData>("/api/dashboard/summary"),
+    queryFn: () => api.get<DashboardData>("/api/dashboard"),
+  });
+
+  const { data: bottomPrices, refetch: refetchBottom } = useQuery({
+    queryKey: ["dashboard-products"],
+    queryFn: () => api.get<BottomPriceResult>("/api/dashboard/products?limit=10"),
   });
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await refetch();
+    await Promise.all([refetch(), refetchBottom()]);
     setRefreshing(false);
-  }, [refetch]);
+  }, [refetch, refetchBottom]);
 
   return (
     <ScrollView
@@ -89,7 +110,7 @@ export default function DashboardScreen() {
         </Text>
       )}
 
-      {data?.recentPrices?.map((price) => (
+      {data?.recentPrices?.map((price: DashboardData["recentPrices"][0]) => (
         <Card key={price.id} style={styles.priceCard}>
           <Card.Content>
             <View style={styles.priceRow}>
@@ -106,6 +127,44 @@ export default function DashboardScreen() {
           </Card.Content>
         </Card>
       ))}
+
+      {/* Bottom price products */}
+      <Text variant="titleMedium" style={styles.sectionTitle}>
+        底値一覧
+      </Text>
+
+      {bottomPrices?.items?.map((item: BottomPriceProduct) => (
+        <Card
+          key={item.productId}
+          style={styles.priceCard}
+          onPress={() => router.push(`/product/${item.productId}`)}
+        >
+          <Card.Content>
+            <View style={styles.priceRow}>
+              <View style={{ flex: 1 }}>
+                <Text variant="titleSmall">{item.productName}</Text>
+                <Text variant="bodySmall" style={{ color: "#64748b" }}>
+                  {item.storeName}
+                  {item.categoryName ? ` · ${item.categoryName}` : ""}
+                </Text>
+              </View>
+              <Text variant="titleMedium" style={{ color: theme.colors.primary, fontWeight: "bold" }}>
+                ¥{item.bottomPrice.toLocaleString()}
+              </Text>
+            </View>
+          </Card.Content>
+        </Card>
+      ))}
+
+      {bottomPrices && bottomPrices.total > 10 && (
+        <Button
+          mode="text"
+          onPress={() => router.push("/search")}
+          style={{ marginTop: 8 }}
+        >
+          すべての商品を見る →
+        </Button>
+      )}
     </ScrollView>
   );
 }

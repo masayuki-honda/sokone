@@ -1,38 +1,76 @@
 import { View, ScrollView, StyleSheet } from "react-native";
-import { Text, Card, Button, Chip, useTheme } from "react-native-paper";
+import { Text, Card, IconButton, Chip, useTheme } from "react-native-paper";
 import { useLocalSearchParams, Stack } from "expo-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+
+interface StoreRef {
+  id: string;
+  name: string;
+}
+
+interface PriceRecord {
+  id: string;
+  price: number;
+  recordedAt: string;
+  store: StoreRef;
+}
 
 interface ProductDetail {
   id: string;
   name: string;
-  categoryName: string | null;
   unit: string | null;
-  bottomPrice: number | null;
-  bottomStore: string | null;
-  priceHistory: {
-    id: string;
-    price: number;
-    storeName: string;
-    recordedAt: string;
-  }[];
-  storeComparison: {
-    storeId: string;
-    storeName: string;
-    latestPrice: number;
+  category: { id: string; name: string } | null;
+  priceRecords: PriceRecord[];
+  stats: {
     bottomPrice: number;
-  }[];
+    averagePrice: number;
+    latestPrice: number;
+    recordCount: number;
+    bottomStore: StoreRef;
+    bottomDate: string;
+  } | null;
+  isFavorite: boolean;
+}
+
+interface CompareStore {
+  storeId: string;
+  storeName: string;
+  latestPrice: number;
+  avgPrice: number;
+  minPrice: number;
+  maxPrice: number;
+  count: number;
 }
 
 export default function ProductDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const theme = useTheme();
+  const queryClient = useQueryClient();
 
   const { data: product, isLoading } = useQuery({
     queryKey: ["product", id],
     queryFn: () => api.get<ProductDetail>(`/api/products/${id}`),
     enabled: !!id,
+  });
+
+  const { data: comparison } = useQuery({
+    queryKey: ["product-compare", id],
+    queryFn: () => api.get<{ stores: CompareStore[] }>(`/api/products/${id}/compare`),
+    enabled: !!id,
+  });
+
+  const favoriteMutation = useMutation({
+    mutationFn: async () => {
+      if (product?.isFavorite) {
+        await api.delete(`/api/favorites/${id}`);
+      } else {
+        await api.post("/api/favorites", { productId: id });
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["product", id] });
+    },
   });
 
   if (isLoading) {
@@ -63,6 +101,13 @@ export default function ProductDetailScreen() {
         options={{
           title: product.name,
           headerShown: true,
+          headerRight: () => (
+            <IconButton
+              icon={product.isFavorite ? "heart" : "heart-outline"}
+              iconColor={product.isFavorite ? "#ef4444" : "#94a3b8"}
+              onPress={() => favoriteMutation.mutate()}
+            />
+          ),
         }}
       />
       <ScrollView style={styles.container}>
@@ -73,9 +118,9 @@ export default function ProductDetailScreen() {
               {product.name}
             </Text>
             <View style={styles.tagsRow}>
-              {product.categoryName && (
+              {product.category && (
                 <Chip compact style={styles.chip}>
-                  {product.categoryName}
+                  {product.category.name}
                 </Chip>
               )}
               {product.unit && (
@@ -85,34 +130,46 @@ export default function ProductDetailScreen() {
               )}
             </View>
 
-            {product.bottomPrice && (
-              <View style={styles.bottomPriceSection}>
-                <Text variant="bodySmall" style={{ color: "#64748b" }}>
-                  底値
-                </Text>
-                <Text
-                  variant="displaySmall"
-                  style={{ color: theme.colors.primary, fontWeight: "bold" }}
-                >
-                  ¥{product.bottomPrice.toLocaleString()}
-                </Text>
-                {product.bottomStore && (
-                  <Text variant="bodySmall" style={{ color: "#64748b" }}>
-                    {product.bottomStore}
+            {product.stats && (
+              <View style={styles.statsSection}>
+                <View style={styles.statItem}>
+                  <Text variant="bodySmall" style={styles.statLabel}>底値</Text>
+                  <Text
+                    variant="headlineMedium"
+                    style={{ color: theme.colors.primary, fontWeight: "bold" }}
+                  >
+                    ¥{product.stats.bottomPrice.toLocaleString()}
                   </Text>
-                )}
+                  <Text variant="bodySmall" style={styles.statLabel}>
+                    {product.stats.bottomStore.name}
+                  </Text>
+                </View>
+                <View style={styles.statDivider} />
+                <View style={styles.statItem}>
+                  <Text variant="bodySmall" style={styles.statLabel}>平均</Text>
+                  <Text variant="titleLarge" style={{ fontWeight: "bold" }}>
+                    ¥{product.stats.averagePrice.toLocaleString()}
+                  </Text>
+                </View>
+                <View style={styles.statDivider} />
+                <View style={styles.statItem}>
+                  <Text variant="bodySmall" style={styles.statLabel}>最新</Text>
+                  <Text variant="titleLarge" style={{ fontWeight: "bold" }}>
+                    ¥{product.stats.latestPrice.toLocaleString()}
+                  </Text>
+                </View>
               </View>
             )}
           </Card.Content>
         </Card>
 
         {/* Store comparison */}
-        {product.storeComparison.length > 0 && (
+        {comparison?.stores && comparison.stores.length > 0 && (
           <>
             <Text variant="titleMedium" style={styles.sectionTitle}>
               店舗別価格
             </Text>
-            {product.storeComparison.map((store) => (
+            {comparison.stores.map((store: CompareStore) => (
               <Card key={store.storeId} style={styles.storeCard}>
                 <Card.Content>
                   <View style={styles.storeRow}>
@@ -120,14 +177,11 @@ export default function ProductDetailScreen() {
                       {store.storeName}
                     </Text>
                     <View style={{ alignItems: "flex-end" }}>
-                      <Text
-                        variant="titleMedium"
-                        style={{ fontWeight: "bold" }}
-                      >
+                      <Text variant="titleMedium" style={{ fontWeight: "bold" }}>
                         ¥{store.latestPrice.toLocaleString()}
                       </Text>
                       <Text variant="bodySmall" style={{ color: "#64748b" }}>
-                        底値: ¥{store.bottomPrice.toLocaleString()}
+                        底値: ¥{store.minPrice.toLocaleString()} / 平均: ¥{store.avgPrice.toLocaleString()}
                       </Text>
                     </View>
                   </View>
@@ -141,15 +195,15 @@ export default function ProductDetailScreen() {
         <Text variant="titleMedium" style={styles.sectionTitle}>
           価格履歴
         </Text>
-        {product.priceHistory.length === 0 ? (
+        {product.priceRecords.length === 0 ? (
           <Text style={styles.emptyText}>価格履歴がありません</Text>
         ) : (
-          product.priceHistory.map((record) => (
+          product.priceRecords.slice(0, 20).map((record: PriceRecord) => (
             <Card key={record.id} style={styles.historyCard}>
               <Card.Content>
                 <View style={styles.storeRow}>
                   <View style={{ flex: 1 }}>
-                    <Text variant="bodyMedium">{record.storeName}</Text>
+                    <Text variant="bodyMedium">{record.store.name}</Text>
                     <Text variant="bodySmall" style={{ color: "#94a3b8" }}>
                       {new Date(record.recordedAt).toLocaleDateString("ja-JP")}
                     </Text>
@@ -196,12 +250,26 @@ const styles = StyleSheet.create({
   chip: {
     alignSelf: "flex-start",
   },
-  bottomPriceSection: {
+  statsSection: {
+    flexDirection: "row",
+    justifyContent: "space-around",
     alignItems: "center",
     paddingVertical: 12,
     borderTopWidth: 1,
     borderTopColor: "#e2e8f0",
     marginTop: 8,
+  },
+  statItem: {
+    alignItems: "center",
+    flex: 1,
+  },
+  statLabel: {
+    color: "#64748b",
+  },
+  statDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: "#e2e8f0",
   },
   sectionTitle: {
     fontWeight: "bold",
