@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { getSession } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { geocodeAddress } from "@/lib/geocode";
 
@@ -13,7 +12,7 @@ export const maxDuration = 30;
 
 // GET /api/stores/[id] — Get a single store
 export async function GET(_request: NextRequest, { params }: Params) {
-  const session = await getServerSession(authOptions);
+  const session = await getSession();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -33,7 +32,7 @@ export async function GET(_request: NextRequest, { params }: Params) {
 
 // PUT /api/stores/[id] — Update a store
 export async function PUT(request: NextRequest, { params }: Params) {
-  const session = await getServerSession(authOptions);
+  const session = await getSession();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -100,7 +99,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
 
 // DELETE /api/stores/[id] — Delete a store
 export async function DELETE(_request: NextRequest, { params }: Params) {
-  const session = await getServerSession(authOptions);
+  const session = await getSession();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

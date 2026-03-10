@@ -181,3 +181,189 @@ declare module "expo-web-browser" {
   export function warmUpAsync(): Promise<void>;
   export function coolDownAsync(): Promise<void>;
 }
+
+declare module "expo-camera" {
+  import { ComponentType, ReactNode, RefObject } from "react";
+  import { ViewProps } from "react-native";
+
+  export type CameraType = "front" | "back";
+  export type FlashMode = "off" | "on" | "auto";
+
+  export interface CameraCapturedPicture {
+    uri: string;
+    width: number;
+    height: number;
+    base64?: string;
+  }
+
+  export interface CameraViewProps extends ViewProps {
+    facing?: CameraType;
+    flash?: FlashMode;
+    children?: ReactNode;
+  }
+
+  export interface CameraViewRef {
+    takePictureAsync: (options?: {
+      quality?: number;
+      base64?: boolean;
+      skipProcessing?: boolean;
+    }) => Promise<CameraCapturedPicture>;
+  }
+
+  export const CameraView: ComponentType<CameraViewProps & { ref?: RefObject<CameraViewRef> }>;
+
+  export function useCameraPermissions(): [
+    { granted: boolean; canAskAgain: boolean } | null,
+    () => Promise<{ granted: boolean; canAskAgain: boolean }>,
+  ];
+}
+
+declare module "expo-image-picker" {
+  export type MediaTypeOptions = "All" | "Images" | "Videos";
+
+  export interface ImagePickerAsset {
+    uri: string;
+    width: number;
+    height: number;
+    type?: "image" | "video";
+    fileName?: string;
+    fileSize?: number;
+    base64?: string;
+    exif?: Record<string, unknown>;
+  }
+
+  export interface ImagePickerResult {
+    canceled: boolean;
+    assets: ImagePickerAsset[] | null;
+  }
+
+  export function launchImageLibraryAsync(options?: {
+    mediaTypes?: MediaTypeOptions[];
+    allowsMultipleSelection?: boolean;
+    quality?: number;
+    base64?: boolean;
+    exif?: boolean;
+  }): Promise<ImagePickerResult>;
+
+  export function launchCameraAsync(options?: {
+    mediaTypes?: MediaTypeOptions[];
+    quality?: number;
+    base64?: boolean;
+    exif?: boolean;
+  }): Promise<ImagePickerResult>;
+
+  export function requestCameraPermissionsAsync(): Promise<{
+    granted: boolean;
+    canAskAgain: boolean;
+  }>;
+
+  export function requestMediaLibraryPermissionsAsync(): Promise<{
+    granted: boolean;
+    canAskAgain: boolean;
+  }>;
+}
+
+declare module "expo-image-manipulator" {
+  export interface ImageResult {
+    uri: string;
+    width: number;
+    height: number;
+    base64?: string;
+  }
+
+  export type FlipType = "vertical" | "horizontal";
+
+  export interface Action {
+    resize?: { width?: number; height?: number };
+    rotate?: number;
+    flip?: FlipType;
+    crop?: { originX: number; originY: number; width: number; height: number };
+  }
+
+  export type SaveFormat = "jpeg" | "png" | "webp";
+
+  export interface SaveOptions {
+    compress?: number;
+    format?: SaveFormat;
+    base64?: boolean;
+  }
+
+  export function manipulateAsync(
+    uri: string,
+    actions: Action[],
+    saveOptions?: SaveOptions,
+  ): Promise<ImageResult>;
+}
+
+declare module "expo-file-system" {
+  export const documentDirectory: string | null;
+  export const cacheDirectory: string | null;
+
+  export interface FileInfo {
+    exists: boolean;
+    uri: string;
+    size?: number;
+    modificationTime?: number;
+    isDirectory?: boolean;
+    md5?: string;
+  }
+
+  export interface UploadResult {
+    status: number;
+    headers: Record<string, string>;
+    body: string;
+  }
+
+  export function getInfoAsync(
+    fileUri: string,
+    options?: { md5?: boolean; size?: boolean },
+  ): Promise<FileInfo>;
+
+  export function readAsStringAsync(
+    fileUri: string,
+    options?: { encoding?: "utf8" | "base64" },
+  ): Promise<string>;
+
+  export function writeAsStringAsync(
+    fileUri: string,
+    contents: string,
+    options?: { encoding?: "utf8" | "base64" },
+  ): Promise<void>;
+
+  export function deleteAsync(
+    fileUri: string,
+    options?: { idempotent?: boolean },
+  ): Promise<void>;
+
+  export function makeDirectoryAsync(
+    fileUri: string,
+    options?: { intermediates?: boolean },
+  ): Promise<void>;
+
+  export function copyAsync(options: {
+    from: string;
+    to: string;
+  }): Promise<void>;
+
+  export function moveAsync(options: {
+    from: string;
+    to: string;
+  }): Promise<void>;
+
+  export function uploadAsync(
+    url: string,
+    fileUri: string,
+    options?: {
+      fieldName?: string;
+      httpMethod?: "POST" | "PUT" | "PATCH";
+      headers?: Record<string, string>;
+      parameters?: Record<string, string>;
+      uploadType?: number;
+    },
+  ): Promise<UploadResult>;
+
+  export const FileSystemUploadType: {
+    BINARY_CONTENT: number;
+    MULTIPART: number;
+  };
+}

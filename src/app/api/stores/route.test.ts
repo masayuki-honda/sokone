@@ -20,6 +20,10 @@ vi.mock("@/lib/auth", () => ({
   authOptions: {},
 }));
 
+vi.mock("@/lib/session", () => ({
+  getSession: vi.fn(() => Promise.resolve(mockSession)),
+}));
+
 vi.mock("@/lib/geocode", () => ({
   geocodeAddress: vi.fn(() => Promise.resolve(null)),
 }));

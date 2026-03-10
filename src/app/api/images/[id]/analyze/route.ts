@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { getSession } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { getR2SignedUrl } from "@/lib/r2";
 import { analyzeImageWithSplit, OcrSourceType } from "@/lib/ocr";
@@ -16,7 +15,7 @@ interface Params {
  * POST /api/images/[id]/analyze — Run OCR on an uploaded image
  */
 export async function POST(_request: NextRequest, { params }: Params) {
-  const session = await getServerSession(authOptions);
+  const session = await getSession();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
