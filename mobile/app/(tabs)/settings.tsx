@@ -1,9 +1,11 @@
 import { View, ScrollView, StyleSheet, Alert } from "react-native";
 import { Text, List, Switch, Divider, Avatar, Button } from "react-native-paper";
 import { useAuth } from "@/lib/auth";
+import { useRouter } from "expo-router";
 
 export default function SettingsScreen() {
   const { user, signOut } = useAuth();
+  const router = useRouter();
 
   const handleSignOut = () => {
     Alert.alert(
@@ -55,6 +57,19 @@ export default function SettingsScreen() {
           description="お買い得価格を検出した時"
           left={(props) => <List.Icon {...props} icon="tag" />}
           right={() => <Switch value={true} />}
+        />
+      </List.Section>
+
+      <Divider />
+
+      <List.Section>
+        <List.Subheader>データ管理</List.Subheader>
+        <List.Item
+          title="店舗管理"
+          description="店舗の追加・編集・削除"
+          left={(props) => <List.Icon {...props} icon="store" />}
+          right={(props) => <List.Icon {...props} icon="chevron-right" />}
+          onPress={() => router.push("/stores")}
         />
       </List.Section>
 

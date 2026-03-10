@@ -189,6 +189,7 @@ sokone/
     │   │   ├── camera.tsx     # カメラ（Sprint 15）
     │   │   └── settings.tsx   # 設定
     │   └── product/[id].tsx   # 商品詳細
+    │   └── stores.tsx         # 店舗管理
     ├── lib/                   # ユーティリティ・サービス
     │   ├── api.ts             # API クライアント（Bearer token）
     │   ├── auth.tsx           # 認証プロバイダ（Google OAuth）

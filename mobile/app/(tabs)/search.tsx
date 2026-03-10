@@ -1,9 +1,15 @@
-import { useState, useCallback } from "react";
-import { View, FlatList, StyleSheet } from "react-native";
+import { useState, useCallback, useRef, useEffect } from "react";
+import { View, FlatList, StyleSheet, ScrollView } from "react-native";
 import { Searchbar, Text, Card, Chip, useTheme } from "react-native-paper";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useRouter } from "expo-router";
+
+interface Category {
+  id: string;
+  name: string;
+  productCount: number;
+}
 
 interface Product {
   id: string;
@@ -22,24 +28,41 @@ interface ProductSearchResult {
 export default function SearchScreen() {
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const theme = useTheme();
   const router = useRouter();
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Fetch categories
+  const { data: categories } = useQuery({
+    queryKey: ["categories"],
+    queryFn: () => api.get<Category[]>("/api/categories"),
+  });
 
   // Debounce search input
   const handleSearch = useCallback((text: string) => {
     setQuery(text);
-    // Simple debounce using setTimeout
-    const timer = setTimeout(() => setDebouncedQuery(text), 300);
-    return () => clearTimeout(timer);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => setDebouncedQuery(text), 300);
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
+
+  // Build query params
+  const queryParams = new URLSearchParams();
+  if (debouncedQuery) queryParams.set("q", debouncedQuery);
+  if (selectedCategory) queryParams.set("categoryId", selectedCategory);
+  queryParams.set("limit", "30");
+
   const { data, isLoading } = useQuery({
-    queryKey: ["products", debouncedQuery],
+    queryKey: ["products", debouncedQuery, selectedCategory],
     queryFn: () =>
-      api.get<ProductSearchResult>(
-        `/api/products?search=${encodeURIComponent(debouncedQuery)}&limit=30`,
-      ),
-    enabled: debouncedQuery.length > 0,
+      api.get<ProductSearchResult>(`/api/products?${queryParams.toString()}`),
+    enabled: debouncedQuery.length > 0 || selectedCategory !== null,
   });
 
   const renderProduct = ({ item }: { item: Product }) => (
@@ -96,13 +119,45 @@ export default function SearchScreen() {
         style={styles.searchbar}
       />
 
-      {isLoading && debouncedQuery.length > 0 && (
+      {/* Category tabs */}
+      {categories && categories.length > 0 && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.categoryRow}
+          contentContainerStyle={styles.categoryRowContent}
+        >
+          <Chip
+            selected={selectedCategory === null}
+            onPress={() => setSelectedCategory(null)}
+            style={styles.categoryTab}
+            compact
+          >
+            すべて
+          </Chip>
+          {categories.map((cat: Category) => (
+            <Chip
+              key={cat.id}
+              selected={selectedCategory === cat.id}
+              onPress={() =>
+                setSelectedCategory(selectedCategory === cat.id ? null : cat.id)
+              }
+              style={styles.categoryTab}
+              compact
+            >
+              {cat.name} ({cat.productCount})
+            </Chip>
+          ))}
+        </ScrollView>
+      )}
+
+      {isLoading && (debouncedQuery.length > 0 || selectedCategory) && (
         <Text style={styles.emptyText}>検索中...</Text>
       )}
 
-      {debouncedQuery.length === 0 && (
+      {debouncedQuery.length === 0 && !selectedCategory && (
         <Text style={styles.emptyText}>
-          商品名を入力して検索してください
+          商品名を入力するかカテゴリを選択してください
         </Text>
       )}
 
@@ -115,7 +170,14 @@ export default function SearchScreen() {
           ListEmptyComponent={
             !isLoading ? (
               <Text style={styles.emptyText}>
-                「{debouncedQuery}」に一致する商品が見つかりません
+                一致する商品が見つかりません
+              </Text>
+            ) : null
+          }
+          ListFooterComponent={
+            data.total > 30 ? (
+              <Text style={styles.countText}>
+                {data.total}件中 30件表示
               </Text>
             ) : null
           }
@@ -132,7 +194,19 @@ const styles = StyleSheet.create({
   },
   searchbar: {
     margin: 16,
+    marginBottom: 8,
     borderRadius: 12,
+  },
+  categoryRow: {
+    maxHeight: 44,
+    marginBottom: 8,
+  },
+  categoryRowContent: {
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  categoryTab: {
+    borderRadius: 16,
   },
   list: {
     paddingHorizontal: 16,
@@ -156,5 +230,11 @@ const styles = StyleSheet.create({
     textAlign: "center",
     color: "#94a3b8",
     marginTop: 32,
+  },
+  countText: {
+    textAlign: "center",
+    color: "#94a3b8",
+    marginTop: 8,
+    fontSize: 12,
   },
 });
