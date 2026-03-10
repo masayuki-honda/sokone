@@ -1000,22 +1000,22 @@ Web 版の既存バックエンド API をそのまま利用し、モバイル�
 
 #### 13-1. プロジェクト基盤
 
-- [ ] Expo プロジェクト初期化（`npx create-expo-app`）
-- [ ] `mobile/` ディレクトリとして追加
-- [ ] TypeScript 設定
-- [ ] Expo Router セットアップ
-- [ ] UI ライブラリ導入
-- [ ] 共通コンポーネント作成（ヘッダー、ボトムナビ、カード等）
-- [ ] API クライアント共通層（axios / fetch ラッパー）
-- [ ] 環境変数管理（`app.config.ts`）
+- [x] Expo プロジェクト初期化（`npx create-expo-app`）
+- [x] `mobile/` ディレクトリとして追加
+- [x] TypeScript 設定
+- [x] Expo Router セットアップ
+- [x] UI ライブラリ導入
+- [x] 共通コンポーネント作成（ヘッダー、ボトムナビ、カード等）
+- [x] API クライアント共通層（axios / fetch ラッパー）
+- [x] 環境変数管理（`app.config.ts`）
 
 #### 13-2. 認証
 
-- [ ] Google OAuth（Expo AuthSession）
-- [ ] JWT トークンの Secure Storage 保存
+- [x] Google OAuth（Expo AuthSession）
+- [x] JWT トークンの Secure Storage 保存
 - [ ] 自動トークンリフレッシュ
-- [ ] ログイン / ログアウト画面
-- [ ] 認証状態によるナビゲーションガード
+- [x] ログイン / ログアウト画面
+- [x] 認証状態によるナビゲーションガード
 
 ### Sprint 14: コア画面移植（〜1.5週間）
 

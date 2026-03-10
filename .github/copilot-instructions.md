@@ -129,6 +129,7 @@ sokone/
 ├── src/
 │   ├── app/                   # App Router pages + API Routes
 │   │   ├── api/               # Route Handlers
+│   │   │   ├── auth/mobile/   # モバイルアプリ認証エンドポイント
 │   │   │   ├── cron/scrape/   # Vercel Cron 自動スクレイピング
 │   │   │   ├── jobs/          # ジョブ一覧 API
 │   │   │   └── stores/[id]/pipeline/ # パイプライン実行・履歴
@@ -165,6 +166,7 @@ sokone/
 │   │   ├── scraping-pipeline.ts # 自動スクレイプ→OCR→価格登録パイプライン
 │   │   ├── geocode.ts         # GPS座標・近辺店舗検索
 │   │   ├── image-processing.ts # 画像リサイズ・HEIC変換 (sharp)
+│   │   ├── session.ts         # デュアル認証（web + mobile）セッション取得
 │   │   └── utils.ts           # 共通ユーティリティ
 │   ├── hooks/                 # Custom hooks
 │   └── types/                 # TypeScript types
@@ -175,7 +177,30 @@ sokone/
 ├── vercel.json                # Vercel Cron 設定（毎日7時JST自動スクレイピング）
 ├── package.json
 ├── tsconfig.json
-└── .env.example
+├── .env.example
+└── mobile/                    # React Native (Expo) モバイルアプリ
+    ├── app/                   # Expo Router ページ
+    │   ├── _layout.tsx        # Root layout (providers)
+    │   ├── login.tsx          # ログイン画面
+    │   ├── (tabs)/            # ボトムタブナビゲーション
+    │   │   ├── _layout.tsx    # タブ設定 + 認証ガード
+    │   │   ├── index.tsx      # ダッシュボード
+    │   │   ├── search.tsx     # 商品検索
+    │   │   ├── camera.tsx     # カメラ（Sprint 15）
+    │   │   └── settings.tsx   # 設定
+    │   └── product/[id].tsx   # 商品詳細
+    ├── lib/                   # ユーティリティ・サービス
+    │   ├── api.ts             # API クライアント（Bearer token）
+    │   ├── auth.tsx           # 認証プロバイダ（Google OAuth）
+    │   ├── auth-storage.ts    # SecureStore トークン管理
+    │   └── config.ts          # 環境変数
+    ├── components/            # 共通コンポーネント
+    ├── hooks/                 # カスタムフック
+    ├── types/                 # TypeScript 型定義
+    │   └── declarations.d.ts  # Expo パッケージ型宣言
+    ├── app.json               # Expo 設定
+    ├── tsconfig.json
+    └── .env.example
 ```
 
 ### API 設計方針
