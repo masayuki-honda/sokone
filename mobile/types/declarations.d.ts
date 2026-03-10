@@ -367,3 +367,78 @@ declare module "expo-file-system" {
     MULTIPART: number;
   };
 }
+
+declare module "react-native-svg" {
+  import { ComponentType, ReactNode } from "react";
+
+  interface SvgProps {
+    width?: number | string;
+    height?: number | string;
+    viewBox?: string;
+    children?: ReactNode;
+  }
+
+  interface LineProps {
+    x1: number | string;
+    y1: number | string;
+    x2: number | string;
+    y2: number | string;
+    stroke?: string;
+    strokeWidth?: number | string;
+    strokeDasharray?: string;
+  }
+
+  interface PolylineProps {
+    points: string;
+    fill?: string;
+    stroke?: string;
+    strokeWidth?: number | string;
+    strokeLinejoin?: string;
+    strokeLinecap?: string;
+  }
+
+  interface CircleProps {
+    cx: number | string;
+    cy: number | string;
+    r: number | string;
+    fill?: string;
+    stroke?: string;
+    strokeWidth?: number | string;
+  }
+
+  interface SvgTextProps {
+    x?: number | string;
+    y?: number | string;
+    fontSize?: number | string;
+    fill?: string;
+    textAnchor?: "start" | "middle" | "end";
+    dominantBaseline?: string;
+    children?: ReactNode;
+  }
+
+  interface RectProps {
+    x?: number | string;
+    y?: number | string;
+    width: number | string;
+    height: number | string;
+    fill?: string;
+    stroke?: string;
+    strokeWidth?: number | string;
+    rx?: number | string;
+    ry?: number | string;
+  }
+
+  interface GProps {
+    children?: ReactNode;
+    transform?: string;
+  }
+
+  const Svg: ComponentType<SvgProps>;
+  export default Svg;
+  export const Line: ComponentType<LineProps>;
+  export const Polyline: ComponentType<PolylineProps>;
+  export const Circle: ComponentType<CircleProps>;
+  export const Text: ComponentType<SvgTextProps>;
+  export const Rect: ComponentType<RectProps>;
+  export const G: ComponentType<GProps>;
+}
