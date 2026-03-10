@@ -2,7 +2,7 @@
 
 ## プロジェクト概要
 
-Sokone（底値）は、チラシ・Instagram・店頭写真から商品価格をAIで読み取り、底値データを蓄積・可視化するWebアプリ。
+Sokone（底値）は、チラシ・Instagram・店頭写真から商品価格をAIで読み取り、底値データを蓄積・可視化するWebアプリ + モバイルアプリ（React Native / Expo）。
 日本語UIの個人向けアプリケーション。
 
 ## ドキュメント
@@ -35,6 +35,17 @@ Sokone（底値）は、チラシ・Instagram・店頭写真から商品価格�
 
 - **Cloudflare R2** — S3互換API（`@aws-sdk/client-s3`）
 - 無料枠: 10GB ストレージ / 月
+
+### モバイルアプリ（Phase 5）
+
+- **React Native** (Expo SDK 55) + **TypeScript**
+- **Expo Router** ~55.0.4 — ファイルベースルーティング
+- **React Native Paper** ^5.14.5 — Material Design 3 UI
+- **TanStack Query** ^5.75.0 — データフェッチ・キャッシュ
+- **Expo AuthSession** ~55.0.7 — Google OAuth
+- **expo-secure-store** ~55.0.8 — トークン永続化
+- **expo-camera** ~55.0.9 + **expo-image-picker** ~55.0.11 — カメラ撮影・画像選択
+- **expo-image-manipulator** ~55.0.9 — 画像リサイズ・圧縮
 
 ### ホスティング
 

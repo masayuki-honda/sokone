@@ -13,7 +13,7 @@
 | **Phase 2** | 高度チラシ機能 + 検索・フィルタ + UX改善 | 3〜4週間 | 未着手 |
 | **Phase 3** | 底値アラート + 特売通知 | 3〜4週間 | 未着手 |
 | **Phase 4** | 自動チラシ収集 + バッチ処理 + Instagram API検討 | 継続的 | 未着手 |
-| **Phase 5** | モバイルアプリ化（React Native / Expo） | 6〜8週間 | 未着手 |
+| **Phase 5** | モバイルアプリ化（React Native / Expo） | 6〜8週間 | 🔄 進行中 |
 
 ---
 
@@ -1104,22 +1104,31 @@ Web 版の既存バックエンド API をそのまま利用し、モバイル�
 ```
 sokone/
 ├── ...（既存）
-├── mobile/                        # React Native (Expo)
+├── mobile/                        # React Native (Expo SDK 55)
 │   ├── app/                       # Expo Router (screens)
+│   │   ├── _layout.tsx           # Root layout (providers)
+│   │   ├── login.tsx             # ログイン画面
 │   │   ├── (tabs)/               # タブナビゲーション
+│   │   │   ├── _layout.tsx       # タブ設定 + 認証ガード
 │   │   │   ├── index.tsx         # ダッシュボード
 │   │   │   ├── search.tsx        # 商品検索
-│   │   │   ├── camera.tsx        # カメラ/アップロード
+│   │   │   ├── camera.tsx        # カメラ撮影・画像選択
 │   │   │   └── settings.tsx      # 設定
 │   │   ├── product/[id].tsx      # 商品詳細
-│   │   ├── store/                # 店舗関連
-│   │   └── login.tsx             # ログイン
-│   ├── components/               # 共通コンポーネント
-│   ├── lib/                      # API クライアント、ユーティリティ
-│   ├── hooks/                    # カスタムフック
-│   ├── app.config.ts
-│   ├── package.json
-│   └── tsconfig.json
+│   │   ├── stores.tsx            # 店舗管理
+│   │   ├── upload.tsx            # アップロード＋店舗選択
+│   │   └── ocr-results.tsx       # OCR結果確認・修正・登録
+│   ├── lib/                      # ユーティリティ・サービス
+│   │   ├── api.ts               # API クライアント（Bearer token）
+│   │   ├── auth.tsx             # 認証プロバイダ（Google OAuth）
+│   │   ├── auth-storage.ts      # SecureStore トークン管理
+│   │   └── config.ts            # 環境変数
+│   ├── types/                    # TypeScript 型定義
+│   │   └── declarations.d.ts    # Expo パッケージ型宣言
+│   ├── app.json                  # Expo 設定
+│   ├── tsconfig.json
+│   ├── .env.example
+│   └── package.json
 ```
 
 ### 追加 API（Phase 5）
@@ -1195,6 +1204,7 @@ sokone/
 | 4 | POST | `/api/admin/jobs/{id}/retry` | ジョブリトライ |
 | 4 | PUT | `/api/stores/{id}/scraping` | スクレイピング設定 |
 | 4 | GET | `/api/stores/{id}/scraping/status` | スクレイピング状況 |
+| 5 | POST | `/api/auth/mobile` | モバイル認証（Google OAuth トークン交換） |
 | 5 | POST | `/api/devices` | デバイストークン登録 |
 | 5 | DELETE | `/api/devices/{token}` | デバイストークン削除 |
 
