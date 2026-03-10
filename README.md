@@ -197,10 +197,11 @@ cp .env.example .env
 `.env` を開いて以下を設定:
 
 ```env
-# バックエンド API の URL
-# ローカル開発の場合: PCの LAN IPアドレスを使う（localhost ではダメ）
-# 本番 Vercel の場合: https://sokone-sigma.vercel.app
-EXPO_PUBLIC_API_BASE_URL=http://192.168.x.x:3000
+# バックエンド API の URL（以下のいずれかを設定）
+# ・Vercel デプロイ済み（推奨）: https://sokone-sigma.vercel.app
+# ・ローカル開発（LAN接続可能な場合）: http://192.168.x.x:3000
+# ・ローカル開発（VPN等でLAN不可の場合）: ngrok トンネルURL（後述）
+EXPO_PUBLIC_API_BASE_URL=https://sokone-sigma.vercel.app
 
 # Step 1-2 でメモした Web クライアントID
 EXPO_PUBLIC_GOOGLE_CLIENT_ID=xxxxx.apps.googleusercontent.com
@@ -212,13 +213,14 @@ EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID=xxxxx.apps.googleusercontent.com
 EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=xxxxx.apps.googleusercontent.com
 ```
 
-> **重要: `EXPO_PUBLIC_API_BASE_URL` について**
-> - ローカル開発時は `localhost` ではなく **PCの LAN IPアドレス** を指定してください
-> - 実機/エミュレータから `localhost` にアクセスすると PC ではなく端末自身を指してしまいます
-> - LAN IP の確認方法:
->   - Windows: `ipconfig` → 「IPv4 アドレス」（例: `192.168.1.100`）
->   - Mac: `ifconfig en0` → `inet` の値
-> - Vercel にデプロイ済みの場合は `https://sokone-sigma.vercel.app` を使えば LAN IP は不要です
+> **`EXPO_PUBLIC_API_BASE_URL` の選び方**
+>
+> | 環境 | 設定値 | 備考 |
+> |---|---|---|
+> | Vercel デプロイ済み（推奨） | `https://sokone-sigma.vercel.app` | ネットワーク制約なし。最も簡単 |
+> | ローカル（同一LAN、VPNなし） | `http://192.168.x.x:3000` | `ipconfig` で LAN IP を確認 |
+> | ローカル（VPN/社内NW） | ngrok トンネルURL | 下記「VPN環境での開発」参照 |
+> | Android エミュレータ | `http://10.0.2.2:3000` | エミュレータ→ホスト固有アドレス |
 
 ### Step 3: 依存パッケージのインストール
 
@@ -232,6 +234,7 @@ npm install
 ```bash
 # Web バックエンドが起動していることを確認（別ターミナルで）
 # cd <プロジェクトルート> && npm run dev
+# ※ Vercel デプロイ済みバックエンドを使う場合はローカル起動不要
 
 # モバイル開発サーバーを起動
 cd mobile
@@ -239,6 +242,51 @@ npx expo start
 ```
 
 ターミナルにQRコードが表示されます。
+
+#### VPN環境・社内ネットワークでの開発
+
+会社VPNに接続中などで PC と Android 端末が直接通信できない場合は、**tunnel モード** を使います。
+
+**バックエンドに Vercel を使う場合（推奨）:**
+
+バックエンドは Vercel 経由でインターネットからアクセスできるため、Expo の開発サーバーだけ tunnel にすればOKです。
+
+```bash
+# mobile/.env に設定
+# EXPO_PUBLIC_API_BASE_URL=https://sokone-sigma.vercel.app
+
+# tunnel モードで起動（ngrok 経由でQRコードが生成される）
+cd mobile
+npx expo start --tunnel
+```
+
+> 初回実行時に `@expo/ngrok` のインストールを求められるので `y` で承認してください
+
+`dev` ブランチに push すれば Vercel のプレビューデプロイが自動更新されるので、バックエンドの変更もリアルタイムに反映できます。
+
+**ローカルバックエンドも tunnel にする場合:**
+
+バックエンドのコードをローカルで変更しながらテストしたい場合は、ngrok でバックエンドもトンネルします。
+
+```bash
+# ターミナル1: Next.js 起動
+npm run dev
+
+# ターミナル2: ngrok でバックエンドをトンネル
+npx ngrok http 3000
+# → https://xxxx.ngrok-free.app のようなURLが発行される
+```
+
+発行されたURLを `mobile/.env` に設定:
+```env
+EXPO_PUBLIC_API_BASE_URL=https://xxxx.ngrok-free.app
+```
+
+```bash
+# ターミナル3: Expo を tunnel モードで起動
+cd mobile
+npx expo start --tunnel
+```
 
 ---
 
@@ -254,34 +302,35 @@ Expo Go は Expo の開発ビルドを実機で即座に実行できるクライ
 1. **Android 端末に Expo Go をインストール**
    - Google Play Store で「[Expo Go](https://play.google.com/store/apps/details?id=host.exp.exponent)」を検索してインストール
 
-2. **PC と Android 端末を同じ Wi-Fi ネットワークに接続**
-   - PC（Next.js バックエンド + Expo 開発サーバー）と Android 端末が同じ LAN にいる必要があります
+2. **ネットワーク接続を確認**
+   - **同一 LAN の場合**: PC と Android 端末を同じ Wi-Fi に接続
+   - **VPN/社内NW の場合**: Android 端末はインターネットに接続できればOK（tunnel モードを使用）
 
-3. **Web バックエンドを起動**（別ターミナルで）
-   ```bash
-   cd <プロジェクトルート>
-   npm run dev
-   ```
-
-4. **Expo 開発サーバーを起動**
+3. **Expo 開発サーバーを起動**
    ```bash
    cd mobile
+
+   # 同一 LAN の場合
    npx expo start
+
+   # VPN/社内NW の場合（tunnel モード）
+   npx expo start --tunnel
    ```
 
-5. **QRコードを読み取る**
+4. **QRコードを読み取る**
    - Android 端末の **Expo Go アプリ** を開く
    - 「Scan QR code」をタップ
    - PC のターミナルに表示された QR コードを読み取る
    - アプリが自動的にダウンロード・起動されます
 
-6. **動作確認**
+5. **動作確認**
    - ログイン画面が表示されたら「Google でログイン」をタップ
    - Google アカウントで認証 → ダッシュボードが表示されれば成功
 
 > **トラブルシューティング**:
 > - QR コードが読めない場合: ターミナルで `s` キーを押して Expo アカウントでログインし、「My Projects」からアクセス
-> - 接続エラーの場合: `EXPO_PUBLIC_API_BASE_URL` が PC の LAN IP になっているか確認
+> - 接続エラーの場合: `EXPO_PUBLIC_API_BASE_URL` が正しいか確認（Vercel URL or LAN IP）
+> - VPN 環境の場合: `--tunnel` オプションを付けて `npx expo start --tunnel` で起動
 > - ファイアウォールにブロックされる場合: Windows Defender ファイアウォールで Node.js のプライベートネットワーク通信を許可
 
 ### 方法 B: Android エミュレータで実行
@@ -356,8 +405,8 @@ eas build -p android --profile preview
 ### Expo Go で実行（Mac 不要）
 
 1. iOS 端末に App Store から「[Expo Go](https://apps.apple.com/app/expo-go/id982107779)」をインストール
-2. PC と iOS 端末を同じ Wi-Fi に接続
-3. `cd mobile && npx expo start` でサーバー起動
+2. PC と iOS 端末を同じ Wi-Fi に接続（VPN 環境の場合は `--tunnel` を使用）
+3. `cd mobile && npx expo start`（または `npx expo start --tunnel`）でサーバー起動
 4. iOS のカメラアプリで QR コードを読み取る → Expo Go で開く
 
 ### iOS シミュレータで実行（Mac のみ）
