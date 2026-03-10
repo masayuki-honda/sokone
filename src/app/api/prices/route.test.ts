@@ -19,6 +19,10 @@ vi.mock("@/lib/auth", () => ({
   authOptions: {},
 }));
 
+vi.mock("@/lib/session", () => ({
+  getSession: vi.fn(() => Promise.resolve(mockSession)),
+}));
+
 vi.mock("@/lib/product-matcher", () => ({
   findOrCreateProduct: vi.fn(),
   normalizeProductName: vi.fn((name: string) => name.toLowerCase()),

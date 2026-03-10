@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { getSession } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { findOrCreateProduct, normalizeProductName } from "@/lib/product-matcher";
 import { SourceType } from "@prisma/client";
@@ -28,7 +27,7 @@ interface BulkPriceRequest {
  * POST /api/prices/bulk — Register prices from OCR results
  */
 export async function POST(request: NextRequest) {
-  const session = await getServerSession(authOptions);
+  const session = await getSession();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -261,7 +260,7 @@ export async function POST(request: NextRequest) {
  * GET /api/prices — List price records with filters
  */
 export async function GET(request: NextRequest) {
-  const session = await getServerSession(authOptions);
+  const session = await getSession();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

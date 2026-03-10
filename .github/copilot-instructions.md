@@ -186,10 +186,12 @@ sokone/
     │   │   ├── _layout.tsx    # タブ設定 + 認証ガード
     │   │   ├── index.tsx      # ダッシュボード
     │   │   ├── search.tsx     # 商品検索
-    │   │   ├── camera.tsx     # カメラ（Sprint 15）
+    │   │   ├── camera.tsx     # カメラ撮影・画像選択
     │   │   └── settings.tsx   # 設定
     │   └── product/[id].tsx   # 商品詳細
     │   └── stores.tsx         # 店舗管理
+    │   └── upload.tsx         # アップロード＋店舗選択
+    │   └── ocr-results.tsx    # OCR結果確認・修正・登録
     ├── lib/                   # ユーティリティ・サービス
     │   ├── api.ts             # API クライアント（Bearer token）
     │   ├── auth.tsx           # 認証プロバイダ（Google OAuth）

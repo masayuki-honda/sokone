@@ -62,6 +62,33 @@ export const api = {
   put: <T>(path: string, body?: unknown) => request<T>(path, { method: "PUT", body }),
   patch: <T>(path: string, body?: unknown) => request<T>(path, { method: "PATCH", body }),
   delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
+
+  /**
+   * Upload files via multipart/form-data.
+   * Content-Type header is set automatically by fetch for FormData.
+   */
+  upload: async <T>(path: string, formData: FormData): Promise<T> => {
+    const token = await getToken();
+    const url = `${config.apiBaseUrl}${path}`;
+    const headers: Record<string, string> = {};
+
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const errorBody = await res.json().catch(() => ({ error: res.statusText }));
+      throw new ApiError(res.status, errorBody.error || res.statusText);
+    }
+
+    return res.json() as Promise<T>;
+  },
 };
 
 export { ApiError };

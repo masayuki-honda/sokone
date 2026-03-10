@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Find or create user via Google account link
-    let account = await prisma.account.findFirst({
+    const account = await prisma.account.findFirst({
       where: {
         provider: "google",
         providerAccountId: googleId,

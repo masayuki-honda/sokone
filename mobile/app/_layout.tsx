@@ -36,7 +36,10 @@ export default function RootLayout() {
               screenOptions={{
                 headerShown: false,
               }}
-            />
+            >
+              <Stack.Screen name="upload" options={{ headerShown: true, title: "アップロード" }} />
+              <Stack.Screen name="ocr-results" options={{ headerShown: true, title: "解析結果" }} />
+            </Stack>
             <StatusBar style="dark" />
           </AuthProvider>
         </PaperProvider>
