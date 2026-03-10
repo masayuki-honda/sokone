@@ -10,6 +10,7 @@ import {
   clearAuthData,
   type StoredUser,
 } from "./auth-storage";
+import { setOnUnauthorized } from "./api";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -57,6 +58,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setIsLoading(false);
       }
     })();
+  }, []);
+
+  // Register 401 handler — auto-logout when token expires
+  useEffect(() => {
+    setOnUnauthorized(() => {
+      setUser(null);
+    });
+    return () => setOnUnauthorized(null);
   }, []);
 
   // Handle OAuth response

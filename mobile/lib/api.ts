@@ -1,5 +1,5 @@
 import { config } from "./config";
-import { getToken } from "./auth-storage";
+import { getToken, clearAuthData } from "./auth-storage";
 
 type HttpMethod = "GET" | "POST" | "PUT" | "DELETE" | "PATCH";
 
@@ -19,9 +19,17 @@ class ApiError extends Error {
   }
 }
 
+// Callback for handling 401 — set by AuthProvider
+let onUnauthorized: (() => void) | null = null;
+
+export function setOnUnauthorized(callback: (() => void) | null) {
+  onUnauthorized = callback;
+}
+
 /**
  * Typed fetch wrapper for the backend API.
  * Automatically attaches the auth token and handles JSON.
+ * On 401, clears auth data and triggers re-authentication.
  */
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = "GET", body, headers = {} } = options;
@@ -44,6 +52,10 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   });
 
   if (!res.ok) {
+    if (res.status === 401) {
+      await clearAuthData();
+      onUnauthorized?.();
+    }
     const errorBody = await res.json().catch(() => ({ error: res.statusText }));
     throw new ApiError(res.status, errorBody.error || res.statusText);
   }
@@ -83,6 +95,10 @@ export const api = {
     });
 
     if (!res.ok) {
+      if (res.status === 401) {
+        await clearAuthData();
+        onUnauthorized?.();
+      }
       const errorBody = await res.json().catch(() => ({ error: res.statusText }));
       throw new ApiError(res.status, errorBody.error || res.statusText);
     }

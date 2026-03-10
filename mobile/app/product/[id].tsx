@@ -1,8 +1,12 @@
-import { View, ScrollView, StyleSheet } from "react-native";
-import { Text, Card, IconButton, Chip, useTheme } from "react-native-paper";
+import { useState, useMemo } from "react";
+import { View, ScrollView, StyleSheet, Dimensions } from "react-native";
+import { Text, Card, IconButton, Chip, useTheme, SegmentedButtons } from "react-native-paper";
 import { useLocalSearchParams, Stack } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import Svg, { Line, Polyline, Text as SvgText, Circle } from "react-native-svg";
+
+const CHART_COLORS = ["#2563eb", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899"];
 
 interface StoreRef {
   id: string;
@@ -43,10 +47,224 @@ interface CompareStore {
   count: number;
 }
 
+interface PriceHistorySeries {
+  storeId: string;
+  storeName: string;
+  records: Array<{
+    id: string;
+    price: number;
+    recordedAt: string;
+    store: StoreRef;
+  }>;
+}
+
+interface PriceHistoryResponse {
+  product: { id: string; name: string; unit: string | null };
+  stats: {
+    bottomPrice: number;
+    averagePrice: number;
+    latestPrice: number;
+    highestPrice: number;
+    recordCount: number;
+  } | null;
+  series: PriceHistorySeries[];
+  records: Array<{
+    id: string;
+    price: number;
+    recordedAt: string;
+    store: StoreRef;
+  }>;
+}
+
+type Period = "1m" | "3m" | "6m" | "1y" | "all";
+
+const PERIOD_BUTTONS = [
+  { value: "1m", label: "1M" },
+  { value: "3m", label: "3M" },
+  { value: "6m", label: "6M" },
+  { value: "1y", label: "1Y" },
+  { value: "all", label: "全期間" },
+];
+
+const CHART_WIDTH = Dimensions.get("window").width - 64;
+const CHART_HEIGHT = 200;
+const CHART_PADDING = { top: 16, right: 16, bottom: 32, left: 50 };
+
+function PriceChart({ series }: { series: PriceHistorySeries[] }) {
+  const chartData = useMemo(() => {
+    // Collect all records with timestamps
+    const allRecords = series.flatMap((s) =>
+      s.records.map((r) => ({
+        price: r.price,
+        time: new Date(r.recordedAt).getTime(),
+        storeId: s.storeId,
+      }))
+    );
+
+    if (allRecords.length === 0) return null;
+
+    const prices = allRecords.map((r) => r.price);
+    const times = allRecords.map((r) => r.time);
+    const minPrice = Math.min(...prices);
+    const maxPrice = Math.max(...prices);
+    const minTime = Math.min(...times);
+    const maxTime = Math.max(...times);
+
+    // Add padding to price range
+    const priceRange = maxPrice - minPrice || 1;
+    const paddedMin = Math.max(0, minPrice - priceRange * 0.1);
+    const paddedMax = maxPrice + priceRange * 0.1;
+    const timeRange = maxTime - minTime || 1;
+
+    const plotWidth = CHART_WIDTH - CHART_PADDING.left - CHART_PADDING.right;
+    const plotHeight = CHART_HEIGHT - CHART_PADDING.top - CHART_PADDING.bottom;
+
+    const toX = (t: number) =>
+      CHART_PADDING.left + ((t - minTime) / timeRange) * plotWidth;
+    const toY = (p: number) =>
+      CHART_PADDING.top + (1 - (p - paddedMin) / (paddedMax - paddedMin)) * plotHeight;
+
+    // Generate Y-axis labels (3-5 ticks)
+    const yTicks: number[] = [];
+    const step = Math.ceil(priceRange / 4 / 10) * 10 || 10;
+    const yStart = Math.floor(paddedMin / step) * step;
+    for (let v = yStart; v <= paddedMax; v += step) {
+      yTicks.push(v);
+    }
+
+    // Generate X-axis labels (date ticks)
+    const xTicks: { time: number; label: string }[] = [];
+    const dateRange = maxTime - minTime;
+    const tickCount = Math.min(4, Math.max(2, allRecords.length));
+    for (let i = 0; i < tickCount; i++) {
+      const t = minTime + (dateRange * i) / (tickCount - 1 || 1);
+      const d = new Date(t);
+      xTicks.push({
+        time: t,
+        label: `${d.getMonth() + 1}/${d.getDate()}`,
+      });
+    }
+
+    // Build polyline points per store
+    const lines = series.map((s, idx) => {
+      const sorted = [...s.records].sort(
+        (a, b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime()
+      );
+      const points = sorted
+        .map((r) => `${toX(new Date(r.recordedAt).getTime())},${toY(r.price)}`)
+        .join(" ");
+      return {
+        storeId: s.storeId,
+        storeName: s.storeName,
+        color: CHART_COLORS[idx % CHART_COLORS.length],
+        points,
+        dots: sorted.map((r) => ({
+          x: toX(new Date(r.recordedAt).getTime()),
+          y: toY(r.price),
+        })),
+      };
+    });
+
+    return { yTicks, xTicks, lines, toX, toY };
+  }, [series]);
+
+  if (!chartData) return null;
+
+  return (
+    <Card style={styles.chartCard}>
+      <Card.Content>
+        <Svg width={CHART_WIDTH} height={CHART_HEIGHT}>
+          {/* Y-axis grid lines and labels */}
+          {chartData.yTicks.map((tick) => {
+            const y = chartData.toY(tick);
+            if (y < CHART_PADDING.top || y > CHART_HEIGHT - CHART_PADDING.bottom) return null;
+            return (
+              <>
+                <Line
+                  key={`yline-${tick}`}
+                  x1={CHART_PADDING.left}
+                  y1={y}
+                  x2={CHART_WIDTH - CHART_PADDING.right}
+                  y2={y}
+                  stroke="#e2e8f0"
+                  strokeWidth={1}
+                />
+                <SvgText
+                  key={`ylabel-${tick}`}
+                  x={CHART_PADDING.left - 6}
+                  y={y + 4}
+                  fontSize={10}
+                  fill="#94a3b8"
+                  textAnchor="end"
+                >
+                  ¥{tick.toLocaleString()}
+                </SvgText>
+              </>
+            );
+          })}
+
+          {/* X-axis labels */}
+          {chartData.xTicks.map((tick, i) => (
+            <SvgText
+              key={`x-${i}`}
+              x={chartData.toX(tick.time)}
+              y={CHART_HEIGHT - 8}
+              fontSize={10}
+              fill="#94a3b8"
+              textAnchor="middle"
+            >
+              {tick.label}
+            </SvgText>
+          ))}
+
+          {/* Data lines */}
+          {chartData.lines.map((line) => (
+            <>
+              <Polyline
+                key={`line-${line.storeId}`}
+                points={line.points}
+                fill="none"
+                stroke={line.color}
+                strokeWidth={2}
+              />
+              {line.dots.map((dot, i) => (
+                <Circle
+                  key={`dot-${line.storeId}-${i}`}
+                  cx={dot.x}
+                  cy={dot.y}
+                  r={3}
+                  fill={line.color}
+                />
+              ))}
+            </>
+          ))}
+        </Svg>
+
+        {/* Legend */}
+        {chartData.lines.length > 1 && (
+          <View style={styles.legendRow}>
+            {chartData.lines.map((line) => (
+              <View key={line.storeId} style={styles.legendItem}>
+                <View
+                  style={[styles.legendDot, { backgroundColor: line.color }]}
+                />
+                <Text variant="bodySmall" numberOfLines={1}>
+                  {line.storeName}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
+      </Card.Content>
+    </Card>
+  );
+}
+
 export default function ProductDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const theme = useTheme();
   const queryClient = useQueryClient();
+  const [period, setPeriod] = useState<Period>("all");
 
   const { data: product, isLoading } = useQuery({
     queryKey: ["product", id],
@@ -57,6 +275,15 @@ export default function ProductDetailScreen() {
   const { data: comparison } = useQuery({
     queryKey: ["product-compare", id],
     queryFn: () => api.get<{ stores: CompareStore[] }>(`/api/products/${id}/compare`),
+    enabled: !!id,
+  });
+
+  const { data: priceHistory } = useQuery({
+    queryKey: ["price-history", id, period],
+    queryFn: () =>
+      api.get<PriceHistoryResponse>(
+        `/api/products/${id}/price-history?period=${period}`
+      ),
     enabled: !!id,
   });
 
@@ -162,6 +389,29 @@ export default function ProductDetailScreen() {
             )}
           </Card.Content>
         </Card>
+
+        {/* Price history chart */}
+        <Text variant="titleMedium" style={styles.sectionTitle}>
+          価格推移
+        </Text>
+        <SegmentedButtons
+          value={period}
+          onValueChange={(value) => setPeriod(value as Period)}
+          buttons={PERIOD_BUTTONS}
+          style={styles.periodSelector}
+        />
+
+        {priceHistory?.series && priceHistory.series.length > 0 ? (
+          <PriceChart series={priceHistory.series} />
+        ) : (
+          <Card style={styles.chartPlaceholder}>
+            <Card.Content>
+              <Text style={styles.emptyText}>
+                {priceHistory ? "この期間のデータがありません" : "読み込み中..."}
+              </Text>
+            </Card.Content>
+          </Card>
+        )}
 
         {/* Store comparison */}
         {comparison?.stores && comparison.stores.length > 0 && (
@@ -293,5 +543,34 @@ const styles = StyleSheet.create({
     textAlign: "center",
     color: "#94a3b8",
     marginTop: 16,
+  },
+  periodSelector: {
+    marginBottom: 12,
+  },
+  chartCard: {
+    borderRadius: 12,
+    marginBottom: 8,
+  },
+  chartPlaceholder: {
+    borderRadius: 12,
+    marginBottom: 8,
+    height: 120,
+    justifyContent: "center",
+  },
+  legendRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    marginTop: 8,
+  },
+  legendItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  legendDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
 });
