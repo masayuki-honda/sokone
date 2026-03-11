@@ -5,6 +5,7 @@ export interface BottomPriceInfo {
   productName: string;
   categoryName: string | null;
   unit: string | null;
+  volume: string | null;
   bottomPrice: number;
   bottomDate: Date;
   bottomStoreName: string;
@@ -108,6 +109,7 @@ export async function getBottomPrices(
       productName: product.name,
       categoryName: product.category?.name || null,
       unit: product.unit,
+      volume: product.volume,
       bottomPrice: minPrice,
       bottomDate: bottomRecord.recordedAt,
       bottomStoreName: bottomRecord.store.name,

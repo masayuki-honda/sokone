@@ -4,6 +4,7 @@ import { analyzeImageWithSplit, OcrSourceType } from "@/lib/ocr";
 import { getR2SignedUrl } from "@/lib/r2";
 import { findOrCreateProduct } from "@/lib/product-matcher";
 import { createNotification } from "@/lib/notification";
+import { calculateUnitPriceForStorage } from "@/lib/unit-price";
 import crypto from "crypto";
 
 const MIN_CONFIDENCE = 0.7;
@@ -179,12 +180,19 @@ export async function runScrapingPipeline(
               volume: item.volume,
             });
 
+            const unitPrice = calculateUnitPriceForStorage(
+              finalPrice,
+              product.volume ?? item.volume,
+              product.unit ?? item.unit,
+            );
+
             await prisma.priceRecord.create({
               data: {
                 productId: product.id,
                 storeId,
                 userId,
                 price: finalPrice,
+                unitPrice,
                 taxIncluded: true,
                 sourceType: "auto_flyer",
                 sourceImageId: imageId,

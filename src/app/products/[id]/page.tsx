@@ -28,6 +28,7 @@ import { Badge } from "@/components/ui/badge";
 import { useRecentlyViewed } from "@/hooks/use-recently-viewed";
 import { PriceChart } from "@/components/price-chart";
 import { MergeProductDialog } from "@/components/merge-product-dialog";
+import { formatUnitPrice } from "@/lib/unit-price";
 
 interface ProductDetail {
   id: string;
@@ -486,6 +487,11 @@ export default function ProductDetailPage({
                 <p className="mt-1 text-2xl font-bold text-green-600">
                   ¥{product.stats.bottomPrice.toLocaleString()}
                 </p>
+                {formatUnitPrice(product.stats.bottomPrice, product.volume, product.unit) && (
+                  <p className="text-xs text-green-700 dark:text-green-400 mt-0.5">
+                    {formatUnitPrice(product.stats.bottomPrice, product.volume, product.unit)}
+                  </p>
+                )}
                 {product.stats.bottomStore && (
                   <p className="text-xs text-muted-foreground mt-1">
                     {product.stats.bottomStore.name}
@@ -608,6 +614,11 @@ export default function ProductDetailPage({
                           >
                             ¥{min.toLocaleString()}
                           </p>
+                          {formatUnitPrice(min, product.volume, product.unit) && (
+                            <p className="text-xs text-muted-foreground">
+                              {formatUnitPrice(min, product.volume, product.unit)}
+                            </p>
+                          )}
                         </div>
                       </div>
                       <div className="mt-2 flex gap-4 text-xs text-muted-foreground">
@@ -643,6 +654,7 @@ export default function ProductDetailPage({
                       <th className="pb-2 pr-4 font-medium">日付</th>
                       <th className="pb-2 pr-4 font-medium">店舗</th>
                       <th className="pb-2 pr-4 font-medium text-right">価格</th>
+                      <th className="pb-2 pr-4 font-medium text-right">単価</th>
                       <th className="pb-2 font-medium">ソース</th>
                       <th className="pb-2 font-medium w-16"></th>
                     </tr>
@@ -728,6 +740,9 @@ export default function ProductDetailPage({
                           <td className={`py-2 pr-4 text-right font-medium ${isBottomPrice ? "text-green-600 font-bold" : ""}`}>
                             ¥{record.price.toLocaleString()}
                             {isBottomPrice && <span className="ml-1 text-xs">🏆</span>}
+                          </td>
+                          <td className="py-2 pr-4 text-right text-xs text-muted-foreground">
+                            {formatUnitPrice(record.price, product.volume, product.unit) || "—"}
                           </td>
                           <td className="py-2">
                             {record.sourceImageId ? (

@@ -280,7 +280,7 @@ export async function findOrCreateProduct(
     unit?: string | null;
     volume?: string | null;
   },
-): Promise<{ id: string; name: string; isNew: boolean }> {
+): Promise<{ id: string; name: string; isNew: boolean; unit: string | null; volume: string | null }> {
   const normalized = normalizeProductName(name);
 
   // Try exact match first
@@ -300,7 +300,7 @@ export async function findOrCreateProduct(
   });
 
   if (existing) {
-    return { id: existing.id, name: existing.name, isNew: false };
+    return { id: existing.id, name: existing.name, isNew: false, unit: existing.unit, volume: existing.volume };
   }
 
   // Resolve category
@@ -325,7 +325,7 @@ export async function findOrCreateProduct(
     },
   });
 
-  return { id: product.id, name: product.name, isNew: true };
+  return { id: product.id, name: product.name, isNew: true, unit: product.unit, volume: product.volume };
 }
 
 /**
