@@ -16,6 +16,7 @@ import {
   Database,
   ArrowUpDown,
   Trash2,
+  GitMerge,
 } from "lucide-react";
 import { Header } from "@/components/header";
 import { WatchKeywordsManager } from "@/components/watch-keywords-manager";
@@ -32,6 +33,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { MergeProductDialog } from "@/components/merge-product-dialog";
 
 interface DashboardStats {
   productCount: number;
@@ -137,6 +139,9 @@ export default function DashboardPage() {
   const [deleteTarget, setDeleteTarget] = useState<{ productId: string; productName: string; recordCount: number } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Merge state
+  const [mergeSource, setMergeSource] = useState<{ id: string; name: string; recordCount: number } | null>(null);
 
   // Debounce search query
   useEffect(() => {
@@ -662,6 +667,7 @@ export default function DashboardPage() {
                         ☆
                       </th>
                       <th className="pb-3 font-medium text-center w-8"></th>
+                      <th className="pb-3 font-medium text-center w-8"></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -741,6 +747,17 @@ export default function DashboardPage() {
                               title="削除"
                             >
                               <Trash2 className="h-4 w-4" />
+                            </button>
+                          </td>
+                          <td className="py-3 text-center">
+                            <button
+                              onClick={() => {
+                                setMergeSource({ id: item.productId, name: item.productName, recordCount: item.recordCount });
+                              }}
+                              className="hover:text-primary transition-colors text-muted-foreground"
+                              title="統合"
+                            >
+                              <GitMerge className="h-4 w-4" />
                             </button>
                           </td>
                         </tr>
@@ -823,6 +840,16 @@ export default function DashboardPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Merge dialog */}
+      <MergeProductDialog
+        source={mergeSource}
+        onClose={() => setMergeSource(null)}
+        onMerged={(sourceId) => {
+          setBottomPrices((prev) => prev.filter((p) => p.productId !== sourceId));
+          setFavorites((prev) => prev.filter((f) => f.productId !== sourceId));
+        }}
+      />
     </div>
   );
 }
