@@ -18,6 +18,7 @@ import {
   Save,
   Eye,
   EyeOff,
+  GitMerge,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Header } from "@/components/header";
@@ -26,6 +27,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useRecentlyViewed } from "@/hooks/use-recently-viewed";
 import { PriceChart } from "@/components/price-chart";
+import { MergeProductDialog } from "@/components/merge-product-dialog";
 
 interface ProductDetail {
   id: string;
@@ -109,6 +111,7 @@ export default function ProductDetailPage({
   const [deletingRecordId, setDeletingRecordId] = useState<string | null>(null);
   const [isWatching, setIsWatching] = useState(false);
   const [watchId, setWatchId] = useState<string | null>(null);
+  const [mergeSource, setMergeSource] = useState<{ id: string; name: string; recordCount: number } | null>(null);
   const { addProduct } = useRecentlyViewed();
 
   useEffect(() => {
@@ -429,6 +432,20 @@ export default function ProductDetailPage({
             </div>
           </div>
           <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() =>
+                product && setMergeSource({
+                  id: product.id,
+                  name: product.name,
+                  recordCount: product.priceRecords.length,
+                })
+              }
+              title="別の商品に統合"
+            >
+              <GitMerge className="h-5 w-5" />
+            </Button>
             <Button
               variant="ghost"
               size="icon"
@@ -778,6 +795,16 @@ export default function ProductDetailPage({
           </Card>
         )}
       </main>
+
+      {/* Merge dialog */}
+      <MergeProductDialog
+        source={mergeSource}
+        onClose={() => setMergeSource(null)}
+        onMerged={(sourceId) => {
+          // Source product was merged and deleted, navigate away
+          router.push("/products");
+        }}
+      />
 
       {/* Lightbox for source image */}
       {lightboxUrl && (

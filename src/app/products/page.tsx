@@ -8,8 +8,6 @@ import {
   Package,
   ArrowLeft,
   Merge,
-  X,
-  Check,
   Wand2,
   ArrowUpDown,
   SlidersHorizontal,
@@ -28,6 +26,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { MergeProductDialog } from "@/components/merge-product-dialog";
 
 interface ProductItem {
   id: string;
@@ -65,12 +64,7 @@ export default function ProductsPage() {
   const [showFilters, setShowFilters] = useState(false);
 
   // Merge dialog state
-  const [mergeSource, setMergeSource] = useState<ProductItem | null>(null);
-  const [mergeSearch, setMergeSearch] = useState("");
-  const [mergeSearchResults, setMergeSearchResults] = useState<ProductItem[]>([]);
-  const [mergeTarget, setMergeTarget] = useState<ProductItem | null>(null);
-  const [isMerging, setIsMerging] = useState(false);
-  const [mergeError, setMergeError] = useState<string | null>(null);
+  const [mergeSource, setMergeSource] = useState<{ id: string; name: string; recordCount: number } | null>(null);
 
   // Auto-categorize state
   const [isAutoCategorizing, setIsAutoCategorizing] = useState(false);
@@ -155,78 +149,6 @@ export default function ProductsPage() {
     } catch (error) {
       console.error("Failed to load more:", error);
     }
-  }
-
-  // Search for merge target
-  useEffect(() => {
-    if (!mergeSearch.trim() || mergeSearch.length < 1) {
-      setMergeSearchResults([]);
-      return;
-    }
-    const timer = setTimeout(async () => {
-      try {
-        const res = await fetch(
-          `/api/products?q=${encodeURIComponent(mergeSearch)}&limit=10`,
-        );
-        if (res.ok) {
-          const data = await res.json();
-          // Exclude the source product from results
-          setMergeSearchResults(
-            (data.products || []).filter(
-              (p: ProductItem) => p.id !== mergeSource?.id,
-            ),
-          );
-        }
-      } catch {
-        // ignore
-      }
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [mergeSearch, mergeSource]);
-
-  // Execute merge
-  async function handleMerge() {
-    if (!mergeSource || !mergeTarget) return;
-    setIsMerging(true);
-    setMergeError(null);
-    try {
-      const res = await fetch(`/api/products/${mergeSource.id}/merge`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ targetProductId: mergeTarget.id }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setMergeError(data.error || "統合に失敗しました");
-        return;
-      }
-      // Remove source from list, close dialog
-      setProducts((prev) => prev.filter((p) => p.id !== mergeSource.id));
-      setMergeSource(null);
-      setMergeTarget(null);
-      setMergeSearch("");
-      setMergeSearchResults([]);
-    } catch {
-      setMergeError("統合中にエラーが発生しました");
-    } finally {
-      setIsMerging(false);
-    }
-  }
-
-  function openMergeDialog(product: ProductItem) {
-    setMergeSource(product);
-    setMergeTarget(null);
-    setMergeSearch("");
-    setMergeSearchResults([]);
-    setMergeError(null);
-  }
-
-  function closeMergeDialog() {
-    setMergeSource(null);
-    setMergeTarget(null);
-    setMergeSearch("");
-    setMergeSearchResults([]);
-    setMergeError(null);
   }
 
   /** Compute per-100g price if volume is in grams (e.g. "300g"). Returns null otherwise. */
@@ -494,7 +416,7 @@ export default function ProductsPage() {
                       variant="outline"
                       size="sm"
                       className="h-8 gap-1 text-xs"
-                      onClick={() => openMergeDialog(product)}
+                      onClick={() => setMergeSource({ id: product.id, name: product.name, recordCount: product._count.priceRecords })}
                     >
                       <Merge className="h-3 w-3" />
                       統合
@@ -561,111 +483,12 @@ export default function ProductsPage() {
       </Dialog>
 
       {/* Merge dialog */}
-      <Dialog open={!!mergeSource} onOpenChange={(open) => !open && closeMergeDialog()}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>商品を統合</DialogTitle>
-            <DialogDescription>
-              「{mergeSource?.name}」を別の商品に統合します。
-              価格記録がすべて統合先に移動し、元の商品名は自動的にエイリアスとして保存されます。
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-2">
-            {/* Source info */}
-            <div className="rounded-lg border bg-muted/40 p-3 text-sm">
-              <p className="text-xs text-muted-foreground mb-1">統合元（削除される）</p>
-              <p className="font-medium">{mergeSource?.name}</p>
-              <p className="text-xs text-muted-foreground">
-                {mergeSource?._count.priceRecords}件の価格記録
-              </p>
-            </div>
-
-            {/* Target search */}
-            <div>
-              <p className="text-sm font-medium mb-2">統合先を検索</p>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="商品名で検索..."
-                  value={mergeSearch}
-                  onChange={(e) => {
-                    setMergeSearch(e.target.value);
-                    setMergeTarget(null);
-                  }}
-                  className="pl-10"
-                />
-              </div>
-              {mergeSearchResults.length > 0 && !mergeTarget && (
-                <div className="mt-1 rounded-md border bg-background shadow-sm max-h-48 overflow-y-auto">
-                  {mergeSearchResults.map((p) => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      className="w-full px-3 py-2 text-left text-sm hover:bg-muted transition-colors flex items-center justify-between"
-                      onClick={() => {
-                        setMergeTarget(p);
-                        setMergeSearch(p.name);
-                        setMergeSearchResults([]);
-                      }}
-                    >
-                      <span>{p.name}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {p._count.priceRecords}件
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Selected target */}
-            {mergeTarget && (
-              <div className="rounded-lg border border-green-400 bg-green-50 dark:bg-green-950 p-3 text-sm flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-muted-foreground mb-0.5">統合先（残る）</p>
-                  <p className="font-medium">{mergeTarget.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {mergeTarget._count.priceRecords}件の価格記録
-                  </p>
-                </div>
-                <button
-                  onClick={() => { setMergeTarget(null); setMergeSearch(""); }}
-                  className="rounded-full p-1 hover:bg-green-100 dark:hover:bg-green-900"
-                >
-                  <X className="h-4 w-4 text-muted-foreground" />
-                </button>
-              </div>
-            )}
-
-            {mergeError && (
-              <p className="text-sm text-destructive">{mergeError}</p>
-            )}
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={closeMergeDialog} disabled={isMerging}>
-              キャンセル
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={!mergeTarget || isMerging}
-              onClick={handleMerge}
-            >
-              {isMerging ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  統合中...
-                </>
-              ) : (
-                <>
-                  <Check className="mr-2 h-4 w-4" />
-                  統合する
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>    </div>
+      <MergeProductDialog
+        source={mergeSource}
+        onClose={() => setMergeSource(null)}
+        onMerged={(sourceId) => {
+          setProducts((prev) => prev.filter((p) => p.id !== sourceId));
+        }}
+      />    </div>
   );
 }
