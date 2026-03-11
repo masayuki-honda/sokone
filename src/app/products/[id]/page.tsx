@@ -346,6 +346,7 @@ export default function ProductDetailPage({
   const sourceTypeLabels: Record<string, string> = {
     photo: "店頭写真",
     flyer: "チラシ",
+    auto_flyer: "自動チラシ",
     instagram: "Instagram",
     receipt: "レシート",
   };
@@ -642,7 +643,7 @@ export default function ProductDetailPage({
                       <th className="pb-2 pr-4 font-medium">日付</th>
                       <th className="pb-2 pr-4 font-medium">店舗</th>
                       <th className="pb-2 pr-4 font-medium text-right">価格</th>
-                      <th className="pb-2 font-medium hidden sm:table-cell">ソース</th>
+                      <th className="pb-2 font-medium">ソース</th>
                       <th className="pb-2 font-medium w-16"></th>
                     </tr>
                   </thead>
@@ -685,7 +686,7 @@ export default function ProductDetailPage({
                                 min={1}
                               />
                             </td>
-                            <td className="py-2 hidden sm:table-cell text-xs text-muted-foreground">
+                            <td className="py-2 text-xs text-muted-foreground">
                               {sourceTypeLabels[record.sourceType] || record.sourceType}
                             </td>
                             <td className="py-2">
@@ -728,7 +729,7 @@ export default function ProductDetailPage({
                             ¥{record.price.toLocaleString()}
                             {isBottomPrice && <span className="ml-1 text-xs">🏆</span>}
                           </td>
-                          <td className="py-2 hidden sm:table-cell">
+                          <td className="py-2">
                             {record.sourceImageId ? (
                               <button
                                 onClick={() => handleImageClick(record.sourceImageId!)}
@@ -826,7 +827,7 @@ export default function ProductDetailPage({
             <img
               src={lightboxUrl}
               alt="ソース画像"
-              className="max-h-[90vh] max-w-full rounded-lg object-contain"
+              className="max-h-[90vh] max-w-[95vw] rounded-lg object-contain"
             />
           </div>
         </div>

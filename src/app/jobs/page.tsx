@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { RefreshCw, CheckCircle2, XCircle, Clock, Loader2 } from "lucide-react";
+import { RefreshCw, CheckCircle2, XCircle, Clock, Loader2, ArrowLeft } from "lucide-react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
 interface ScrapingJob {
@@ -108,7 +109,14 @@ export default function JobsPage() {
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">ジョブ履歴</h1>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="icon" asChild>
+            <Link href="/stores">
+              <ArrowLeft className="h-5 w-5" />
+            </Link>
+          </Button>
+          <h1 className="text-2xl font-bold">ジョブ履歴</h1>
+        </div>
         <Button variant="outline" size="sm" onClick={fetchJobs}>
           <RefreshCw className="h-4 w-4 mr-1" />
           更新
