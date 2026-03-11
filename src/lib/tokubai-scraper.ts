@@ -11,6 +11,7 @@
  */
 
 import * as cheerio from "cheerio";
+import crypto from "crypto";
 import { processImage, generateImageKey } from "@/lib/image-processing";
 import { uploadToR2 } from "@/lib/r2";
 import { prisma } from "@/lib/prisma";
@@ -205,6 +206,16 @@ export async function downloadAndSaveImage(
   // Resize + convert via sharp
   const processed = await processImage(buffer, contentType);
 
+  // Deduplicate by file hash before uploading
+  const fileHash = crypto.createHash("sha256").update(processed.buffer).digest("hex");
+  const existing = await prisma.uploadedImage.findFirst({
+    where: { fileHash },
+    select: { id: true, imageUrl: true },
+  });
+  if (existing) {
+    return { uploadedImageId: existing.id, imageUrl: existing.imageUrl };
+  }
+
   // Upload to R2
   const key = generateImageKey(userId, "flyer-scrape");
   await uploadToR2(key, processed.buffer, processed.contentType);
@@ -217,6 +228,7 @@ export async function downloadAndSaveImage(
       imageUrl: key,
       sourceType: "flyer",
       status: "pending",
+      fileHash,
     },
   });
 

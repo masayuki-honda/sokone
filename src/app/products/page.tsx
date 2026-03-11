@@ -209,6 +209,32 @@ export default function ProductsPage() {
     }
   }
 
+  async function handleCategoryChange(productId: string, categoryId: string | null) {
+    try {
+      const res = await fetch(`/api/products/${productId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ categoryId }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setProducts((prev) =>
+          prev.map((p) =>
+            p.id === productId ? { ...p, category: updated.category } : p,
+          ),
+        );
+        // Refresh category counts
+        const catRes = await fetch("/api/categories");
+        if (catRes.ok) {
+          const catData = await catRes.json();
+          setCategories(catData.categories || []);
+        }
+      }
+    } catch {
+      // silently fail
+    }
+  }
+
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
       <Header />
@@ -384,11 +410,6 @@ export default function ProductsPage() {
                   >
                     <h3 className="font-medium truncate">{product.name}</h3>
                     <div className="mt-1 flex items-center gap-2 flex-wrap">
-                      {product.category && (
-                        <Badge variant="outline" className="text-xs">
-                          {product.category.name}
-                        </Badge>
-                      )}
                       {product.unit && (
                         <span className="text-xs text-muted-foreground">
                           {product.unit}
@@ -409,6 +430,16 @@ export default function ProductsPage() {
                     </div>
                   </Link>
                   <div className="flex items-center gap-3 shrink-0">
+                    <select
+                      className="text-xs border rounded px-1.5 py-0.5 bg-background text-foreground max-w-[100px] hidden sm:block"
+                      value={product.category?.id || ""}
+                      onChange={(e) => handleCategoryChange(product.id, e.target.value || null)}
+                    >
+                      <option value="">未分類</option>
+                      {categories.map((cat) => (
+                        <option key={cat.id} value={cat.id}>{cat.name}</option>
+                      ))}
+                    </select>
                     <span className="text-sm text-muted-foreground">
                       {product._count.priceRecords}件
                     </span>
