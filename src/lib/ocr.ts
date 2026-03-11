@@ -123,12 +123,18 @@ const BASE_PROMPT = `以下の画像はスーパーマーケットの商品価�
 各商品について以下の情報を抽出してください：
 - name: 商品名
 - price: 税込価格（数値）
-- unit: 単位（個/袋/本/パック/100g等）
-- volume: 容量（350ml/1L等）
+- unit: 単位（個/袋/本/パック/100g等）。箱入り・ケース売りの場合は入数を「×24」「×6」のように記載してください
+- volume: 容量（350ml/1L/500g/1kg等）。内容量が記載されていれば必ず抽出してください
 - category_hint: 推定カテゴリ名（後述のリストから選択）
 - is_tax_included: 元の表示が税込かどうか
 - confidence: 読み取り確信度（0.0-1.0）
-- identified_by: text（テキストから識別）/ image（画像から識別）/ both（両方）`;
+- identified_by: text（テキストから識別）/ image（画像から識別）/ both（両方）
+
+【容量・入数の抽出ルール】
+- ビール・飲料のケース売り（例: 24缶入、6本パック）→ unit に「×24」「×6」と記載し、volume に1缶/1本あたりの容量（例: 350ml）を記載してください
+- 肉類・食材の重量表示（例: 100gあたり○○円で500g）→ volume に「500g」と記載してください
+- 調味料等の内容量（例: マヨネーズ450g）→ volume に「450g」と記載してください
+- 「○個入」「○本入」の場合 → unit に「×○」と記載してください`;
 
 // Default fallback categories if none are defined in DB
 const DEFAULT_CATEGORIES = [

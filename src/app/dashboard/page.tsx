@@ -34,6 +34,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { MergeProductDialog } from "@/components/merge-product-dialog";
+import { formatUnitPrice } from "@/lib/unit-price";
 
 interface DashboardStats {
   productCount: number;
@@ -74,6 +75,7 @@ interface BottomPriceItem {
   productName: string;
   categoryName: string | null;
   unit: string | null;
+  volume: string | null;
   bottomPrice: number;
   bottomDate: string;
   bottomStoreName: string;
@@ -705,6 +707,11 @@ export default function DashboardPage() {
                           </td>
                           <td className="py-3 pr-4 text-right font-bold text-green-600">
                             ¥{item.bottomPrice.toLocaleString()}
+                            {formatUnitPrice(item.bottomPrice, item.volume, item.unit) && (
+                              <div className="text-[10px] font-normal text-muted-foreground">
+                                {formatUnitPrice(item.bottomPrice, item.volume, item.unit)}
+                              </div>
+                            )}
                           </td>
                           <td className="py-3 pr-4 text-xs hidden md:table-cell">
                             {item.bottomStoreName}

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { findOrCreateProduct, normalizeProductName } from "@/lib/product-matcher";
 import { SourceType } from "@prisma/client";
 import { createNotification } from "@/lib/notification";
+import { calculateUnitPriceForStorage } from "@/lib/unit-price";
 
 interface PriceItem {
   name: string;
@@ -143,6 +144,17 @@ export async function POST(request: NextRequest) {
           finalPrice = Math.round(item.price * 1.1); // 10% tax
         }
 
+        // Calculate unit price from product's volume/unit info
+        const productForUnit = await prisma.product.findUnique({
+          where: { id: productId },
+          select: { volume: true, unit: true },
+        });
+        const unitPrice = calculateUnitPriceForStorage(
+          finalPrice,
+          productForUnit?.volume ?? item.volume,
+          productForUnit?.unit ?? item.unit,
+        );
+
         // Create price record
         const priceRecord = await prisma.priceRecord.create({
           data: {
@@ -150,6 +162,7 @@ export async function POST(request: NextRequest) {
             storeId,
             userId: session.user.id,
             price: finalPrice,
+            unitPrice,
             taxIncluded: true,
             sourceType,
             sourceImageId: sourceImageId || null,
