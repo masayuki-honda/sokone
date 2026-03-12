@@ -1,5 +1,5 @@
 {
-  "buildCommand": "prisma migrate deploy && prisma generate && next build",
+  "buildCommand": "prisma migrate resolve --applied 20260310000000_add_device_tokens && prisma migrate deploy && prisma generate && next build",
   "crons": [
     {
       "path": "/api/cron/scrape",
