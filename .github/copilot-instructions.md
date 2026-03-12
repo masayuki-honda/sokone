@@ -142,6 +142,7 @@ sokone/
 │   │   ├── api/               # Route Handlers
 │   │   │   ├── auth/mobile/   # モバイルアプリ認証エンドポイント
 │   │   │   ├── cron/scrape/   # Vercel Cron 自動スクレイピング
+│   │   │   ├── devices/       # デバイストークン登録・削除 API
 │   │   │   ├── jobs/          # ジョブ一覧 API
 │   │   │   └── stores/[id]/pipeline/ # パイプライン実行・履歴
 │   │   ├── auth/              # 認証関連ページ (signin/)
@@ -169,7 +170,8 @@ sokone/
 │   │   ├── auth.ts            # NextAuth 設定
 │   │   ├── gemini.ts          # Geminiクライアント・モデルID一元管理 (GEMINI_MODEL)
 │   │   ├── ocr.ts             # OCR処理 (Gemini Flash)
-│   │   ├── notification.ts    # 通知作成サービス（アプリ内 + メール）
+│   │   ├── notification.ts    # 通知作成サービス（アプリ内 + メール + Push）
+│   │   ├── push.ts            # Push通知送信サービス（Expo Push API）
 │   │   ├── email.ts           # メール送信サービス（Resend）
 │   │   ├── r2.ts              # Cloudflare R2 クライアント
 │   │   ├── product-matcher.ts # 商品名寄せ
