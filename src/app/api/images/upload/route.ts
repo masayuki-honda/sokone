@@ -6,6 +6,7 @@ import {
   processImage,
   isValidImageType,
   generateImageKey,
+  FLYER_IMAGE_OPTIONS,
 } from "@/lib/image-processing";
 import { SourceType } from "@prisma/client";
 
@@ -113,7 +114,8 @@ export async function POST(request: NextRequest) {
         const inputBuffer = Buffer.from(arrayBuffer);
 
         // Process image (resize, convert to JPEG)
-        const processed = await processImage(inputBuffer, file.type);
+        const imageOptions = sourceType === "flyer" ? FLYER_IMAGE_OPTIONS : undefined;
+        const processed = await processImage(inputBuffer, file.type, imageOptions);
 
         // Generate R2 key and upload
         const key = generateImageKey(session.user.id, file.name);
