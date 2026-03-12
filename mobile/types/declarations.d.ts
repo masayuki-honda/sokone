@@ -442,3 +442,113 @@ declare module "react-native-svg" {
   export const Rect: ComponentType<RectProps>;
   export const G: ComponentType<GProps>;
 }
+
+declare module "expo-network" {
+  export interface NetworkState {
+    type?: string;
+    isConnected?: boolean;
+    isInternetReachable?: boolean;
+  }
+
+  export function getNetworkStateAsync(): Promise<NetworkState>;
+}
+
+declare module "expo-device" {
+  export const isDevice: boolean;
+  export const brand: string | null;
+  export const modelName: string | null;
+  export const osName: string | null;
+  export const osVersion: string | null;
+}
+
+declare module "expo-notifications" {
+  export interface NotificationContent {
+    title: string | null;
+    subtitle: string | null;
+    body: string | null;
+    data: Record<string, unknown>;
+    sound: string | boolean | null;
+    badge: number | null;
+  }
+
+  export interface NotificationRequest {
+    identifier: string;
+    content: NotificationContent;
+    trigger: unknown;
+  }
+
+  export interface Notification {
+    date: number;
+    request: NotificationRequest;
+  }
+
+  export interface NotificationResponse {
+    notification: Notification;
+    actionIdentifier: string;
+    userText?: string;
+  }
+
+  export interface EventSubscription {
+    remove: () => void;
+  }
+
+  export interface NotificationPermissionsStatus {
+    status: "granted" | "denied" | "undetermined";
+    canAskAgain: boolean;
+    granted: boolean;
+  }
+
+  export interface ExpoPushToken {
+    type: "expo";
+    data: string;
+  }
+
+  export const AndroidImportance: {
+    MIN: number;
+    LOW: number;
+    DEFAULT: number;
+    HIGH: number;
+    MAX: number;
+  };
+
+  export function setNotificationHandler(handler: {
+    handleNotification: (
+      notification: Notification,
+    ) => Promise<{
+      shouldShowAlert: boolean;
+      shouldPlaySound: boolean;
+      shouldSetBadge: boolean;
+      shouldShowBanner?: boolean;
+      shouldFlashScreen?: boolean;
+    }>;
+  }): void;
+
+  export function getPermissionsAsync(): Promise<NotificationPermissionsStatus>;
+  export function requestPermissionsAsync(): Promise<NotificationPermissionsStatus>;
+
+  export function getExpoPushTokenAsync(options?: {
+    projectId?: string;
+  }): Promise<ExpoPushToken>;
+
+  export function setNotificationChannelAsync(
+    channelId: string,
+    channel: {
+      name: string;
+      importance: number;
+      vibrationPattern?: number[];
+      lightColor?: string;
+    },
+  ): Promise<unknown>;
+
+  export function addNotificationReceivedListener(
+    listener: (notification: Notification) => void,
+  ): EventSubscription;
+
+  export function addNotificationResponseReceivedListener(
+    listener: (response: NotificationResponse) => void,
+  ): EventSubscription;
+
+  export function removeNotificationSubscription(
+    subscription: EventSubscription,
+  ): void;
+}
