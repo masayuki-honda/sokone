@@ -549,12 +549,12 @@ export default function UploadsPage() {
                   <img
                     src={lightboxImage.signedUrl}
                     alt="アップロード画像"
-                    className="w-full max-h-[60vh] object-contain"
+                    className="w-full max-h-[40vh] object-contain"
                   />
                 </div>
 
                 {/* Details — scrollable */}
-                <div className="p-4 space-y-2 overflow-y-auto bg-background">
+                <div className="flex-1 min-h-0 p-4 space-y-2 overflow-y-auto bg-background">
                   <div className="flex items-center justify-between flex-wrap gap-2">
                     <div className="flex items-center gap-2 flex-wrap">
                       <Badge variant="secondary">
