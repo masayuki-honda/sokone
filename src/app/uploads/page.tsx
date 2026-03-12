@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useTransition } from "react";
 import Link from "next/link";
 import {
   Image as ImageIcon,
@@ -99,6 +99,8 @@ export default function UploadsPage() {
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const [isCleaningUp, setIsCleaningUp] = useState(false);
   const [cleanupConfirm, setCleanupConfirm] = useState(false);
+
+  const [, startTransition] = useTransition();
 
   // OCR state
   const [analyzingId, setAnalyzingId] = useState<string | null>(null);
@@ -401,7 +403,7 @@ export default function UploadsPage() {
                   <Card
                     key={img.id}
                     className="overflow-hidden hover:shadow-md transition-shadow cursor-pointer relative"
-                    onClick={() => !isDeleting && setLightboxImage(img)}
+                    onClick={() => !isDeleting && startTransition(() => setLightboxImage(img))}
                   >
                     {/* Thumbnail */}
                     <div className="relative aspect-[4/3] bg-zinc-100 dark:bg-zinc-800">

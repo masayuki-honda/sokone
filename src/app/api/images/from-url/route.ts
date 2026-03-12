@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { uploadToR2 } from "@/lib/r2";
-import { processImage, generateImageKey } from "@/lib/image-processing";
+import { processImage, generateImageKey, FLYER_IMAGE_OPTIONS } from "@/lib/image-processing";
 import { SourceType } from "@prisma/client";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -191,7 +191,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Process image
-    const processed = await processImage(inputBuffer, contentType);
+    const imageOptions = (sourceType === "flyer" || sourceType === "auto_flyer") ? FLYER_IMAGE_OPTIONS : undefined;
+    const processed = await processImage(inputBuffer, contentType, imageOptions);
 
     // Upload to R2
     const key = generateImageKey(session.user.id, "from-url");
