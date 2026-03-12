@@ -30,10 +30,12 @@ export async function GET(request: NextRequest) {
     userId: session.user.id,
     ...(sourceType && { sourceType: sourceType as "photo" | "flyer" | "instagram" | "receipt" }),
     // When an explicit status filter is given, use it.
-    // Otherwise exclude `no_products` images from the default view.
+    // Otherwise show only "active" statuses (exclude no_products).
+    // Use `in` rather than `not` so the query works even before the
+    // no_products migration has been applied to the database.
     ...(status
       ? { status: status as "pending" | "processed" | "failed" | "no_products" }
-      : { status: { not: "no_products" as const } }),
+      : { status: { in: ["pending", "processed", "failed"] as const } }),
     ...(storeId && { storeId }),
   };
 
