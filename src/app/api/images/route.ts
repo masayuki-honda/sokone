@@ -54,6 +54,11 @@ export async function GET(request: NextRequest) {
       _count: {
         select: { priceRecords: true },
       },
+      priceRecords: {
+        select: { storeId: true, store: { select: { id: true, name: true } } },
+        take: 1,
+        orderBy: { createdAt: "desc" },
+      },
     },
   });
 
@@ -61,12 +66,20 @@ export async function GET(request: NextRequest) {
   const result = hasMore ? images.slice(0, limit) : images;
   const nextCursor = hasMore ? result[result.length - 1].id : null;
 
-  // Generate signed URLs for each image
+  // Generate signed URLs for each image, and back-fill store from price records if null
   const imagesWithUrls = await Promise.all(
-    result.map(async (image) => ({
-      ...image,
-      signedUrl: await getR2SignedUrl(image.imageUrl),
-    })),
+    result.map(async (image) => {
+      const effectiveStore =
+        image.store ??
+        (image.priceRecords?.[0]?.store ?? null);
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { priceRecords: _pr, ...rest } = image;
+      return {
+        ...rest,
+        store: effectiveStore,
+        signedUrl: await getR2SignedUrl(image.imageUrl),
+      };
+    }),
   );
 
   return NextResponse.json({

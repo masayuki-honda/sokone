@@ -247,6 +247,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Back-fill storeId on the source image so the lightbox shows the store correctly
+    if (sourceImageId && results.length > 0) {
+      await prisma.uploadedImage.updateMany({
+        where: { id: sourceImageId, userId: session.user.id, storeId: null },
+        data: { storeId },
+      });
+    }
+
     return NextResponse.json(
       {
         registered: results,
