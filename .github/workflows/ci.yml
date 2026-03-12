@@ -34,6 +34,7 @@ jobs:
         run: npm run build
         env:
           DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
+          DIRECT_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
           NEXTAUTH_SECRET: "ci-secret"
           GOOGLE_CLIENT_ID: "ci-client-id"
           GOOGLE_CLIENT_SECRET: "ci-client-secret"

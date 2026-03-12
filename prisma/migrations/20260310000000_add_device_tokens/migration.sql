@@ -1,5 +1,5 @@
 -- AlterEnum
-ALTER TYPE "NotificationChannel" ADD VALUE 'push';
+ALTER TYPE "NotificationChannel" ADD VALUE IF NOT EXISTS 'push';
 
 -- CreateTable
 CREATE TABLE "device_tokens" (
