@@ -12,7 +12,7 @@
 
 import * as cheerio from "cheerio";
 import crypto from "crypto";
-import { processImage, generateImageKey } from "@/lib/image-processing";
+import { processImage, generateImageKey, FLYER_IMAGE_OPTIONS } from "@/lib/image-processing";
 import { uploadToR2 } from "@/lib/r2";
 import { prisma } from "@/lib/prisma";
 
@@ -203,8 +203,8 @@ export async function downloadAndSaveImage(
   if (buffer.length === 0) throw new Error("空の画像データです");
   if (buffer.length > MAX_IMAGE_SIZE) throw new Error("画像サイズが20MBを超えています");
 
-  // Resize + convert via sharp
-  const processed = await processImage(buffer, contentType);
+  // Resize + convert via sharp (use higher quality for flyer images)
+  const processed = await processImage(buffer, contentType, FLYER_IMAGE_OPTIONS);
 
   // Deduplicate by file hash before uploading
   const fileHash = crypto.createHash("sha256").update(processed.buffer).digest("hex");

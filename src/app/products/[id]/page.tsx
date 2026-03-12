@@ -100,6 +100,7 @@ export default function ProductDetailPage({
   const [isLoading, setIsLoading] = useState(true);
   const [isFavorite, setIsFavorite] = useState(false);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [lightboxLoading, setLightboxLoading] = useState(false);
   const [categories, setCategories] = useState<Array<{ id: string; name: string }>>([])
   const [editingCategory, setEditingCategory] = useState(false);
   const [pendingCategoryId, setPendingCategoryId] = useState<string>("");
@@ -306,16 +307,13 @@ export default function ProductDetailPage({
     }
   }
 
-  async function handleImageClick(imageId: string) {
-    try {
-      const res = await fetch(`/api/images/${imageId}`);
-      if (res.ok) {
-        const data = await res.json();
-        setLightboxUrl(data.signedUrl);
-      }
-    } catch (error) {
-      console.error("Failed to load image:", error);
-    }
+  function handleImageClick(imageId: string) {
+    setLightboxLoading(true);
+    fetch(`/api/images/${imageId}`)
+      .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
+      .then((data) => setLightboxUrl(data.signedUrl))
+      .catch((error) => console.error("Failed to load image:", error))
+      .finally(() => setLightboxLoading(false));
   }
 
   if (isLoading) {
@@ -823,10 +821,10 @@ export default function ProductDetailPage({
       />
 
       {/* Lightbox for source image */}
-      {lightboxUrl && (
+      {(lightboxUrl || lightboxLoading) && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
-          onClick={() => setLightboxUrl(null)}
+          onClick={() => { setLightboxUrl(null); setLightboxLoading(false); }}
         >
           <div
             className="relative max-w-screen-lg"
@@ -834,16 +832,22 @@ export default function ProductDetailPage({
           >
             <button
               className="absolute -top-8 right-0 text-white text-sm hover:text-gray-300"
-              onClick={() => setLightboxUrl(null)}
+              onClick={() => { setLightboxUrl(null); setLightboxLoading(false); }}
             >
               ✕ 閉じる
             </button>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={lightboxUrl}
-              alt="ソース画像"
-              className="max-h-[90vh] max-w-[95vw] rounded-lg object-contain"
-            />
+            {lightboxLoading && !lightboxUrl ? (
+              <div className="flex items-center justify-center py-20">
+                <Loader2 className="h-8 w-8 animate-spin text-white" />
+              </div>
+            ) : (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                src={lightboxUrl!}
+                alt="ソース画像"
+                className="max-h-[90vh] max-w-[95vw] rounded-lg object-contain"
+              />
+            )}
           </div>
         </div>
       )}

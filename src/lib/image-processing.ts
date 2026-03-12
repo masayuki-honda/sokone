@@ -4,6 +4,12 @@ import exifr from "exifr";
 const MAX_DIMENSION = 1600;
 const JPEG_QUALITY = 85;
 
+// Higher settings for flyer images to preserve text legibility
+export const FLYER_IMAGE_OPTIONS = {
+  maxDimension: 3000,
+  jpegQuality: 92,
+};
+
 export interface ExifMetadata {
   takenAt: Date | null;
   gpsLatitude: number | null;
@@ -81,17 +87,26 @@ export async function extractExifMetadata(
   return result;
 }
 
+export interface ProcessImageOptions {
+  maxDimension?: number;
+  jpegQuality?: number;
+}
+
 /**
  * Process an uploaded image:
  * - Extract EXIF metadata before any transformation
  * - Convert HEIC to JPEG
- * - Resize to max 1600px on longest side
+ * - Resize to max dimension on longest side
  * - Output as JPEG
  */
 export async function processImage(
   inputBuffer: Buffer,
   _mimeType: string,
+  options?: ProcessImageOptions,
 ): Promise<ProcessedImage> {
+  const maxDim = options?.maxDimension ?? MAX_DIMENSION;
+  const quality = options?.jpegQuality ?? JPEG_QUALITY;
+
   // Extract EXIF BEFORE sharp processing (sharp may strip EXIF during conversions)
   const exif = await extractExifMetadata(inputBuffer);
 
@@ -106,10 +121,10 @@ export async function processImage(
   pipeline = pipeline.rotate();
 
   // Resize if necessary (keep aspect ratio)
-  if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+  if (width > maxDim || height > maxDim) {
     pipeline = pipeline.resize({
-      width: MAX_DIMENSION,
-      height: MAX_DIMENSION,
+      width: maxDim,
+      height: maxDim,
       fit: "inside",
       withoutEnlargement: true,
     });
@@ -117,7 +132,7 @@ export async function processImage(
 
   // Convert to JPEG
   const outputBuffer = await pipeline
-    .jpeg({ quality: JPEG_QUALITY })
+    .jpeg({ quality })
     .toBuffer();
 
   // Get final dimensions
