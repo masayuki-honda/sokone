@@ -110,6 +110,10 @@ export default function UploadsPage() {
   const [registeringId, setRegisteringId] = useState<string | null>(null);
   const [registerResult, setRegisterResult] = useState<{ registered: number; errors: number } | null>(null);
 
+  // Store list for store-select in lightbox
+  const [stores, setStores] = useState<{ id: string; name: string }[]>([]);
+  const [settingStoreId, setSettingStoreId] = useState<string | null>(null);
+
   // Pre-select all items when lightbox opens or changes
   useEffect(() => {
     if (lightboxImage?.ocrResultJson?.items?.length) {
@@ -120,6 +124,38 @@ export default function UploadsPage() {
     setRegisterResult(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lightboxImage?.id]);
+
+  // Fetch stores once on mount for the lightbox store-select
+  useEffect(() => {
+    fetch("/api/stores")
+      .then((r) => r.ok ? r.json() : [])
+      .then((data: { id: string; name: string }[]) => setStores(data))
+      .catch(() => {});
+  }, []);
+
+  const handleSetStore = async (imageId: string, storeId: string) => {
+    setSettingStoreId(imageId);
+    try {
+      const res = await fetch(`/api/images/${imageId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ storeId }),
+      });
+      if (res.ok) {
+        const store = stores.find((s) => s.id === storeId) ?? null;
+        setLightboxImage((prev) => (prev ? { ...prev, store } : prev));
+        setImages((prev) =>
+          prev.map((img) => (img.id === imageId ? { ...img, store } : img)),
+        );
+      } else {
+        alert("店舗の設定に失敗しました");
+      }
+    } catch {
+      alert("通信エラーが発生しました");
+    } finally {
+      setSettingStoreId(null);
+    }
+  };
 
   const fetchImages = useCallback(
     async (cursor?: string | null) => {
@@ -199,8 +235,7 @@ export default function UploadsPage() {
 
   const handleRegister = async (image: UploadedImage) => {
     if (!image.store) {
-      alert("店舗情報が設定されていません。画像の再アップロードか、アップロード時に店舗を選択してください");
-      return;
+      return; // should not reach here; button is disabled when no store
     }
     const allItems = image.ocrResultJson?.items ?? [];
     const selected = allItems.filter((_, i) => selectedItems.has(i));
@@ -654,9 +689,36 @@ export default function UploadsPage() {
                           </p>
                         )}
                         {!lightboxImage.store && (
-                          <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
-                            ⚠️ 店舗が設定されていないため登録できません
-                          </p>
+                          <div className="mt-2">
+                            {stores.length > 0 ? (
+                              <div className="flex items-center gap-2">
+                                <Select
+                                  onValueChange={(storeId) =>
+                                    handleSetStore(lightboxImage.id, storeId)
+                                  }
+                                  disabled={settingStoreId === lightboxImage.id}
+                                >
+                                  <SelectTrigger className="h-8 text-xs flex-1">
+                                    <SelectValue placeholder="店舗を選択して登録を有効にする" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {stores.map((s) => (
+                                      <SelectItem key={s.id} value={s.id}>
+                                        {s.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                {settingStoreId === lightboxImage.id && (
+                                  <Loader2 className="h-4 w-4 animate-spin text-zinc-500" />
+                                )}
+                              </div>
+                            ) : (
+                              <p className="text-xs text-amber-600 dark:text-amber-400">
+                                ⚠️ 店舗が設定されていないため登録できません。先に店舗を登録してください
+                              </p>
+                            )}
+                          </div>
                         )}
 
                         <div className="mt-2 flex items-center justify-between gap-2">
