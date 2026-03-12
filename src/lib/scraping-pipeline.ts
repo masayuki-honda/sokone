@@ -157,12 +157,15 @@ export async function runScrapingPipeline(
         );
 
         // Update image with OCR result
+        // Use `no_products` when OCR found nothing — avoids polluting the gallery
+        // with campaign banners / non-product flyer pages.
+        const hasItems = (ocrResult.items?.length ?? 0) > 0;
         await prisma.uploadedImage.update({
           where: { id: imageId },
           data: {
             ocrResultJson: ocrResult as object,
             ocrRawText: JSON.stringify(ocrResult),
-            status: "processed",
+            status: hasItems ? "processed" : "no_products",
           },
         });
         imagesOcred++;

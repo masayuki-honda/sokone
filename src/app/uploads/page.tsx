@@ -46,7 +46,7 @@ interface UploadedImage {
   imageUrl: string;
   signedUrl: string;
   sourceType: "photo" | "flyer" | "instagram" | "receipt";
-  status: "pending" | "processed" | "failed";
+  status: "pending" | "processed" | "failed" | "no_products";
   createdAt: string;
   takenAt: string | null;
   store: { id: string; name: string } | null;
@@ -79,6 +79,7 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   pending: { label: "未処理", color: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400" },
   processed: { label: "処理済み", color: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400" },
   failed: { label: "失敗", color: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400" },
+  no_products: { label: "商品なし", color: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800/50 dark:text-zinc-400" },
 };
 
 export default function UploadsPage() {
@@ -368,6 +369,7 @@ export default function UploadsPage() {
               <SelectItem value="pending">未処理</SelectItem>
               <SelectItem value="processed">処理済み</SelectItem>
               <SelectItem value="failed">失敗</SelectItem>
+              <SelectItem value="no_products">商品なし</SelectItem>
             </SelectContent>
           </Select>
         </div>

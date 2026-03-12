@@ -190,6 +190,7 @@ enum ImageStatus {
   pending
   processed
   failed
+  no_products
 }
 
 enum ReviewStatus {
