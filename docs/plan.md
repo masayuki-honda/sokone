@@ -92,7 +92,7 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 - [x] Prisma で Neon PostgreSQL に接続できる（マイグレーション適用済み）
 - [x] Vercel デプロイ完了（https://sokone-sigma.vercel.app）
 - [x] R2 への画像アップロード・削除が動作する（Sprint 2 で実装）
-- [ ] CI が Green で通る
+- [x] CI が Green で通る
 - [ ] OCR 精度の初期評価が完了している（Sprint 2 で実施）
 
 ---
@@ -409,7 +409,7 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 
 - [x] Vitest で API Route Handler テスト（各エンドポイント）
 - [x] OCR サービスのユニットテスト（モック使用）
-- [ ] 主要コンポーネントの基本テスト（Testing Library）
+- [x] 主要コンポーネントの基本テスト（Testing Library）
 
 ### ドキュメント
 
@@ -1077,7 +1077,7 @@ Web 版の既存バックエンド API をそのまま利用し、モバイル�
 - [x] デバイストークン登録 API
   - `POST /api/devices` — デバイストークン登録
   - `DELETE /api/devices/{token}` — トークン削除
-- [ ] 通知送信サービスに Push チャネル追加
+- [x] 通知送信サービスに Push チャネル追加
 
 **Mobile:**
 - [x] Expo Notifications セットアップ
