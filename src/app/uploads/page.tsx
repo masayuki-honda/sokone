@@ -720,31 +720,34 @@ export default function UploadsPage() {
                             )}
                           </div>
                         )}
-
-                        <div className="mt-2 flex items-center justify-between gap-2">
-                          <span className="text-xs text-zinc-500">
-                            {selectedItems.size}品目を選択中
-                          </span>
-                          <Button
-                            size="sm"
-                            onClick={() => handleRegister(lightboxImage)}
-                            disabled={
-                              !lightboxImage.store ||
-                              selectedItems.size === 0 ||
-                              registeringId === lightboxImage.id
-                            }
-                          >
-                            {registeringId === lightboxImage.id ? (
-                              <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-                            ) : (
-                              <PlusCircle className="mr-1 h-4 w-4" />
-                            )}
-                            選択した {selectedItems.size} 品目を登録
-                          </Button>
-                        </div>
                       </div>
                     )}
                 </div>
+                {/* Register footer — outside scroll area so it is never clipped */}
+                {lightboxImage.ocrResultJson?.items &&
+                  lightboxImage.ocrResultJson.items.length > 0 && (
+                    <div className="flex-shrink-0 border-t bg-background px-4 py-2 flex items-center justify-between gap-2">
+                      <span className="text-xs text-zinc-500">
+                        {selectedItems.size}品目を選択中
+                      </span>
+                      <Button
+                        size="sm"
+                        onClick={() => handleRegister(lightboxImage)}
+                        disabled={
+                          !lightboxImage.store ||
+                          selectedItems.size === 0 ||
+                          registeringId === lightboxImage.id
+                        }
+                      >
+                        {registeringId === lightboxImage.id ? (
+                          <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                        ) : (
+                          <PlusCircle className="mr-1 h-4 w-4" />
+                        )}
+                        選択した {selectedItems.size} 品目を登録
+                      </Button>
+                    </div>
+                  )}
               </div>
             )}
           </DialogContent>
