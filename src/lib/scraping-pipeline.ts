@@ -77,9 +77,14 @@ export async function runScrapingPipeline(
 
     // 3. Download images
     const imageIds: string[] = [];
+    // Deduplicate image URLs across all leaflets to avoid downloading the same
+    // campaign banner image that appears in multiple leaflet IDs.
+    const seenImageUrls = new Set<string>();
     for (const leaflet of newLeaflets) {
       let savedCount = 0;
       for (const imageUrl of leaflet.imageUrls) {
+        if (seenImageUrls.has(imageUrl)) continue;
+        seenImageUrls.add(imageUrl);
         try {
           const result = await downloadAndSaveImage(imageUrl, userId, storeId);
           imageIds.push(result.uploadedImageId);

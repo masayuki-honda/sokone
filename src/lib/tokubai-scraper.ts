@@ -135,18 +135,29 @@ async function extractLeafletImages(leafletUrl: string): Promise<string[]> {
     let foundNewOnPage = false;
 
     $("img").each((_, el) => {
-      const src = $(el).attr("src") || $(el).attr("data-src") || "";
-      // Accept both image URL patterns:
-      //   bargain_office_leaflets — classic pattern (always full-res)
-      //   bargain_leaflets        — newer pattern used by some chains (e.g. ロピア)
-      // For bargain_leaflets, exclude resize/thumbnail variants (path contains "w=")
-      const isLeafletImg =
-        src.includes("image.tokubai.co.jp/images/bargain_office_leaflets") ||
-        (src.includes("image.tokubai.co.jp/images/bargain_leaflets") &&
-          !/\/bargain_leaflets\/w=/.test(src));
-      if (!isLeafletImg) return;
+      // Tokubai uses lazy loading on paginated leaflet pages:
+      //   src      = low-res placeholder or thumbnail (eager-loaded)
+      //   data-src = full-resolution image (loaded on scroll)
+      // We must check data-src FIRST to get the full-res URL.
+      const candidates = [
+        $(el).attr("data-src"),
+        $(el).attr("data-lazy-src"),
+        $(el).attr("data-original"),
+        $(el).attr("src"),
+      ].filter((u): u is string => !!u);
+
+      // Accept leaflet CDN images only; exclude width/height-restricted thumbnails
+      // (e.g. /bargain_office_leaflets/w=200/... or /bargain_leaflets/w=300/...)
+      const leafletUrl = candidates.find(
+        (u) =>
+          (u.includes("image.tokubai.co.jp/images/bargain_office_leaflets") ||
+            u.includes("image.tokubai.co.jp/images/bargain_leaflets")) &&
+          !/[/?][wh]=\d/.test(u),
+      );
+      if (!leafletUrl) return;
+
       // Strip cache-busting query strings
-      const clean = src.split("?")[0];
+      const clean = leafletUrl.split("?")[0];
       if (!allImages.includes(clean)) {
         allImages.push(clean);
         foundNewOnPage = true;
