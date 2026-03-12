@@ -29,7 +29,11 @@ export async function GET(request: NextRequest) {
   const where = {
     userId: session.user.id,
     ...(sourceType && { sourceType: sourceType as "photo" | "flyer" | "instagram" | "receipt" }),
-    ...(status && { status: status as "pending" | "processed" | "failed" }),
+    // When an explicit status filter is given, use it.
+    // Otherwise exclude `no_products` images from the default view.
+    ...(status
+      ? { status: status as "pending" | "processed" | "failed" | "no_products" }
+      : { status: { not: "no_products" as const } }),
     ...(storeId && { storeId }),
   };
 

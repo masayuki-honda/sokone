@@ -71,12 +71,14 @@ export async function POST(_request: NextRequest, { params }: Params) {
     );
 
     // Update the database with OCR results
+    // Use `no_products` when OCR found nothing (e.g. campaign banner, non-product page)
+    const hasItems = (ocrResult.items?.length ?? 0) > 0;
     const updated = await prisma.uploadedImage.update({
       where: { id },
       data: {
         ocrResultJson: ocrResult as object,
         ocrRawText: JSON.stringify(ocrResult),
-        status: "processed",
+        status: hasItems ? "processed" : "no_products",
       },
     });
 
