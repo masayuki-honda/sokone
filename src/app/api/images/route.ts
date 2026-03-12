@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
     // no_products migration has been applied to the database.
     ...(status
       ? { status: status as "pending" | "processed" | "failed" | "no_products" }
-      : { status: { in: ["pending", "processed", "failed"] as const } }),
+      : { status: { in: ["pending", "processed", "failed"] as ("pending" | "processed" | "failed")[] } }),
     ...(storeId && { storeId }),
   };
 
