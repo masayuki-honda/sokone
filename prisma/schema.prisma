@@ -76,6 +76,7 @@ model User {
   notificationPreferences NotificationPreference[]
   scrapingJobs     ScrapingJob[]
   pendingReviews   PendingReview[]
+  deviceTokens     DeviceToken[]
 
   @@map("users")
 }
@@ -182,6 +183,7 @@ enum NotificationType {
 enum NotificationChannel {
   in_app
   email
+  push
 }
 
 enum ImageStatus {
@@ -356,4 +358,18 @@ model PendingReview {
 
   @@index([userId, status])
   @@map("pending_reviews")
+}
+
+model DeviceToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  token     String   @unique
+  platform  String   // "android" or "ios"
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("device_tokens")
 }

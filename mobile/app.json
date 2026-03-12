@@ -43,6 +43,13 @@
         {
           "photosPermission": "チラシや値札の写真を選択するために使用します"
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#2563eb"
+        }
       ]
     ]
   }

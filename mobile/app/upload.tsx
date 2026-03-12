@@ -15,9 +15,12 @@ import {
   ProgressBar,
   useTheme,
   ActivityIndicator,
+  Banner,
 } from "react-native-paper";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { api } from "../lib/api";
+import { enqueue } from "../lib/offline-queue";
+import { useNetwork } from "../hooks/use-network";
 import * as FileSystem from "expo-file-system";
 
 interface Store {
@@ -53,6 +56,7 @@ export default function UploadScreen() {
   const theme = useTheme();
   const router = useRouter();
   const params = useLocalSearchParams<{ images: string }>();
+  const { isConnected } = useNetwork();
 
   const [imageUris, setImageUris] = useState<string[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
@@ -102,6 +106,23 @@ export default function UploadScreen() {
 
     setUploading(true);
     setUploadProgress(0);
+
+    // Offline fallback: save to local queue
+    if (!isConnected) {
+      try {
+        await enqueue(imageUris, selectedStoreId, sourceType);
+        Alert.alert(
+          "オフライン保存",
+          "ネットワークに接続されていないため、ローカルに保存しました。接続が復旧すると自動的にアップロードされます。",
+          [{ text: "OK", onPress: () => router.back() }],
+        );
+      } catch {
+        Alert.alert("エラー", "オフライン保存に失敗しました");
+      } finally {
+        setUploading(false);
+      }
+      return;
+    }
 
     try {
       const formData = new FormData();
@@ -212,6 +233,11 @@ export default function UploadScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      {!isConnected && (
+        <Banner visible icon="wifi-off" style={styles.offlineBanner}>
+          オフラインです。アップロードはローカルに保存され、接続復旧時に自動送信されます。
+        </Banner>
+      )}
       {/* Image preview */}
       <Text variant="titleMedium" style={styles.sectionTitle}>
         選択した画像（{imageUris.length}枚）
@@ -277,13 +303,13 @@ export default function UploadScreen() {
       {/* Upload button */}
       <Button
         mode="contained"
-        icon="cloud-upload"
+        icon={isConnected ? "cloud-upload" : "content-save"}
         style={styles.uploadButton}
         contentStyle={styles.uploadButtonContent}
         onPress={handleUpload}
         disabled={!selectedStoreId || imageUris.length === 0}
       >
-        アップロード＆解析
+        {isConnected ? "アップロード＆解析" : "オフライン保存"}
       </Button>
     </ScrollView>
   );
@@ -370,5 +396,9 @@ const styles = StyleSheet.create({
   uploadingHint: {
     marginTop: 8,
     color: "#64748b",
+  },
+  offlineBanner: {
+    backgroundColor: "#fef3c7",
+    marginBottom: 8,
   },
 });

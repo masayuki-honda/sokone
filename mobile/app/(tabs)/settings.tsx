@@ -1,11 +1,44 @@
+import { useState, useEffect, useCallback } from "react";
 import { View, ScrollView, StyleSheet, Alert } from "react-native";
 import { Text, List, Switch, Divider, Avatar, Button } from "react-native-paper";
 import { useAuth } from "@/lib/auth";
 import { useRouter } from "expo-router";
+import {
+  registerForPushNotifications,
+  registerDeviceToken,
+  unregisterDeviceToken,
+} from "@/lib/push-notifications";
+import { getPendingCount } from "@/lib/offline-queue";
 
 export default function SettingsScreen() {
   const { user, signOut } = useAuth();
   const router = useRouter();
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushToken, setPushToken] = useState<string | null>(null);
+  const [pendingUploads, setPendingUploads] = useState(0);
+
+  useEffect(() => {
+    getPendingCount().then(setPendingUploads);
+  }, []);
+
+  const handlePushToggle = useCallback(async (value: boolean) => {
+    if (value) {
+      const token = await registerForPushNotifications();
+      if (token) {
+        await registerDeviceToken(token);
+        setPushToken(token);
+        setPushEnabled(true);
+      } else {
+        Alert.alert("通知許可", "通知の許可が得られませんでした。端末の設定を確認してください。");
+      }
+    } else {
+      if (pushToken) {
+        await unregisterDeviceToken(pushToken);
+      }
+      setPushToken(null);
+      setPushEnabled(false);
+    }
+  }, [pushToken]);
 
   const handleSignOut = () => {
     Alert.alert(
@@ -47,16 +80,10 @@ export default function SettingsScreen() {
       <List.Section>
         <List.Subheader>通知設定</List.Subheader>
         <List.Item
-          title="底値更新通知"
-          description="ウォッチ中の商品が底値を更新した時"
+          title="プッシュ通知"
+          description="底値更新・特売アラートを受け取る"
           left={(props) => <List.Icon {...props} icon="bell-ring" />}
-          right={() => <Switch value={true} />}
-        />
-        <List.Item
-          title="特売アラート"
-          description="お買い得価格を検出した時"
-          left={(props) => <List.Icon {...props} icon="tag" />}
-          right={() => <Switch value={true} />}
+          right={() => <Switch value={pushEnabled} onValueChange={handlePushToggle} />}
         />
       </List.Section>
 
@@ -71,6 +98,13 @@ export default function SettingsScreen() {
           right={(props) => <List.Icon {...props} icon="chevron-right" />}
           onPress={() => router.push("/stores")}
         />
+        {pendingUploads > 0 && (
+          <List.Item
+            title="未送信のアップロード"
+            description={`${pendingUploads}件のアップロードが待機中`}
+            left={(props) => <List.Icon {...props} icon="cloud-off-outline" />}
+          />
+        )}
       </List.Section>
 
       <Divider />
