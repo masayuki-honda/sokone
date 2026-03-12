@@ -538,7 +538,7 @@ export default function UploadsPage() {
           <DialogContent className="max-w-3xl p-0 overflow-hidden max-h-[90vh] [&>button:last-child]:hidden">
             <DialogTitle className="sr-only">アップロード画像の詳細</DialogTitle>
             {lightboxImage && (
-              <div className="flex flex-col max-h-[90vh]">
+              <div className="flex flex-col w-full overflow-hidden max-h-[90vh]">
                 {/* Image section with custom close button */}
                 <div className="relative bg-zinc-900 flex-shrink-0">
                   <DialogClose className="absolute top-2 right-2 z-50 rounded-full bg-black/60 p-1.5 text-white hover:bg-black/90 transition-colors focus:outline-none focus:ring-2 focus:ring-white">
@@ -727,11 +727,12 @@ export default function UploadsPage() {
                 {lightboxImage.ocrResultJson?.items &&
                   lightboxImage.ocrResultJson.items.length > 0 && (
                     <div className="flex-shrink-0 border-t bg-background px-4 py-2 flex items-center justify-between gap-2">
-                      <span className="text-xs text-zinc-500">
+                      <span className="min-w-0 truncate text-xs text-zinc-500">
                         {selectedItems.size}品目を選択中
                       </span>
                       <Button
                         size="sm"
+                        className="flex-shrink-0"
                         onClick={() => handleRegister(lightboxImage)}
                         disabled={
                           !lightboxImage.store ||
@@ -744,7 +745,7 @@ export default function UploadsPage() {
                         ) : (
                           <PlusCircle className="mr-1 h-4 w-4" />
                         )}
-                        選択した {selectedItems.size} 品目を登録
+                        {selectedItems.size}品目を登録
                       </Button>
                     </div>
                   )}
