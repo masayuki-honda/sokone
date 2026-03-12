@@ -369,62 +369,6 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Deals Section */}
-        {deals.length > 0 && (
-          <section>
-            <div className="flex items-center gap-2 mb-4">
-              <TrendingDown className="h-5 w-5 text-green-600" />
-              <h2 className="text-lg font-semibold">今週のお買い得</h2>
-              <Badge variant="secondary" className="text-xs">
-                {deals.length}件
-              </Badge>
-              <Link
-                href="/deals"
-                className="ml-auto text-sm text-muted-foreground hover:text-foreground flex items-center gap-1"
-              >
-                すべて見る <ArrowRight className="h-3 w-3" />
-              </Link>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {deals.slice(0, 6).map((deal) => (
-                <Card key={deal.priceRecordId}>
-                  <CardContent className="pt-6">
-                    <Link
-                      href={`/products/${deal.product.id}`}
-                      className="block"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                          <h3 className="font-medium truncate">
-                            {deal.product.name}
-                          </h3>
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            {deal.store.name}
-                          </p>
-                        </div>
-                        <div className="text-right shrink-0">
-                          <p className="text-lg font-bold text-green-600">
-                            ¥{deal.price.toLocaleString()}
-                          </p>
-                          {deal.isBottomPrice ? (
-                            <Badge className="bg-green-600 text-white text-xs">
-                              🏆 底値
-                            </Badge>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">
-                              底値 ¥{deal.bottomPrice.toLocaleString()}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </Link>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </section>
-        )}
-
         {/* Favorites Section */}
         {favorites.length > 0 && (
           <section>
@@ -502,45 +446,64 @@ export default function DashboardPage() {
           </section>
         )}
 
-        {/* Recently Viewed Products */}
-        <RecentlyViewedSection />
-
-        {/* Recent Prices */}
-        {recentPrices.length > 0 && (
+        {/* Deals Section */}
+        {deals.length > 0 && (
           <section>
-            <h2 className="text-lg font-semibold mb-4">最近の価格登録</h2>
-            <Card>
-              <CardContent className="pt-6">
-                <div className="space-y-3">
-                  {recentPrices.map((record) => (
-                    <div
-                      key={record.id}
-                      className="flex items-center justify-between border-b pb-3 last:border-0 last:pb-0"
+            <div className="flex items-center gap-2 mb-4">
+              <TrendingDown className="h-5 w-5 text-green-600" />
+              <h2 className="text-lg font-semibold">今週のお買い得</h2>
+              <Badge variant="secondary" className="text-xs">
+                {deals.length}件
+              </Badge>
+              <Link
+                href="/deals"
+                className="ml-auto text-sm text-muted-foreground hover:text-foreground flex items-center gap-1"
+              >
+                すべて見る <ArrowRight className="h-3 w-3" />
+              </Link>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {deals.slice(0, 6).map((deal) => (
+                <Card key={deal.priceRecordId}>
+                  <CardContent className="pt-6">
+                    <Link
+                      href={`/products/${deal.product.id}`}
+                      className="block"
                     >
-                      <div className="min-w-0 flex-1">
-                        <Link
-                          href={`/products/${record.product.id}`}
-                          className="font-medium hover:text-primary truncate block"
-                        >
-                          {record.product.name}
-                        </Link>
-                        <p className="text-xs text-muted-foreground">
-                          {record.store.name} ・{" "}
-                          {new Date(record.recordedAt).toLocaleDateString(
-                            "ja-JP",
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <h3 className="font-medium truncate">
+                            {deal.product.name}
+                          </h3>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {deal.store.name}
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-lg font-bold text-green-600">
+                            ¥{deal.price.toLocaleString()}
+                          </p>
+                          {deal.isBottomPrice ? (
+                            <Badge className="bg-green-600 text-white text-xs">
+                              🏆 底値
+                            </Badge>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">
+                              底値 ¥{deal.bottomPrice.toLocaleString()}
+                            </span>
                           )}
-                        </p>
+                        </div>
                       </div>
-                      <span className="font-bold ml-4">
-                        ¥{record.price.toLocaleString()}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+                    </Link>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
           </section>
         )}
+
+        {/* Recently Viewed Products */}
+        <RecentlyViewedSection />
 
         {/* Bottom Prices Table */}
         <section>
