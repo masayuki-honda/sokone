@@ -463,15 +463,24 @@ export default function DashboardPage() {
               </Link>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {deals.slice(0, 6).map((deal) => (
-                <Card key={deal.priceRecordId}>
+              {deals.slice(0, 6).map((deal) => {
+                const isFav = favorites.some((f) => f.productId === deal.product.id);
+                return (
+                <Card key={deal.priceRecordId} className="relative">
+                  <button
+                    className={`absolute right-3 top-3 transition-colors ${isFav ? "text-yellow-500 hover:text-yellow-600" : "text-zinc-300 hover:text-yellow-400"}`}
+                    onClick={() => handleToggleFavorite(deal.product.id, isFav)}
+                    title={isFav ? "お気に入り解除" : "お気に入り登録"}
+                  >
+                    <Star className={`h-4 w-4 ${isFav ? "fill-current" : ""}`} />
+                  </button>
                   <CardContent className="pt-6">
                     <Link
                       href={`/products/${deal.product.id}`}
                       className="block"
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1">
+                        <div className="min-w-0 flex-1 pr-6">
                           <h3 className="font-medium truncate">
                             {deal.product.name}
                           </h3>
@@ -497,7 +506,8 @@ export default function DashboardPage() {
                     </Link>
                   </CardContent>
                 </Card>
-              ))}
+                );
+              })}
             </div>
           </section>
         )}
