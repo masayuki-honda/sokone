@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { parseQuantity } from "@/lib/unit-price";
 
 // === Synonym dictionary ===
 // Groups of equivalent terms — any term in a group will be normalized to the first entry.
@@ -232,10 +233,21 @@ export async function matchProduct(
     take: 50,
   });
 
+  // Extract pack quantity from the query name to avoid cross-pack matching
+  const queryPackQty = parseQuantity(normalized);
+
   const candidates = recentProducts
     .map((product) => {
       // Also normalize the DB product name with synonyms for better matching
       const dbNormalized = normalizeProductName(product.name);
+
+      // Prevent matching across different pack sizes:
+      // e.g., single can vs 6-pack should never be auto-matched.
+      const dbPackQty = parseQuantity(dbNormalized) ?? parseQuantity(product.unit);
+      const queryPack = queryPackQty?.value ?? 1;
+      const dbPack = dbPackQty?.value ?? 1;
+      if (queryPack !== dbPack) return null;
+
       return {
         productId: product.id,
         productName: product.name,
@@ -246,7 +258,7 @@ export async function matchProduct(
         ),
       };
     })
-    .filter((c) => c.similarity > 0.5)
+    .filter((c): c is NonNullable<typeof c> => c !== null && c.similarity > 0.5)
     .sort((a, b) => b.similarity - a.similarity)
     .slice(0, 5);
 
@@ -283,15 +295,26 @@ export async function findOrCreateProduct(
 ): Promise<{ id: string; name: string; isNew: boolean; unit: string | null; volume: string | null }> {
   const normalized = normalizeProductName(name);
 
+  // If unit/volume contains a pack notation (×6, ×24 etc.), incorporate it into the
+  // normalized name so that single-can and 6-pack are treated as distinct products.
+  const packQty =
+    parseQuantity(options?.unit) ?? parseQuantity(options?.volume);
+  const packSuffix =
+    packQty && packQty.value > 1 ? ` ×${packQty.value}` : "";
+  // Only append if not already present in the normalized name
+  const lookupNormalized = normalized.includes(packSuffix.trim()) || !packSuffix
+    ? normalized
+    : `${normalized}${packSuffix}`;
+
   // Try exact match first
   const existing = await prisma.product.findFirst({
     where: {
       OR: [
-        { normalizedName: normalized },
+        { normalizedName: lookupNormalized },
         {
           aliases: {
             some: {
-              aliasName: { equals: normalized, mode: "insensitive" },
+              aliasName: { equals: lookupNormalized, mode: "insensitive" },
             },
           },
         },
@@ -314,11 +337,18 @@ export async function findOrCreateProduct(
     }
   }
 
+  // When creating a new product, include the pack notation in the display name
+  // if the original name doesn't already contain it (e.g., name="アサヒ", unit="×6").
+  const displayName =
+    packSuffix && !name.trim().toLowerCase().includes(packSuffix.trim())
+      ? `${name.trim()}${packSuffix}`
+      : name.trim();
+
   // Create new product
   const product = await prisma.product.create({
     data: {
-      name: name.trim(),
-      normalizedName: normalized,
+      name: displayName,
+      normalizedName: lookupNormalized,
       categoryId,
       unit: options?.unit || null,
       volume: options?.volume || null,
