@@ -50,7 +50,7 @@ interface StoreItem {
   name: string;
 }
 
-export default function ProductsPage() {
+function ProductsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
