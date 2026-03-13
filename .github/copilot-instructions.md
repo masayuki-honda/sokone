@@ -76,6 +76,21 @@ Sokone（底値）は、チラシ・Instagram・店頭写真から商品価格�
 - ブランチ戦略: `main`（本番）/ `dev`（開発）/ `feature/*`（機能ブランチ）
 - PR マージは **squash を使わない**（`gh pr merge <id> --merge`）— コミット履歴をそのまま保持する
 - **コミット前に必ず `npx tsc --noEmit` を実行**し、TypeScript コンパイルエラーがゼロであることを確認してからコミットする。エラーがある状態でコミットしてはならない
+- **Git pre-commit フック設置済み**（`.git/hooks/pre-commit`）— `tsc --noEmit` が失敗するとコミットが自動中断される。新しいリポジトリでも同様に設置すること:
+
+  ```sh
+  # .git/hooks/pre-commit（実行権限が必要: chmod +x on Mac/Linux）
+  #!/bin/sh
+  echo 'Running TypeScript check...'
+  cd "$(git rev-parse --show-toplevel)"
+  npx tsc --noEmit
+  if [ $? -ne 0 ]; then
+    echo 'TypeScript errors found. Commit aborted.'
+    exit 1
+  fi
+  ```
+
+  Windows では `python -c "open('.git/hooks/pre-commit','wb').write(open('write_hook_template').read())"` などで LF 改行で書き込む（CRLF だと sh が解釈できない）
 
 ### TypeScript / Next.js
 
