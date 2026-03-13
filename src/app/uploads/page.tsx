@@ -40,6 +40,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { parseQuantity, formatUnitPrice } from "@/lib/unit-price";
 
 interface UploadedImage {
   id: string;
@@ -674,6 +675,11 @@ export default function UploadsPage() {
                               <span className="shrink-0 font-medium text-green-700 dark:text-green-400">
                                 ¥{item.price.toLocaleString()}
                               </span>
+                              {item.unit && parseQuantity(item.unit) && parseQuantity(item.unit)!.value > 1 && (
+                                <span className="shrink-0 text-xs text-zinc-400">
+                                  {formatUnitPrice(item.price, item.volume, item.unit)}
+                                </span>
+                              )}
                             </label>
                           ))}
                         </div>
