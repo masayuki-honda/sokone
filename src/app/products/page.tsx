@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Search,
   Loader2,
@@ -50,18 +51,23 @@ interface StoreItem {
 }
 
 export default function ProductsPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [stores, setStores] = useState<StoreItem[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState("");
-  const [selectedStore, setSelectedStore] = useState("");
-  const [sortBy, setSortBy] = useState("name");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState(() => searchParams.get("categoryId") ?? "");
+  const [selectedStore, setSelectedStore] = useState(() => searchParams.get("storeId") ?? "");
+  const [sortBy, setSortBy] = useState(() => searchParams.get("sortBy") ?? "name");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">(() => (searchParams.get("sortOrder") as "asc" | "desc") ?? "asc");
+  const [searchQuery, setSearchQuery] = useState(() => searchParams.get("q") ?? "");
+  const [debouncedQuery, setDebouncedQuery] = useState(() => searchParams.get("q") ?? "");
   const [isLoading, setIsLoading] = useState(true);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [showFilters, setShowFilters] = useState(false);
+  const [showFilters, setShowFilters] = useState(() =>
+    !!(searchParams.get("categoryId") || searchParams.get("storeId") || searchParams.get("sortBy"))
+  );
 
   // Merge dialog state
   const [mergeSource, setMergeSource] = useState<{ id: string; name: string; recordCount: number } | null>(null);
@@ -80,6 +86,18 @@ export default function ProductsPage() {
     const timer = setTimeout(() => setDebouncedQuery(searchQuery), 300);
     return () => clearTimeout(timer);
   }, [searchQuery]);
+
+  // Sync filter state → URL (so back-navigation restores filters)
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (debouncedQuery) params.set("q", debouncedQuery);
+    if (selectedCategory) params.set("categoryId", selectedCategory);
+    if (selectedStore) params.set("storeId", selectedStore);
+    if (sortBy !== "name") params.set("sortBy", sortBy);
+    if (sortOrder !== "asc") params.set("sortOrder", sortOrder);
+    const qs = params.toString();
+    router.replace(qs ? `/products?${qs}` : "/products", { scroll: false });
+  }, [debouncedQuery, selectedCategory, selectedStore, sortBy, sortOrder, router]);
 
   // Fetch categories
   useEffect(() => {
@@ -521,5 +539,13 @@ export default function ProductsPage() {
           setProducts((prev) => prev.filter((p) => p.id !== sourceId));
         }}
       />    </div>
+  );
+}
+
+export default function ProductsPageWrapper() {
+  return (
+    <Suspense>
+      <ProductsPage />
+    </Suspense>
   );
 }
