@@ -28,6 +28,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { MergeProductDialog } from "@/components/merge-product-dialog";
+import { parseQuantity, formatUnitPrice } from "@/lib/unit-price";
 
 interface ProductItem {
   id: string;
@@ -418,6 +419,10 @@ function ProductsPage() {
                 const per100g = isMeat && bottomRecord
                   ? computePer100gPrice(bottomRecord.price, product.volume)
                   : null;
+                const qty = parseQuantity(product.unit);
+                const perItemStr = qty && qty.value > 1 && bottomRecord
+                  ? formatUnitPrice(bottomRecord.price, product.volume, product.unit)
+                  : null;
 
                 return (
               <Card key={product.id} className="transition-shadow hover:shadow-md">
@@ -444,6 +449,9 @@ function ProductsPage() {
                             ? `¥${per100g.toLocaleString()}/100g`
                             : `¥${bottomRecord.price.toLocaleString()}`}
                         </span>
+                      )}
+                      {perItemStr && (
+                        <span className="text-xs text-zinc-500 dark:text-zinc-400">{perItemStr}</span>
                       )}
                     </div>
                   </Link>
