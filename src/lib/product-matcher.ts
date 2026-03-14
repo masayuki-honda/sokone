@@ -295,19 +295,40 @@ export async function findOrCreateProduct(
 ): Promise<{ id: string; name: string; isNew: boolean; unit: string | null; volume: string | null }> {
   const normalized = normalizeProductName(name);
 
-  // If unit/volume contains a pack notation (×6, ×24 etc.), incorporate it into the
-  // normalized name so that single-can and 6-pack are treated as distinct products.
+  // --- Pack count suffix (×6, ×24 etc.) ---
+  // Includes pack notation in the lookup key so single-can and 6-pack are separate products.
   const packQty =
     parseQuantity(options?.unit) ?? parseQuantity(options?.volume);
   const packSuffix =
     packQty && packQty.value > 1 ? ` ×${packQty.value}` : "";
-  // Only append if not already present in the normalized name
-  const lookupNormalized = normalized.includes(packSuffix.trim()) || !packSuffix
-    ? normalized
-    : `${normalized}${packSuffix}`;
+  const hasPackCount = !!(packQty && packQty.value > 1);
 
-  // Try exact match first
-  const existing = await prisma.product.findFirst({
+  // --- Volume/weight suffix (2kg, 5kg, 1L etc.) for SINGLE-unit products ---
+  // For multi-pack products the pack count already differentiates (×6 vs ×12).
+  // For single-unit products we include the volume so "お米 2kg" and "お米 5kg"
+  // register as distinct products.
+  const rawVolume = options?.volume?.trim() ?? null;
+  const volKey = rawVolume ? rawVolume.toLowerCase().replace(/\s+/g, "") : null;
+  const normNoSpaces = normalized.replace(/\s/g, "");
+  const volumeSuffix =
+    !hasPackCount && volKey && !normNoSpaces.includes(volKey)
+      ? ` ${rawVolume}`
+      : "";
+
+  // Full lookup key: name + optional-volume + optional-pack-count
+  const alreadyHasPack = !packSuffix || normalized.includes(packSuffix.trim());
+  const lookupNormalized =
+    `${normalized}${volumeSuffix}${alreadyHasPack ? "" : packSuffix}`.trim();
+
+  // Legacy key (before volume was incorporated) for backward-compatible lazy migration
+  const lookupLegacy =
+    normalized.includes(packSuffix.trim()) || !packSuffix
+      ? normalized
+      : `${normalized}${packSuffix}`;
+  const hasNewKey = lookupNormalized !== lookupLegacy;
+
+  // Try exact match on full key first
+  let existing = await prisma.product.findFirst({
     where: {
       OR: [
         { normalizedName: lookupNormalized },
@@ -321,6 +342,32 @@ export async function findOrCreateProduct(
       ],
     },
   });
+
+  // Lazy migration: fall back to legacy key and upgrade normalizedName on the fly
+  if (!existing && hasNewKey) {
+    existing = await prisma.product.findFirst({
+      where: {
+        OR: [
+          { normalizedName: lookupLegacy },
+          {
+            aliases: {
+              some: {
+                aliasName: { equals: lookupLegacy, mode: "insensitive" },
+              },
+            },
+          },
+        ],
+      },
+    });
+    if (existing) {
+      // Upgrade this product to the new key format (idempotent)
+      await prisma.product.update({
+        where: { id: existing.id },
+        data: { normalizedName: lookupNormalized },
+      });
+      existing = { ...existing, normalizedName: lookupNormalized };
+    }
+  }
 
   if (existing) {
     return { id: existing.id, name: existing.name, isNew: false, unit: existing.unit, volume: existing.volume };
@@ -337,12 +384,14 @@ export async function findOrCreateProduct(
     }
   }
 
-  // When creating a new product, include the pack notation in the display name
-  // if the original name doesn't already contain it (e.g., name="アサヒ", unit="×6").
-  const displayName =
-    packSuffix && !name.trim().toLowerCase().includes(packSuffix.trim())
-      ? `${name.trim()}${packSuffix}`
-      : name.trim();
+  // Build display name: append volume and/or pack count if not already in the OCR name
+  let displayName = name.trim();
+  if (volumeSuffix && volKey && !name.trim().toLowerCase().replace(/\s+/g, "").includes(volKey)) {
+    displayName += volumeSuffix;
+  }
+  if (packSuffix && !name.trim().toLowerCase().includes(packSuffix.trim())) {
+    displayName += packSuffix;
+  }
 
   // Create new product
   const product = await prisma.product.create({

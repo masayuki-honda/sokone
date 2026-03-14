@@ -3,20 +3,30 @@
  *
  * One-time migration: automatically separate price records that were
  * incorrectly grouped together under the same product when they actually
- * belong to different pack sizes (e.g., single can vs 6-pack).
+ * belong to different pack sizes (e.g., single can vs 6-pack) or
+ * different package weights (e.g., rice 2kg vs 5kg).
  *
- * Detection logic:
- *   - For each product, if max(price) / min(price) > 3.5, mixing is suspected.
+ * === Pack-count separation (auto-split) ===
+ *   - For each product, if max(price) / min(price) > 3.5, pack mixing is suspected.
  *   - The "single-unit baseline" = median of prices in the lower half of the range.
- *   - Records whose price ≈ baseline × N (N ∈ {2,4,6,12,24}, ±25%) are treated
- *     as N-pack records and moved to a new / existing product with unit = "×N".
+ *   - Records whose price ≈ baseline × N (N ∈ {2,4,6,12,24}, ±25%) are moved to
+ *     a new/existing product with unit = "×N".
+ *
+ * === Weight-variant detection (report only — cannot auto-split) ===
+ *   - Products with max/min ratio in the range [--weight-ratio, 3.5) are flagged
+ *     as potential weight variants (e.g., 2kg vs 5kg = 2.5×).
+ *   - These are REPORTED but never auto-split because we cannot determine which
+ *     price record belongs to which weight after the fact.
  *
  * Usage:
- *   # Dry run (no DB changes, just show what would be split):
+ *   # Dry run (no DB changes):
  *   npx tsx prisma/split-packs.ts --dry-run
  *
- *   # Actually perform the split:
- *   npx tsx prisma/split-packs.ts
+ *   # Actually perform pack separation:
+ *   npx tsx prisma/split-packs.ts [--min-each-side=2]
+ *
+ *   # Also report possible weight variants (lower ratio threshold, default 2.0):
+ *   npx tsx prisma/split-packs.ts --dry-run --weight-ratio=2.0
  */
 
 import { PrismaClient } from "@prisma/client";
@@ -66,6 +76,9 @@ async function main() {
   // --min-each-side N: require at least N records on both sides before splitting (default 1)
   const minEachSideArg = process.argv.find((a) => a.startsWith("--min-each-side="));
   const minEachSide = minEachSideArg ? parseInt(minEachSideArg.split("=")[1], 10) : 1;
+  // --weight-ratio=N: also report products with max/min ratio >= N (and < SUSPECT_RATIO) as weight suspects
+  const weightRatioArg = process.argv.find((a) => a.startsWith("--weight-ratio="));
+  const weightRatioMin = weightRatioArg ? parseFloat(weightRatioArg.split("=")[1]) : 0;
 
   if (dryRun) {
     console.log("=== DRY RUN MODE — DBは変更されません ===\n");
@@ -216,6 +229,51 @@ async function main() {
     console.log(
       `\n[完了] ${totalDetected}商品を検出、${totalMoved}件の価格レコードを分離しました。`,
     );
+  }
+
+  // === Second pass: weight variant suspects (ratio in [weightRatioMin, SUSPECT_RATIO)) ===
+  // These cannot be auto-split — reported for manual review only.
+  if (weightRatioMin > 0) {
+    const sep = "=".repeat(60);
+    console.log(
+      `\n${sep}\n重量バリアント疑い (価格比 ${weightRatioMin.toFixed(1)}〜${SUSPECT_RATIO}倍) — 手動確認が必要\n${sep}`,
+    );
+    let weightSuspects = 0;
+    for (const product of products) {
+      if (filterProductId && product.id !== filterProductId) continue;
+      if (product.priceRecords.length < 2) continue;
+
+      const prices = product.priceRecords.map((r) => r.price);
+      const minPrice = Math.min(...prices);
+      const maxPrice = Math.max(...prices);
+      const ratio = maxPrice / minPrice;
+
+      // Only flag products NOT already caught by the pack-split scan above
+      if (ratio >= SUSPECT_RATIO) continue;
+      if (ratio < weightRatioMin) continue;
+
+      weightSuspects++;
+      console.log(
+        `\n[${product.name}]  id=${product.id}  unit="${product.unit ?? "null"}"  volume="${product.volume ?? "null"}"`,
+      );
+      const sorted = [...product.priceRecords].sort((a, b) => a.price - b.price);
+      console.log(
+        `  価格一覧 (安→高): ${sorted.map((r) => `¥${r.price}`).join(", ")}`,
+      );
+      console.log(
+        `  価格比: ${ratio.toFixed(2)}倍 — 異なるサイズ（例: 2kgと5kg）が混在している可能性があります`,
+      );
+      console.log(
+        `  → 対処: 商品詳細で誤登録分を削除し、正しいサイズで再登録してください`,
+      );
+    }
+    if (weightSuspects === 0) {
+      console.log(`  (検出なし — 比率 ${weightRatioMin.toFixed(1)}〜${SUSPECT_RATIO}倍の商品はありません)`);
+    } else {
+      console.log(
+        `\n[重量バリアント疑い: ${weightSuspects}商品] ※ 自動分離不可 — 手動で確認・修正してください`,
+      );
+    }
   }
 }
 
