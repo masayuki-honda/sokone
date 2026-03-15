@@ -73,6 +73,7 @@ interface FavoriteItem {
 interface BottomPriceItem {
   productId: string;
   productName: string;
+  categoryId: string | null;
   categoryName: string | null;
   unit: string | null;
   volume: string | null;
@@ -233,6 +234,28 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchBottomPrices();
   }, [fetchBottomPrices]);
+
+  async function handleCategoryChange(productId: string, categoryId: string | null) {
+    try {
+      const res = await fetch(`/api/products/${productId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ categoryId }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setBottomPrices((prev) =>
+          prev.map((p) =>
+            p.productId === productId
+              ? { ...p, categoryId: updated.category?.id ?? null, categoryName: updated.category?.name ?? null }
+              : p,
+          ),
+        );
+      }
+    } catch (error) {
+      console.error("Failed to update category:", error);
+    }
+  }
 
   async function handleDeleteProduct() {
     if (!deleteTarget) return;
@@ -669,14 +692,16 @@ export default function DashboardPage() {
                             )}
                           </td>
                           <td className="py-3 pr-4 hidden sm:table-cell">
-                            {item.categoryName && (
-                              <Badge
-                                variant="outline"
-                                className="text-xs"
-                              >
-                                {item.categoryName}
-                              </Badge>
-                            )}
+                            <select
+                              className="text-xs border rounded px-1.5 py-0.5 bg-background text-foreground max-w-[110px]"
+                              value={item.categoryId ?? ""}
+                              onChange={(e) => handleCategoryChange(item.productId, e.target.value || null)}
+                            >
+                              <option value="">未分類</option>
+                              {categories.map((cat) => (
+                                <option key={cat.id} value={cat.id}>{cat.name}</option>
+                              ))}
+                            </select>
                           </td>
                           <td className="py-3 pr-4 text-right font-bold text-green-600">
                             ¥{item.bottomPrice.toLocaleString()}
