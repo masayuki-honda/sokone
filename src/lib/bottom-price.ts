@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 export interface BottomPriceInfo {
   productId: string;
   productName: string;
+  categoryId: string | null;
   categoryName: string | null;
   unit: string | null;
   volume: string | null;
@@ -107,6 +108,7 @@ export async function getBottomPrices(
     return {
       productId: product.id,
       productName: product.name,
+      categoryId: product.categoryId,
       categoryName: product.category?.name || null,
       unit: product.unit,
       volume: product.volume,
