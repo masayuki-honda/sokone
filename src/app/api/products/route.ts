@@ -13,7 +13,7 @@ import { Prisma } from "@prisma/client";
  * - sortBy: "name" | "price" | "recordCount" (default: "name")
  * - sortOrder: "asc" | "desc" (default: "asc")
  * - limit: max results (default 20)
- * - cursor: cursor-based pagination
+ * - cursor: offset-based pagination (integer encoded as string)
  */
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -28,7 +28,9 @@ export async function GET(request: NextRequest) {
   const sortBy = searchParams.get("sortBy") || "name";
   const sortOrder = (searchParams.get("sortOrder") || "asc") as "asc" | "desc";
   const limit = Math.min(Number(searchParams.get("limit")) || 20, 100);
-  const cursor = searchParams.get("cursor");
+  // cursor is now an integer offset (not a record ID) so deleted records don't break pagination
+  const cursorRaw = searchParams.get("cursor");
+  const offset = cursorRaw ? parseInt(cursorRaw, 10) : 0;
 
   // Build where clause (search + optional category/store filter)
   const normalized = q ? q.trim().replace(/\s+/g, " ").toLowerCase() : null;
@@ -75,9 +77,7 @@ export async function GET(request: NextRequest) {
     where,
     orderBy,
     take: fetchLimit,
-    ...(!isPriceSort && cursor
-      ? { cursor: { id: cursor }, skip: 1 }
-      : {}),
+    ...(!isPriceSort && offset > 0 ? { skip: offset } : {}),
     include: {
       category: {
         select: { id: true, name: true },
@@ -97,28 +97,21 @@ export async function GET(request: NextRequest) {
   let nextCursorValue: string | null;
 
   if (isPriceSort) {
-    // Sort by bottom price in JS
+    // Sort by bottom price in JS then apply offset manually
     const sorted = products.sort((a, b) => {
       const priceA = a.priceRecords[0]?.price ?? Infinity;
       const priceB = b.priceRecords[0]?.price ?? Infinity;
       return sortOrder === "asc" ? priceA - priceB : priceB - priceA;
     });
 
-    // Manual cursor-based pagination for price sort
-    let startIndex = 0;
-    if (cursor) {
-      const cursorIdx = sorted.findIndex((p) => p.id === cursor);
-      if (cursorIdx >= 0) startIndex = cursorIdx + 1;
-    }
-
-    const paginated = sorted.slice(startIndex, startIndex + limit + 1);
+    const paginated = sorted.slice(offset, offset + limit + 1);
     const hasMore = paginated.length > limit;
     result = hasMore ? paginated.slice(0, limit) : paginated;
-    nextCursorValue = hasMore ? result[result.length - 1].id : null;
+    nextCursorValue = hasMore ? String(offset + result.length) : null;
   } else {
     const hasMore = products.length > limit;
     result = hasMore ? products.slice(0, limit) : products;
-    nextCursorValue = hasMore ? result[result.length - 1].id : null;
+    nextCursorValue = hasMore ? String(offset + result.length) : null;
   }
 
   return NextResponse.json({
