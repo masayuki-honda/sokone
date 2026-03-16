@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { scrapeShopLeaflets, downloadAndSaveImage } from "@/lib/tokubai-scraper";
 import { analyzeImageWithSplit, OcrSourceType } from "@/lib/ocr";
 import { getR2SignedUrl } from "@/lib/r2";
-import { findOrCreateProduct } from "@/lib/product-matcher";
+import { findOrCreateProduct, findProductOnly } from "@/lib/product-matcher";
 import { createNotification } from "@/lib/notification";
 import { calculateUnitPriceForStorage } from "@/lib/unit-price";
 import crypto from "crypto";
@@ -182,11 +182,32 @@ export async function runScrapingPipeline(
               finalPrice = Math.round(item.price * 1.1);
             }
 
-            const product = await findOrCreateProduct(item.name, {
-              categoryHint: item.category_hint,
+            // For auto-flyer: only register price for products already in the catalog.
+            // Unknown products go to PendingReview so the catalog stays clean.
+            const product = await findProductOnly(item.name, {
               unit: item.unit,
               volume: item.volume,
             });
+
+            if (!product) {
+              // New product — route to PendingReview instead of auto-creating
+              await prisma.pendingReview.create({
+                data: {
+                  userId,
+                  storeId,
+                  sourceImageId: imageId,
+                  jobId: job.id,
+                  productName: item.name,
+                  price: finalPrice,
+                  confidence: item.confidence,
+                  categoryHint: item.category_hint || null,
+                  unit: item.unit || null,
+                  volume: item.volume || null,
+                },
+              }).catch(() => {}); // ignore duplicate errors
+              pendingReviews++;
+              continue;
+            }
 
             const unitPrice = calculateUnitPriceForStorage(
               finalPrice,
