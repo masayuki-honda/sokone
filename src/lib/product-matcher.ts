@@ -285,6 +285,78 @@ export async function matchProduct(
 /**
  * Find or create a product by name
  */
+/**
+ * Shared helper: resolve the lookup keys (normalizedName variants) for a product name + options.
+ * Used by both findOrCreateProduct and findProductOnly.
+ */
+function resolveLookupKeys(
+  name: string,
+  options?: { unit?: string | null; volume?: string | null },
+): { lookupNormalized: string; lookupLegacy: string; hasNewKey: boolean } {
+  const normalized = normalizeProductName(name);
+  const packQty = parseQuantity(options?.unit) ?? parseQuantity(options?.volume);
+  const packSuffix = packQty && packQty.value > 1 ? ` ×${packQty.value}` : "";
+  const hasPackCount = !!(packQty && packQty.value > 1);
+  const rawVolume = options?.volume?.trim() ?? null;
+  const volKey = rawVolume ? rawVolume.toLowerCase().replace(/\s+/g, "") : null;
+  const normNoSpaces = normalized.replace(/\s/g, "");
+  const volumeSuffix =
+    !hasPackCount && volKey && !normNoSpaces.includes(volKey) ? ` ${rawVolume}` : "";
+  const alreadyHasPack = !packSuffix || normalized.includes(packSuffix.trim());
+  const lookupNormalized = `${normalized}${volumeSuffix}${alreadyHasPack ? "" : packSuffix}`.trim();
+  const lookupLegacy =
+    normalized.includes(packSuffix.trim()) || !packSuffix
+      ? normalized
+      : `${normalized}${packSuffix}`;
+  return { lookupNormalized, lookupLegacy, hasNewKey: lookupNormalized !== lookupLegacy };
+}
+
+/**
+ * Find an existing product by name without creating a new one.
+ * Used by the auto-flyer pipeline so unknown products go to PendingReview
+ * instead of polluting the catalog.
+ *
+ * Returns the product if found, or null if it does not exist in the catalog.
+ */
+export async function findProductOnly(
+  name: string,
+  options?: {
+    unit?: string | null;
+    volume?: string | null;
+  },
+): Promise<{ id: string; name: string; unit: string | null; volume: string | null } | null> {
+  const { lookupNormalized, lookupLegacy, hasNewKey } = resolveLookupKeys(name, options);
+
+  let existing = await prisma.product.findFirst({
+    where: {
+      OR: [
+        { normalizedName: lookupNormalized },
+        { aliases: { some: { aliasName: { equals: lookupNormalized, mode: "insensitive" } } } },
+      ],
+    },
+  });
+
+  if (!existing && hasNewKey) {
+    existing = await prisma.product.findFirst({
+      where: {
+        OR: [
+          { normalizedName: lookupLegacy },
+          { aliases: { some: { aliasName: { equals: lookupLegacy, mode: "insensitive" } } } },
+        ],
+      },
+    });
+    if (existing) {
+      await prisma.product.update({
+        where: { id: existing.id },
+        data: { normalizedName: lookupNormalized },
+      });
+    }
+  }
+
+  if (!existing) return null;
+  return { id: existing.id, name: existing.name, unit: existing.unit, volume: existing.volume };
+}
+
 export async function findOrCreateProduct(
   name: string,
   options?: {
@@ -294,38 +366,17 @@ export async function findOrCreateProduct(
   },
 ): Promise<{ id: string; name: string; isNew: boolean; unit: string | null; volume: string | null }> {
   const normalized = normalizeProductName(name);
+  const { lookupNormalized, lookupLegacy, hasNewKey } = resolveLookupKeys(name, options);
 
-  // --- Pack count suffix (×6, ×24 etc.) ---
-  // Includes pack notation in the lookup key so single-can and 6-pack are separate products.
-  const packQty =
-    parseQuantity(options?.unit) ?? parseQuantity(options?.volume);
-  const packSuffix =
-    packQty && packQty.value > 1 ? ` ×${packQty.value}` : "";
+  // Re-derive display-name helpers (needed only for new product creation)
+  const packQty = parseQuantity(options?.unit) ?? parseQuantity(options?.volume);
+  const packSuffix = packQty && packQty.value > 1 ? ` ×${packQty.value}` : "";
   const hasPackCount = !!(packQty && packQty.value > 1);
-
-  // --- Volume/weight suffix (2kg, 5kg, 1L etc.) for SINGLE-unit products ---
-  // For multi-pack products the pack count already differentiates (×6 vs ×12).
-  // For single-unit products we include the volume so "お米 2kg" and "お米 5kg"
-  // register as distinct products.
   const rawVolume = options?.volume?.trim() ?? null;
   const volKey = rawVolume ? rawVolume.toLowerCase().replace(/\s+/g, "") : null;
   const normNoSpaces = normalized.replace(/\s/g, "");
   const volumeSuffix =
-    !hasPackCount && volKey && !normNoSpaces.includes(volKey)
-      ? ` ${rawVolume}`
-      : "";
-
-  // Full lookup key: name + optional-volume + optional-pack-count
-  const alreadyHasPack = !packSuffix || normalized.includes(packSuffix.trim());
-  const lookupNormalized =
-    `${normalized}${volumeSuffix}${alreadyHasPack ? "" : packSuffix}`.trim();
-
-  // Legacy key (before volume was incorporated) for backward-compatible lazy migration
-  const lookupLegacy =
-    normalized.includes(packSuffix.trim()) || !packSuffix
-      ? normalized
-      : `${normalized}${packSuffix}`;
-  const hasNewKey = lookupNormalized !== lookupLegacy;
+    !hasPackCount && volKey && !normNoSpaces.includes(volKey) ? ` ${rawVolume}` : "";
 
   // Try exact match on full key first
   let existing = await prisma.product.findFirst({
