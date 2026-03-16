@@ -35,7 +35,9 @@ const WEIGHT_KG_PATTERN = /(\d+(?:\.\d+)?)\s*(kg|KG|Kg|キログラム|キロ)/i
 // Count/quantity patterns: ×24, x6, 24缶, 6本, 6個入, 24本入り
 const QUANTITY_MULTIPLY_PATTERN = /[×xX](\d+)/;
 const QUANTITY_UNIT_PATTERN = /(\d+)\s*(缶|本|個|枚|袋|パック|食|包|玉|切れ|丁|尾|匹|束|房)\s*入/;
-const QUANTITY_SIMPLE_PATTERN = /(\d+)\s*(缶|本|個|枚|袋|パック|食)\s*$/;
+// Negative lookbehind (?<![\d/]) prevents matching the denominator in fraction strings
+// like "1/6個" (= 1/6 of a head) which should NOT be treated as a 6-pack.
+const QUANTITY_SIMPLE_PATTERN = /(?<![\d/])(\d+)\s*(缶|本|個|枚|袋|パック|食)\s*$/;
 
 /**
  * Parse a volume string (e.g., "350ml", "1L", "500g") into standardized units
