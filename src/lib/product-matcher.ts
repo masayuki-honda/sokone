@@ -64,6 +64,14 @@ const SYNONYM_GROUPS: string[][] = [
   ["食塩", "塩", "しお"],
 ];
 
+// Units that represent the SELLING FORMAT for produce/vegetables/fruit/fish/meat
+// (e.g., 1本 = 1 cucumber stick, 1袋 = 1 bag, 1パック = 1 pack).
+// These are incorporated into normalizedName so different selling formats are separate products.
+// Condition: only added when no metric volume (ml/g/L/kg) is present.
+const PRODUCE_SELLING_UNITS = new Set([
+  "本", "個", "玉", "球", "袋", "束", "房", "パック",
+]);
+
 // Build fast lookup: normalized synonym → canonical form
 const synonymMap = new Map<string, string>();
 for (const group of SYNONYM_GROUPS) {
@@ -292,9 +300,10 @@ export async function matchProduct(
 function resolveLookupKeys(
   name: string,
   options?: { unit?: string | null; volume?: string | null },
-): { lookupNormalized: string; lookupLegacy: string; hasNewKey: boolean } {
+): { lookupNormalized: string; lookupLegacy: string; hasNewKey: boolean; unitSuffix: string } {
   const normalized = normalizeProductName(name);
-  const packQty = parseQuantity(options?.unit) ?? parseQuantity(options?.volume);
+  const rawUnit = options?.unit?.trim() ?? null;
+  const packQty = parseQuantity(rawUnit) ?? parseQuantity(options?.volume);
   const packSuffix = packQty && packQty.value > 1 ? ` ×${packQty.value}` : "";
   const hasPackCount = !!(packQty && packQty.value > 1);
   const rawVolume = options?.volume?.trim() ?? null;
@@ -302,13 +311,39 @@ function resolveLookupKeys(
   const normNoSpaces = normalized.replace(/\s/g, "");
   const volumeSuffix =
     !hasPackCount && volKey && !normNoSpaces.includes(volKey) ? ` ${rawVolume}` : "";
+
+  // Produce/selling unit suffix: "1袋", "1本", "1パック", "1個", ...
+  // Strip leading "1" from "1袋" → "袋", "1パック" → "パック"
+  const strippedUnit = rawUnit ? rawUnit.replace(/^1\s*/, "").trim() : null;
+  // Metric volume (ml/g/L/kg) means it's a branded packaged good — skip unit suffix
+  const hasMetricVolume = rawVolume ? /\d+\s*(ml|g|l|kg)/i.test(rawVolume) : false;
+  const alreadyHasMultipackInName = normalized.includes("×");
+  const isProduceUnit = strippedUnit !== null && PRODUCE_SELLING_UNITS.has(strippedUnit);
+  // Check against name + volumeSuffix to avoid double-appending (e.g., volume="大入り・1パック")
+  const normWithVolNoSpaces = `${normalized}${volumeSuffix}`.replace(/\s/g, "");
+  const unitSuffix =
+    !hasPackCount &&
+    !alreadyHasMultipackInName &&
+    !hasMetricVolume &&
+    isProduceUnit &&
+    !normNoSpaces.includes(strippedUnit!) &&
+    !normWithVolNoSpaces.includes(strippedUnit!)
+      ? ` 1${strippedUnit}`
+      : "";
+
   const alreadyHasPack = !packSuffix || normalized.includes(packSuffix.trim());
-  const lookupNormalized = `${normalized}${volumeSuffix}${alreadyHasPack ? "" : packSuffix}`.trim();
-  const lookupLegacy =
-    normalized.includes(packSuffix.trim()) || !packSuffix
+  const packPart = alreadyHasPack ? "" : packSuffix;
+  const lookupNormalized = `${normalized}${volumeSuffix}${packPart}${unitSuffix}`.trim();
+
+  // Legacy key: existing products stored before this naming convention was adopted
+  const baseWithoutUnitSuffix = `${normalized}${volumeSuffix}${packPart}`.trim();
+  const lookupLegacy = unitSuffix
+    ? baseWithoutUnitSuffix
+    : normalized.includes(packSuffix.trim()) || !packSuffix
       ? normalized
       : `${normalized}${packSuffix}`;
-  return { lookupNormalized, lookupLegacy, hasNewKey: lookupNormalized !== lookupLegacy };
+
+  return { lookupNormalized, lookupLegacy, hasNewKey: lookupNormalized !== lookupLegacy, unitSuffix };
 }
 
 /**
@@ -366,7 +401,7 @@ export async function findOrCreateProduct(
   },
 ): Promise<{ id: string; name: string; isNew: boolean; unit: string | null; volume: string | null }> {
   const normalized = normalizeProductName(name);
-  const { lookupNormalized, lookupLegacy, hasNewKey } = resolveLookupKeys(name, options);
+  const { lookupNormalized, lookupLegacy, hasNewKey, unitSuffix } = resolveLookupKeys(name, options);
 
   // Re-derive display-name helpers (needed only for new product creation)
   const packQty = parseQuantity(options?.unit) ?? parseQuantity(options?.volume);
@@ -435,13 +470,16 @@ export async function findOrCreateProduct(
     }
   }
 
-  // Build display name: append volume and/or pack count if not already in the OCR name
+  // Build display name: append volume, pack count, and/or produce unit if not already in the OCR name
   let displayName = name.trim();
   if (volumeSuffix && volKey && !name.trim().toLowerCase().replace(/\s+/g, "").includes(volKey)) {
     displayName += volumeSuffix;
   }
   if (packSuffix && !name.trim().toLowerCase().includes(packSuffix.trim())) {
     displayName += packSuffix;
+  }
+  if (unitSuffix) {
+    displayName += unitSuffix;
   }
 
   // Create new product
