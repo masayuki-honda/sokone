@@ -69,10 +69,11 @@ describe("Header", () => {
     });
     render(<Header />);
 
-    expect(screen.getByText("店舗管理")).toBeInTheDocument();
+    // PRIMARY_LINKS are always visible in the desktop nav
     expect(screen.getByText("商品一覧")).toBeInTheDocument();
-    expect(screen.getByText("カテゴリ")).toBeInTheDocument();
     expect(screen.getByText("アップロード")).toBeInTheDocument();
+    // "管理" dropdown button is always visible
+    expect(screen.getByText("管理")).toBeInTheDocument();
     expect(screen.getByText("テストユーザー")).toBeInTheDocument();
   });
 
