@@ -308,10 +308,8 @@ function LeafletCard({ leaflet, showStore = true }: { leaflet: Leaflet; showStor
 
 // ---- store leaflet group with tab selector ---------------------------------
 
-function leafletTabLabel(leaflet: Leaflet, index: number): string {
-  if (leaflet.validFrom || leaflet.validTo) return fmtValidRange(leaflet.validFrom, leaflet.validTo);
-  if (leaflet.title) return leaflet.title.slice(0, 20);
-  return `チラシ${index + 1}`;
+function leafletTabLabel(_leaflet: Leaflet, index: number): string {
+  return `チラシ${index + 1}枚目`;
 }
 
 function StoreLeafletGroup({ group }: { group: StoreGroup }) {

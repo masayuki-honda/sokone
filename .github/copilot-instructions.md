@@ -164,6 +164,7 @@ sokone/
 │   │   ├── categories/        # カテゴリ管理
 │   │   ├── dashboard/         # ダッシュボード
 │   │   ├── jobs/              # ジョブ管理ダッシュボード
+│   │   ├── leaflets/          # チラシ閲覧（店舗グルーピング・タブ切り替え）
 │   │   ├── notifications/     # 通知一覧・設定
 │   │   ├── reviews/           # 確認待ちキュー（低信頼度OCR結果）
 │   │   ├── stores/            # 店舗管理
@@ -192,6 +193,8 @@ sokone/
 │   │   ├── product-matcher.ts # 商品名寄せ
 │   │   ├── bottom-price.ts    # 底値計算サービス
 │   │   ├── scraping-pipeline.ts # 自動スクレイプ→OCR→価格登録パイプライン
+│   │   │                      # ・ScrapedLeaflet をDL前に作成し scrapedLeafletId を画像に紐付け
+│   │   │                      # ・画像0件の場合 ScrapedLeaflet を自動リセット
 │   │   ├── geocode.ts         # GPS座標・近辺店舗検索
 │   │   ├── image-processing.ts # 画像リサイズ・HEIC変換 (sharp)
 │   │   ├── session.ts         # デュアル認証（web + mobile）セッション取得
