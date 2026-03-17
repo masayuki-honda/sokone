@@ -84,6 +84,24 @@ function isCurrentlyActive(validFrom: string | null, validTo: string | null): bo
   return true;
 }
 
+// Group leaflets by store
+interface StoreGroup {
+  storeId: string;
+  storeName: string;
+  leaflets: Leaflet[];
+}
+
+function groupLeafletsByStore(leaflets: Leaflet[]): StoreGroup[] {
+  const map = new Map<string, StoreGroup>();
+  for (const l of leaflets) {
+    if (!map.has(l.storeId)) {
+      map.set(l.storeId, { storeId: l.storeId, storeName: l.storeName, leaflets: [] });
+    }
+    map.get(l.storeId)!.leaflets.push(l);
+  }
+  return Array.from(map.values());
+}
+
 // Group pending items by saleDate for display
 function groupByDate(items: PendingItem[]): Map<string, PendingItem[]> {
   const groups = new Map<string, PendingItem[]>();
@@ -152,7 +170,7 @@ function ImageCarousel({ images }: { images: LeafletImage[] }) {
 }
 
 function SaleItemsSection({ items }: { items: PendingItem[] }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
 
   if (items.length === 0) return null;
 
@@ -235,7 +253,7 @@ function SaleItemsSection({ items }: { items: PendingItem[] }) {
   );
 }
 
-function LeafletCard({ leaflet }: { leaflet: Leaflet }) {
+function LeafletCard({ leaflet, showStore = true }: { leaflet: Leaflet; showStore?: boolean }) {
   const active = isCurrentlyActive(leaflet.validFrom, leaflet.validTo);
   const hasTodayItems = leaflet.pendingItems.some((i) => isTodaySaleDate(i.saleDate));
   const validRange = fmtValidRange(leaflet.validFrom, leaflet.validTo);
@@ -245,10 +263,12 @@ function LeafletCard({ leaflet }: { leaflet: Leaflet }) {
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-2">
           <div>
-            <div className="flex items-center gap-2 mb-1">
-              <Store className="h-4 w-4 text-muted-foreground" />
-              <span className="font-semibold">{leaflet.storeName}</span>
-            </div>
+            {showStore && (
+              <div className="flex items-center gap-2 mb-1">
+                <Store className="h-4 w-4 text-muted-foreground" />
+                <span className="font-semibold">{leaflet.storeName}</span>
+              </div>
+            )}
             {leaflet.title && (
               <p className="text-sm text-muted-foreground line-clamp-2">
                 {leaflet.title}
@@ -310,6 +330,7 @@ export default function LeafletsPage() {
 
   // Only show leaflets that have at least one extracted product
   const leafletsWithProducts = leaflets.filter((l) => l.pendingItems.length > 0);
+  const storeGroups = groupLeafletsByStore(leafletsWithProducts);
 
   const hasTodayLeaflets = leafletsWithProducts.some((l) =>
     l.pendingItems.some((i) => isTodaySaleDate(i.saleDate))
@@ -360,9 +381,24 @@ export default function LeafletsPage() {
             </p>
           </div>
         ) : (
-          <div className="space-y-6">
-            {leafletsWithProducts.map((leaflet) => (
-              <LeafletCard key={leaflet.id} leaflet={leaflet} />
+          <div className="space-y-8">
+            {storeGroups.map((group) => (
+              <div key={group.storeId}>
+                <div className="flex items-center gap-2 mb-3">
+                  <Store className="h-5 w-5 text-muted-foreground" />
+                  <h2 className="text-lg font-semibold">{group.storeName}</h2>
+                  {group.leaflets.length > 1 && (
+                    <Badge variant="secondary" className="text-xs">
+                      {group.leaflets.length}件のチラシ
+                    </Badge>
+                  )}
+                </div>
+                <div className="space-y-4">
+                  {group.leaflets.map((leaflet) => (
+                    <LeafletCard key={leaflet.id} leaflet={leaflet} showStore={false} />
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
         )}
