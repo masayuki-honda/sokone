@@ -74,6 +74,7 @@ describe("Header", () => {
     expect(screen.getByText("アップロード")).toBeInTheDocument();
     // "管理" dropdown button is always visible
     expect(screen.getByText("管理")).toBeInTheDocument();
+    // User name is displayed in desktop nav
     expect(screen.getByText("テストユーザー")).toBeInTheDocument();
   });
 

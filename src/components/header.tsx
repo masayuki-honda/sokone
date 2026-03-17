@@ -92,6 +92,11 @@ export function Header() {
                     className="h-7 w-7 rounded-full"
                   />
                 )}
+                {session.user.name && (
+                  <span className="text-sm text-zinc-600 dark:text-zinc-400 whitespace-nowrap hidden lg:inline">
+                    {session.user.name}
+                  </span>
+                )}
                 <button
                   onClick={() => signOut({ callbackUrl: "/" })}
                   className="rounded-md px-2 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800 whitespace-nowrap"
