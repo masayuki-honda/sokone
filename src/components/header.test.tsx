@@ -26,6 +26,7 @@ vi.mock("lucide-react", () => ({
   X: () => <span data-testid="x-icon">X</span>,
   Bell: () => <span data-testid="bell-icon">Bell</span>,
   Check: () => <span data-testid="check-icon">Check</span>,
+  ChevronDown: () => <span data-testid="chevron-down-icon">▼</span>,
 }));
 
 // Mock NotificationBell to isolate Header tests
