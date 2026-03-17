@@ -107,6 +107,17 @@ export async function runScrapingPipeline(
 
     // 2. Scrape leaflets
     const leaflets = await scrapeShopLeaflets(store.tokubaiShopUrl, 5);
+
+    // If images were deleted externally (e.g. by cleanup scripts), reset the
+    // scraped-leaflet records so they are treated as new and re-downloaded.
+    const autoFlyerCount = await prisma.uploadedImage.count({
+      where: { storeId, sourceType: "auto_flyer" },
+    });
+    if (autoFlyerCount === 0 && store.scrapedLeaflets.length > 0) {
+      await prisma.scrapedLeaflet.deleteMany({ where: { storeId } });
+      store.scrapedLeaflets = [];
+    }
+
     const alreadyScrapedIds = new Set(
       store.scrapedLeaflets.map((l) => l.leafletId)
     );
