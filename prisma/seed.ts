@@ -12,17 +12,25 @@ const adapter = new PrismaNeon({
 const prisma = new PrismaClient({ adapter });
 
 const categories = [
-  { name: "酒類", displayOrder: 1 },
-  { name: "肉類", displayOrder: 2 },
-  { name: "野菜類", displayOrder: 3 },
-  { name: "魚介類", displayOrder: 4 },
-  { name: "卵", displayOrder: 5 },
-  { name: "乳製品", displayOrder: 6 },
-  { name: "飲料", displayOrder: 7 },
-  { name: "調味料", displayOrder: 8 },
-  { name: "冷凍食品", displayOrder: 9 },
-  { name: "お菓子", displayOrder: 10 },
-  { name: "日用品", displayOrder: 11 },
+  // 酒類サブカテゴリ（旧「酒類」を細分化）
+  { name: "酒類（ビール・発泡酒）", displayOrder: 1 },
+  { name: "酒類（チューハイ）", displayOrder: 2 },
+  { name: "酒類（ワイン）", displayOrder: 3 },
+  { name: "酒類（日本酒）", displayOrder: 4 },
+  { name: "酒類（焼酎）", displayOrder: 5 },
+  { name: "酒類（ウィスキー）", displayOrder: 6 },
+  { name: "酒類（梅酒・リキュール）", displayOrder: 7 },
+  { name: "酒類（その他）", displayOrder: 8 },
+  { name: "肉類", displayOrder: 9 },
+  { name: "野菜類", displayOrder: 10 },
+  { name: "魚介類", displayOrder: 11 },
+  { name: "卵", displayOrder: 12 },
+  { name: "乳製品", displayOrder: 13 },
+  { name: "飲料", displayOrder: 14 },
+  { name: "調味料", displayOrder: 15 },
+  { name: "冷凍食品", displayOrder: 16 },
+  { name: "お菓子", displayOrder: 17 },
+  { name: "日用品", displayOrder: 18 },
   { name: "その他", displayOrder: 99 },
 ];
 
