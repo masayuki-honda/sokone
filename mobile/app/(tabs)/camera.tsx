@@ -4,7 +4,6 @@ import {
   StyleSheet,
   FlatList,
   Image,
-  Pressable,
   Alert,
 } from "react-native";
 import { Text, Button, useTheme, IconButton } from "react-native-paper";
