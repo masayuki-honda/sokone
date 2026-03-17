@@ -152,6 +152,7 @@ export default function CameraScreen() {
         contentContainerStyle={styles.imageGrid}
         renderItem={({ item, index }) => (
           <View style={styles.imageWrapper}>
+            {/* eslint-disable-next-line jsx-a11y/alt-text */}
             <Image source={{ uri: item.uri }} style={styles.thumbnail} />
             <IconButton
               icon="close-circle"

@@ -198,7 +198,7 @@ export default function UploadScreen() {
       Alert.alert("エラー", "アップロード中にエラーが発生しました");
       setUploading(false);
     }
-  }, [selectedStoreId, sourceType, imageUris, router]);
+  }, [selectedStoreId, sourceType, imageUris, router, isConnected]);
 
   if (loading) {
     return (
@@ -249,6 +249,7 @@ export default function UploadScreen() {
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.imageRow}
         renderItem={({ item }) => (
+          // eslint-disable-next-line jsx-a11y/alt-text
           <Image source={{ uri: item }} style={styles.previewImage} />
         )}
       />

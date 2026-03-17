@@ -41,7 +41,7 @@ const PRODUCE_SELLING_UNITS = new Set([
   "本", "個", "玉", "球", "袋", "束", "房", "パック",
 ]);
 
-function normalizeJa(name: string): string {
+function _normalizeJa(name: string): string {
   let s = name;
   // Full-width alphanumeric → half-width
   s = s.replace(/[\uff01-\uff5e]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0));

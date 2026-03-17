@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect as _useEffect } from "react";
 import { View, StyleSheet } from "react-native";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
