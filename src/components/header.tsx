@@ -3,88 +3,87 @@
 import { useState } from "react";
 import { useSession, signOut } from "next-auth/react";
 import Link from "next/link";
-import { Menu, X } from "lucide-react";
+import { Menu, X, ChevronDown } from "lucide-react";
 import { NotificationBell } from "@/components/notification-bell";
+
+// Items always visible in desktop nav
+const PRIMARY_LINKS = [
+  { href: "/products", label: "商品一覧" },
+  { href: "/upload", label: "アップロード" },
+  { href: "/watches", label: "ウォッチ" },
+  { href: "/reviews", label: "確認待ち" },
+];
+
+// Items collapsed into the "管理" dropdown
+const MANAGE_LINKS = [
+  { href: "/dashboard", label: "📊 ダッシュボード" },
+  { href: "/stores", label: "🏪 店舗管理" },
+  { href: "/categories", label: "📂 カテゴリ" },
+  { href: "/uploads", label: "🖼️ アップロード履歴" },
+  { href: "/records", label: "📝 登録履歴" },
+  { href: "/leaflets", label: "🗞️ チラシ" },
+  { href: "/jobs", label: "⚙️ ジョブ" },
+];
 
 export function Header() {
   const { data: session, status } = useSession();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [manageOpen, setManageOpen] = useState(false);
 
   return (
     <header className="border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
-      <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
-        <Link href="/dashboard" className="flex items-center gap-2">
+      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
+        <Link href="/dashboard" className="flex items-center gap-2 shrink-0">
           <span className="text-xl font-bold">🏷️ Sokone</span>
         </Link>
 
         {/* Desktop nav */}
-        <nav className="hidden sm:flex items-center gap-4">
+        <nav className="hidden md:flex items-center gap-3">
           {status === "loading" ? (
             <span className="text-sm text-zinc-400">...</span>
           ) : session ? (
             <>
-              <Link
-                href="/stores"
-                className="text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
-              >
-                店舗管理
-              </Link>
-              <Link
-                href="/products"
-                className="text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
-              >
-                商品一覧
-              </Link>
-              <Link
-                href="/categories"
-                className="text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
-              >
-                カテゴリ
-              </Link>
-              <Link
-                href="/watches"
-                className="text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
-              >
-                ウォッチ
-              </Link>
-              <Link
-                href="/upload"
-                className="text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
-              >
-                アップロード
-              </Link>
-              <Link
-                href="/uploads"
-                className="text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
-              >
-                履歴
-              </Link>
-              <Link
-                href="/records"
-                className="text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
-              >
-                登録履歴
-              </Link>
-              <Link
-                href="/jobs"
-                className="text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
-              >
-                ジョブ
-              </Link>
-              <Link
-                href="/leaflets"
-                className="text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
-              >
-                チラシ
-              </Link>
-              <Link
-                href="/reviews"
-                className="text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
-              >
-                確認待ち
-              </Link>
+              {PRIMARY_LINKS.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 whitespace-nowrap"
+                >
+                  {link.label}
+                </Link>
+              ))}
+
+              {/* 管理 dropdown */}
+              <div className="relative">
+                <button
+                  onClick={() => setManageOpen((o) => !o)}
+                  className="flex items-center gap-0.5 text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 whitespace-nowrap"
+                >
+                  管理
+                  <ChevronDown className={`h-3.5 w-3.5 transition-transform ${manageOpen ? "rotate-180" : ""}`} />
+                </button>
+                {manageOpen && (
+                  <>
+                    {/* backdrop */}
+                    <div className="fixed inset-0 z-10" onClick={() => setManageOpen(false)} />
+                    <div className="absolute right-0 top-full mt-2 z-20 w-44 rounded-lg border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+                      {MANAGE_LINKS.map((link) => (
+                        <Link
+                          key={link.href}
+                          href={link.href}
+                          onClick={() => setManageOpen(false)}
+                          className="block px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                        >
+                          {link.label}
+                        </Link>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+
               <NotificationBell />
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
                 {session.user.image && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -93,12 +92,9 @@ export function Header() {
                     className="h-7 w-7 rounded-full"
                   />
                 )}
-                <span className="text-sm text-zinc-600 dark:text-zinc-400">
-                  {session.user.name}
-                </span>
                 <button
                   onClick={() => signOut({ callbackUrl: "/" })}
-                  className="rounded-md px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                  className="rounded-md px-2 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800 whitespace-nowrap"
                 >
                   ログアウト
                 </button>
@@ -117,7 +113,7 @@ export function Header() {
         {/* Mobile hamburger */}
         {session && (
           <button
-            className="sm:hidden p-2 -mr-2 text-zinc-600 dark:text-zinc-400"
+            className="md:hidden p-2 -mr-2 text-zinc-600 dark:text-zinc-400"
             onClick={() => setMenuOpen(!menuOpen)}
             aria-label="メニュー"
           >
@@ -127,7 +123,7 @@ export function Header() {
         {!session && status !== "loading" && (
           <Link
             href="/auth/signin"
-            className="sm:hidden rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+            className="md:hidden rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
           >
             ログイン
           </Link>
@@ -136,8 +132,8 @@ export function Header() {
 
       {/* Mobile dropdown menu */}
       {menuOpen && session && (
-        <div className="sm:hidden border-t border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
-          <nav className="mx-auto max-w-5xl px-4 py-3 space-y-1">
+        <div className="md:hidden border-t border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+          <nav className="mx-auto max-w-6xl px-4 py-3 space-y-1">
             <Link
               href="/dashboard"
               onClick={() => setMenuOpen(false)}
