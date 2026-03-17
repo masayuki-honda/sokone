@@ -109,6 +109,11 @@ export function normalizeProductName(name: string): string {
   // Lowercase
   normalized = normalized.toLowerCase();
 
+  // Strip bread slice-cut notation (e.g., "6枚切り", "8枚切") before multipack normalization.
+  // Different slice counts of the same bread are identical products at the same price.
+  // Must run before the multipack regex to prevent "6枚切り" → "×6切り" misparse.
+  normalized = normalized.replace(/\d+\s*枚切り?/g, "");
+
   // Normalize pack/multipack notation: "6缶パック", "6本パック", "6個入" etc.
   // Only normalize when count >= 2 (count of 1 is a single item, not a multi-pack)
   normalized = normalized.replace(

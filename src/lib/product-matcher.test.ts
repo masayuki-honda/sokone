@@ -49,4 +49,26 @@ describe("normalizeProductName", () => {
     const input = "大根 1本";
     expect(normalizeProductName(input)).toBe("大根 1本");
   });
+
+  describe("bread slice-count normalization", () => {
+    it("strips '6枚切り' — different slice counts are the same product", () => {
+      expect(normalizeProductName("超熟 6枚切り")).toBe("超熟");
+    });
+
+    it("strips '8枚切り'", () => {
+      expect(normalizeProductName("超熟 8枚切り")).toBe("超熟");
+    });
+
+    it("strips '5枚切り'", () => {
+      expect(normalizeProductName("超熟 5枚切り")).toBe("超熟");
+    });
+
+    it("strips '6枚切' without trailing り", () => {
+      expect(normalizeProductName("超熟6枚切")).toBe("超熟");
+    });
+
+    it("does not strip '20枚入り' — that is a multipack count", () => {
+      expect(normalizeProductName("ウエハース 20枚入り")).toBe("ウエハース ×20");
+    });
+  });
 });
