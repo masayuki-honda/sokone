@@ -1209,6 +1209,47 @@ sokone/
 | 5 | DELETE | `/api/devices/{token}` | デバイストークン削除 |
 
 ---
+
+# Phase 6: データ品質改善・チラシ閲覧
+
+**前提:** Phase 5 モバイルアプリ完了後に順次実施
+
+## Sprint 概要
+
+### Sprint 17: 自動チラシのカタログ汚染防止 ✅
+
+- [x] `findProductOnly` — 自動スクレイピング時は既存商品のみ価格登録（新規商品は未登録のまま確認待ちキューへ）
+- [x] `cleanup-auto-flyer-products.ts` — auto_flyer起因の孤立商品を一括削除するスクリプト
+
+### Sprint 18: 野菜・生鮮の販売単位表示 ✅
+
+- [x] `PRODUCE_SELLING_UNITS` — 「1袋」「1本」「1パック」等の売り単位辞書を product-matcher に追加
+- [x] OCR プロンプト改善 — 野菜・生鮮の販売単位を抽出するよう指示追加
+- [x] `fix-vegetable-units.ts` — 既存野菜商品の商品名を販売単位付きに更新（198件）
+
+### Sprint 19: 飲料・酒類の容量サフィックス ✅
+
+- [x] OCR プロンプト改善 — 飲料・酒類の容量（350ml/500ml 等）を必須フィールドとして抽出
+- [x] `fix-volume-suffix.ts` — 既存飲料・酒類商品の商品名に容量を付加（155件）
+
+### Sprint 20: チラシ閲覧ページ ✅
+
+- [x] `ScrapedLeaflet` に `valid_from` / `valid_to` を追加（チラシ有効期間）
+- [x] `PendingReview` に `sale_date` を追加（曜日別特売日抽出）
+- [x] マイグレーション: `20260317000000_add_leaflet_validity_and_sale_date`
+- [x] `scraping-pipeline.ts` 改善 — `parseLeafletDates()` / `parseSaleDate()` ヘルパー追加、有効期間・特売日を DB に保存
+- [x] OCR スキーマ更新 — `sale_date` フィールド（YYYY-MM-DD 形式）を Gemini レスポンスに追加
+- [x] `GET /api/leaflets` — 有効チラシ一覧 API（ページ画像・特売商品付き）
+- [x] `/leaflets` — チラシ閲覧ページ（有効期間表示・今日の特売ハイライト）
+- [x] ヘッダーナビゲーションに「チラシ」リンク追加
+
+## API 一覧
+
+| Phase | Method | Path | 説明 |
+|-------|--------|------|------|
+| 6 | GET | `/api/leaflets` | 有効チラシ一覧（画像・特売商品付き） |
+
+---
 ---
 
 # 将来構想（Phase 6以降 / 検討中）
