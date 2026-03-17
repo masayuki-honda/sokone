@@ -16,6 +16,8 @@ import {
   Loader2,
   Tag,
   Flame,
+  X,
+  ZoomIn,
 } from "lucide-react";
 // ---- types ------------------------------------------------------------------
 
@@ -120,7 +122,18 @@ function groupByDate(items: PendingItem[]): Map<string, PendingItem[]> {
 
 function ImageCarousel({ images }: { images: LeafletImage[] }) {
   const [index, setIndex] = useState(0);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const validImages = images.filter((img) => img.signedUrl);
+
+  // Close lightbox on Escape key
+  useEffect(() => {
+    if (!lightboxOpen) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setLightboxOpen(false);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [lightboxOpen]);
 
   if (validImages.length === 0) {
     return (
@@ -134,40 +147,101 @@ function ImageCarousel({ images }: { images: LeafletImage[] }) {
   const current = validImages[index];
 
   return (
-    <div className="relative">
-      <div className="relative w-full aspect-[4/3] overflow-hidden rounded-lg bg-muted">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={current.signedUrl!}
-          alt={`チラシ ${index + 1}ページ目`}
-          className="w-full h-full object-contain"
-        />
-      </div>
+    <>
+      {/* Lightbox overlay */}
+      {lightboxOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4"
+          onClick={() => setLightboxOpen(false)}
+        >
+          {/* Close button */}
+          <button
+            className="absolute top-4 right-4 text-white bg-black/50 rounded-full p-2 hover:bg-black/80 transition-colors"
+            onClick={(e) => { e.stopPropagation(); setLightboxOpen(false); }}
+            aria-label="閉じる"
+          >
+            <X className="h-6 w-6" />
+          </button>
 
-      {validImages.length > 1 && (
-        <div className="flex items-center justify-between mt-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setIndex((i) => Math.max(0, i - 1))}
-            disabled={index === 0}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <span className="text-xs text-muted-foreground">
-            {index + 1} / {validImages.length}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setIndex((i) => Math.min(validImages.length - 1, i + 1))}
-            disabled={index === validImages.length - 1}
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
+          {/* Prev/Next in lightbox */}
+          {validImages.length > 1 && (
+            <button
+              className="absolute left-4 top-1/2 -translate-y-1/2 text-white bg-black/50 rounded-full p-2 hover:bg-black/80 transition-colors disabled:opacity-30"
+              onClick={(e) => { e.stopPropagation(); setIndex((i) => Math.max(0, i - 1)); }}
+              disabled={index === 0}
+              aria-label="前の画像"
+            >
+              <ChevronLeft className="h-6 w-6" />
+            </button>
+          )}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={current.signedUrl!}
+            alt={`チラシ ${index + 1}ページ目`}
+            className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+          {validImages.length > 1 && (
+            <button
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-white bg-black/50 rounded-full p-2 hover:bg-black/80 transition-colors disabled:opacity-30"
+              onClick={(e) => { e.stopPropagation(); setIndex((i) => Math.min(validImages.length - 1, i + 1)); }}
+              disabled={index === validImages.length - 1}
+              aria-label="次の画像"
+            >
+              <ChevronRight className="h-6 w-6" />
+            </button>
+          )}
+          {validImages.length > 1 && (
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white text-sm bg-black/50 px-3 py-1 rounded-full">
+              {index + 1} / {validImages.length}
+            </div>
+          )}
         </div>
       )}
-    </div>
+
+      {/* Thumbnail carousel */}
+      <div className="relative">
+        <button
+          className="relative w-full aspect-[4/3] overflow-hidden rounded-lg bg-muted group cursor-zoom-in"
+          onClick={() => setLightboxOpen(true)}
+          aria-label="拡大表示"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={current.signedUrl!}
+            alt={`チラシ ${index + 1}ページ目`}
+            className="w-full h-full object-contain transition-transform duration-200 group-hover:scale-[1.02]"
+          />
+          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20 rounded-lg">
+            <ZoomIn className="h-8 w-8 text-white drop-shadow" />
+          </div>
+        </button>
+
+        {validImages.length > 1 && (
+          <div className="flex items-center justify-between mt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIndex((i) => Math.max(0, i - 1))}
+              disabled={index === 0}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              {index + 1} / {validImages.length}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIndex((i) => Math.min(validImages.length - 1, i + 1))}
+              disabled={index === validImages.length - 1}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 
