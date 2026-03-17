@@ -14,6 +14,53 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * Parse a leaflet title for a validity date range.
+ * Handles patterns like:
+ *   "3月15日(土)〜3月21日(金)"
+ *   "3/15(土)〜3/21(金)"
+ *   "2026年3月15日〜2026年3月21日"
+ * Returns { validFrom, validTo } in JST (midnight), or nulls if not parsed.
+ */
+function parseLeafletDates(
+  title: string | null | undefined,
+): { validFrom: Date | null; validTo: Date | null } {
+  if (!title) return { validFrom: null, validTo: null };
+
+  const now = new Date();
+  const year = now.getFullYear();
+
+  // Pattern 1: "M月D日" or "M/D"
+  const JP_DATE = `(\\d{1,2})[月/](\\d{1,2})(?:日)?`;
+  const range = new RegExp(`${JP_DATE}[()（）\\w]*\\s*[〜~～\\-]\\s*${JP_DATE}`);
+  const m = title.match(range);
+  if (!m) return { validFrom: null, validTo: null };
+
+  const fromMonth = parseInt(m[1], 10);
+  const fromDay   = parseInt(m[2], 10);
+  const toMonth   = parseInt(m[3], 10);
+  const toDay     = parseInt(m[4], 10);
+
+  // Assume current year; if "from" month is in the future relative to "to" month wrap
+  // (e.g., title scraped in December: 12/31〜1/4 spans year boundary)
+  let fromYear = year;
+  let toYear = year;
+  if (toMonth < fromMonth) toYear = year + 1;
+
+  const validFrom = new Date(fromYear, fromMonth - 1, fromDay, 0, 0, 0);
+  const validTo   = new Date(toYear,   toMonth - 1,   toDay,   23, 59, 59);
+
+  return { validFrom, validTo };
+}
+
+/** Parse an ISO date string (YYYY-MM-DD) from OCR to a Date, or null */
+function parseSaleDate(raw: string | null | undefined): Date | null {
+  if (!raw) return null;
+  const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  return new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3]), 0, 0, 0);
+}
+
 interface PipelineResult {
   jobId: string;
   imagesScraped: number;
@@ -94,11 +141,12 @@ export async function runScrapingPipeline(
           errors.push(`DL: ${err instanceof Error ? err.message : String(err)}`);
         }
       }
-      // Record leaflet as scraped
+      // Record leaflet as scraped (with parsed validity dates)
+      const { validFrom, validTo } = parseLeafletDates(leaflet.title);
       await prisma.scrapedLeaflet.upsert({
         where: { storeId_leafletId: { storeId, leafletId: leaflet.leafletId } },
-        create: { storeId, leafletId: leaflet.leafletId, title: leaflet.title || null, pageCount: savedCount },
-        update: { title: leaflet.title || undefined, pageCount: savedCount, scrapedAt: new Date() },
+        create: { storeId, leafletId: leaflet.leafletId, title: leaflet.title || null, pageCount: savedCount, validFrom, validTo },
+        update: { title: leaflet.title || undefined, pageCount: savedCount, scrapedAt: new Date(), validFrom: validFrom ?? undefined, validTo: validTo ?? undefined },
       });
     }
 
@@ -203,6 +251,7 @@ export async function runScrapingPipeline(
                   categoryHint: item.category_hint || null,
                   unit: item.unit || null,
                   volume: item.volume || null,
+                  saleDate: parseSaleDate(item.sale_date),
                 },
               }).catch(() => {}); // ignore duplicate errors
               pendingReviews++;
@@ -290,6 +339,7 @@ export async function runScrapingPipeline(
                 unit: item.unit || null,
                 volume: item.volume || null,
                 isTaxIncluded: item.is_tax_included !== false,
+                saleDate: parseSaleDate(item.sale_date),
               },
             });
             pendingReviews++;

@@ -15,6 +15,7 @@ export interface OcrItem {
   is_tax_included: boolean;
   confidence: number;
   identified_by: "text" | "image" | "both";
+  sale_date: string | null; // ISO date "YYYY-MM-DD" if item has a specific sale day, null otherwise
 }
 
 export interface OcrResult {
@@ -70,6 +71,11 @@ const ocrResponseSchema: Schema = {
             description: "テキストから識別: text / 画像から識別: image / 両方: both",
             format: "enum",
             enum: ["text", "image", "both"],
+          },
+          sale_date: {
+            type: SchemaType.STRING,
+            description: "この商品の特売日（YYYY-MM-DD形式）。チラシに曜日や日付限定の表記がある場合のみ設定。不明・非限定の場合はnull",
+            nullable: true,
           },
         },
         required: [
@@ -155,7 +161,14 @@ const BASE_PROMPT = `以下の画像はスーパーマーケットの商品価�
 - 1束売り（ほうれん草・小松菜・三つ葉等）→ unit に「束」と記載
 - 1玉売り（キャベツ・白菜・たまねぎ等）→ unit に「玉」と記載
 - 1房売り（ブドウ・バナナ等）→ unit に「房」と記載
-price タグに「○本入り」「○個入り」等の入数が書いてあれば必ず抽出してください。`;
+price タグに「○本入り」「○個入り」等の入数が書いてあれば必ず抽出してください。
+
+【sale_date（特売日）の抽出ルール】
+チラシ内で特定の曜日・日付だけ特売になっている商品がある場合、その日付を sale_date に ISO 形式（YYYY-MM-DD）で記載してください。
+- チラシ上部や商品近くに「土曜限定」「3/17(月)のみ」「本日のみ」等の表記がある場合 → sale_date を設定
+- チラシのカレンダー欄に曜日ごとの商品が並んでいる場合 → 各商品に対応する曜日の日付を設定
+- 特定日不明・期間中ずっと → sale_date は null
+- 「本日のみ」の場合：チラシ上の日付が読み取れる場合はその日付、読み取れない場合は null`;
 
 // Default fallback categories if none are defined in DB
 const DEFAULT_CATEGORIES = [

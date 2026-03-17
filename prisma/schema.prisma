@@ -103,12 +103,14 @@ model Store {
 }
 
 model ScrapedLeaflet {
-  id        String   @id @default(uuid())
-  storeId   String   @map("store_id")
-  leafletId String   @map("leaflet_id")
+  id        String    @id @default(uuid())
+  storeId   String    @map("store_id")
+  leafletId String    @map("leaflet_id")
   title     String?
-  pageCount Int      @default(0) @map("page_count")
-  scrapedAt DateTime @default(now()) @map("scraped_at")
+  pageCount Int       @default(0) @map("page_count")
+  validFrom DateTime? @map("valid_from")
+  validTo   DateTime? @map("valid_to")
+  scrapedAt DateTime  @default(now()) @map("scraped_at")
 
   store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
@@ -348,6 +350,7 @@ model PendingReview {
   unit          String?
   volume        String?
   isTaxIncluded Boolean      @default(true) @map("is_tax_included")
+  saleDate      DateTime?    @map("sale_date")
   status        ReviewStatus @default(pending)
   createdAt     DateTime     @default(now()) @map("created_at")
   resolvedAt    DateTime?    @map("resolved_at")
