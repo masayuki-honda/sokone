@@ -88,18 +88,20 @@ function isCurrentlyActive(validFrom: string | null, validTo: string | null): bo
 interface StoreGroup {
   storeId: string;
   storeName: string;
-  leaflets: Leaflet[];
+  leaflets: Leaflet[]; // in scrapedAt asc order (= tokubai page order)
 }
 
 function groupLeafletsByStore(leaflets: Leaflet[]): StoreGroup[] {
   const map = new Map<string, StoreGroup>();
-  for (const l of leaflets) {
+  // leaflets arrive scrapedAt DESC from API; we reverse per-store to get tokubai order (ASC)
+  for (const l of [...leaflets].reverse()) {
     if (!map.has(l.storeId)) {
       map.set(l.storeId, { storeId: l.storeId, storeName: l.storeName, leaflets: [] });
     }
     map.get(l.storeId)!.leaflets.push(l);
   }
-  return Array.from(map.values());
+  // Restore store order by first-seen scrapedAt DESC (most recently updated store first)
+  return Array.from(map.values()).reverse();
 }
 
 // Group pending items by saleDate for display
@@ -304,6 +306,71 @@ function LeafletCard({ leaflet, showStore = true }: { leaflet: Leaflet; showStor
   );
 }
 
+// ---- store leaflet group with tab selector ---------------------------------
+
+function leafletTabLabel(leaflet: Leaflet, index: number): string {
+  if (leaflet.validFrom || leaflet.validTo) return fmtValidRange(leaflet.validFrom, leaflet.validTo);
+  if (leaflet.title) return leaflet.title.slice(0, 20);
+  return `チラシ${index + 1}`;
+}
+
+function StoreLeafletGroup({ group }: { group: StoreGroup }) {
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const hasTodayInGroup = group.leaflets.some((l) =>
+    l.pendingItems.some((i) => isTodaySaleDate(i.saleDate))
+  );
+  const safeIndex = Math.min(selectedIndex, group.leaflets.length - 1);
+  const selected = group.leaflets[safeIndex];
+
+  return (
+    <div>
+      {/* Store header */}
+      <div className="flex items-center gap-2 mb-3">
+        <Store className="h-5 w-5 text-muted-foreground" />
+        <h2 className="text-lg font-semibold">{group.storeName}</h2>
+        {hasTodayInGroup && (
+          <Badge className="bg-red-500 text-white text-xs gap-1">
+            <Flame className="h-3 w-3" />
+            今日あり
+          </Badge>
+        )}
+      </div>
+
+      {/* Tab selector — shown only if multiple leaflets */}
+      {group.leaflets.length > 1 && (
+        <div className="flex gap-1.5 flex-wrap mb-3">
+          {group.leaflets.map((leaflet, i) => {
+            const hasTodayItems = leaflet.pendingItems.some((item) =>
+              isTodaySaleDate(item.saleDate)
+            );
+            const isActive = isCurrentlyActive(leaflet.validFrom, leaflet.validTo);
+            return (
+              <button
+                key={leaflet.id}
+                onClick={() => setSelectedIndex(i)}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors whitespace-nowrap ${
+                  safeIndex === i
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-background text-muted-foreground border-border hover:border-primary hover:text-foreground"
+                }`}
+              >
+                {leafletTabLabel(leaflet, i)}
+                {hasTodayItems && " 🔥"}
+                {isActive && safeIndex !== i && (
+                  <span className="ml-1 inline-block w-1.5 h-1.5 rounded-full bg-green-500 align-middle" />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Selected leaflet card (without store name in header) */}
+      <LeafletCard leaflet={selected} showStore={false} />
+    </div>
+  );
+}
+
 // ---- main page --------------------------------------------------------------
 
 export default function LeafletsPage() {
@@ -383,22 +450,7 @@ export default function LeafletsPage() {
         ) : (
           <div className="space-y-8">
             {storeGroups.map((group) => (
-              <div key={group.storeId}>
-                <div className="flex items-center gap-2 mb-3">
-                  <Store className="h-5 w-5 text-muted-foreground" />
-                  <h2 className="text-lg font-semibold">{group.storeName}</h2>
-                  {group.leaflets.length > 1 && (
-                    <Badge variant="secondary" className="text-xs">
-                      {group.leaflets.length}件のチラシ
-                    </Badge>
-                  )}
-                </div>
-                <div className="space-y-4">
-                  {group.leaflets.map((leaflet) => (
-                    <LeafletCard key={leaflet.id} leaflet={leaflet} showStore={false} />
-                  ))}
-                </div>
-              </div>
+              <StoreLeafletGroup key={group.storeId} group={group} />
             ))}
           </div>
         )}
