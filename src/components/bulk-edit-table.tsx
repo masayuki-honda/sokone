@@ -116,7 +116,7 @@ function ImageSection({
   imageNumber,
   showImageHeader,
   globalRowOffset,
-  totalRows,
+  totalRows: _totalRows,
   onUpdate,
   onDelete,
   onAdd,

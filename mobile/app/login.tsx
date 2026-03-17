@@ -1,4 +1,4 @@
-import { View, StyleSheet, Image } from "react-native";
+import { View, StyleSheet } from "react-native";
 import { Text, Button, useTheme } from "react-native-paper";
 import { useAuth } from "@/lib/auth";
 import { Redirect } from "expo-router";

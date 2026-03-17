@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { Header } from "@/components/header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
   CalendarDays,
   ChevronLeft,
@@ -15,8 +15,6 @@ import {
   Tag,
   Flame,
 } from "lucide-react";
-import Image from "next/image";
-
 // ---- types ------------------------------------------------------------------
 
 interface PendingItem {

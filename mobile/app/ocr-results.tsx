@@ -53,7 +53,7 @@ interface BulkPriceResponse {
 }
 
 export default function OcrResultsScreen() {
-  const theme = useTheme();
+  const _theme = useTheme();
   const router = useRouter();
   const params = useLocalSearchParams<{ data: string }>();
   const [routeData, setRouteData] = useState<RouteData | null>(null);

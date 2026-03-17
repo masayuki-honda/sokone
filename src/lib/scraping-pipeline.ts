@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { scrapeShopLeaflets, downloadAndSaveImage } from "@/lib/tokubai-scraper";
 import { analyzeImageWithSplit, OcrSourceType } from "@/lib/ocr";
 import { getR2SignedUrl } from "@/lib/r2";
-import { findOrCreateProduct, findProductOnly } from "@/lib/product-matcher";
+import { findProductOnly } from "@/lib/product-matcher";
 import { createNotification } from "@/lib/notification";
 import { calculateUnitPriceForStorage } from "@/lib/unit-price";
 import crypto from "crypto";
@@ -43,7 +43,7 @@ function parseLeafletDates(
 
   // Assume current year; if "from" month is in the future relative to "to" month wrap
   // (e.g., title scraped in December: 12/31〜1/4 spans year boundary)
-  let fromYear = year;
+  const fromYear = year;
   let toYear = year;
   if (toMonth < fromMonth) toYear = year + 1;
 

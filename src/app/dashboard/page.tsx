@@ -122,7 +122,7 @@ interface DealItem {
 
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [recentPrices, setRecentPrices] = useState<RecentPrice[]>([]);
+  const [_recentPrices, setRecentPrices] = useState<RecentPrice[]>([]);
   const [favorites, setFavorites] = useState<FavoriteItem[]>([]);
   const [bottomPrices, setBottomPrices] = useState<BottomPriceItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);

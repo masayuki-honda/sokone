@@ -72,7 +72,6 @@ export async function GET(request: NextRequest) {
       const effectiveStore =
         image.store ??
         (image.priceRecords?.[0]?.store ?? null);
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { priceRecords: _pr, ...rest } = image;
       return {
         ...rest,
