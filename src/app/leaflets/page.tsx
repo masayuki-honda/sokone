@@ -7,8 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
   CalendarDays,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   Store,
   ImageOff,
   Loader2,
@@ -150,6 +152,8 @@ function ImageCarousel({ images }: { images: LeafletImage[] }) {
 }
 
 function SaleItemsSection({ items }: { items: PendingItem[] }) {
+  const [open, setOpen] = useState(true);
+
   if (items.length === 0) return null;
 
   const grouped = groupByDate(items);
@@ -162,61 +166,71 @@ function SaleItemsSection({ items }: { items: PendingItem[] }) {
   });
 
   return (
-    <div className="mt-4 space-y-3">
-      {sortedKeys.map((key) => {
-        const dayItems = grouped.get(key)!;
-        const isToday =
-          key !== "date_unknown" && new Date(key).toDateString() === today;
+    <div className="mt-4">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground mb-2 transition-colors"
+      >
+        {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+        商品一覧（{items.length}件）
+      </button>
 
-        return (
-          <div key={key}>
-            <div className="flex items-center gap-2 mb-2">
-              <CalendarDays className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm font-medium">
-                {key === "date_unknown"
-                  ? "日付不明"
-                  : fmtDate(key)}
-              </span>
-              {isToday && (
-                <Badge className="bg-red-500 text-white text-xs gap-1">
-                  <Flame className="h-3 w-3" />
-                  今日の特売
-                </Badge>
-              )}
-            </div>
+      {open && (
+        <div className="space-y-3">
+          {sortedKeys.map((key) => {
+            const dayItems = grouped.get(key)!;
+            const isToday =
+              key !== "date_unknown" && new Date(key).toDateString() === today;
 
-            <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-              {dayItems.map((item) => (
-                <div
-                  key={item.id}
-                  className={`flex items-center justify-between px-3 py-2 rounded-md border text-sm ${
-                    isToday
-                      ? "border-red-300 bg-red-50 dark:bg-red-950 dark:border-red-800"
-                      : "border-border bg-muted/40"
-                  }`}
-                >
-                  <span className="font-medium truncate mr-2">
-                    {item.productName}
-                    {item.volume && (
-                      <span className="text-muted-foreground ml-1 text-xs">
-                        {item.volume}
-                      </span>
-                    )}
+            return (
+              <div key={key}>
+                <div className="flex items-center gap-2 mb-2">
+                  <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium">
+                    {key === "date_unknown" ? "日付不明" : fmtDate(key)}
                   </span>
-                  <span className="shrink-0 font-bold text-primary">
-                    ¥{item.price.toLocaleString()}
-                    {item.unit && (
-                      <span className="font-normal text-muted-foreground text-xs ml-0.5">
-                        /{item.unit}
-                      </span>
-                    )}
-                  </span>
+                  {isToday && (
+                    <Badge className="bg-red-500 text-white text-xs gap-1">
+                      <Flame className="h-3 w-3" />
+                      今日の特売
+                    </Badge>
+                  )}
                 </div>
-              ))}
-            </div>
-          </div>
-        );
-      })}
+
+                <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                  {dayItems.map((item) => (
+                    <div
+                      key={item.id}
+                      className={`flex items-center justify-between px-3 py-2 rounded-md border text-sm ${
+                        isToday
+                          ? "border-red-300 bg-red-50 dark:bg-red-950 dark:border-red-800"
+                          : "border-border bg-muted/40"
+                      }`}
+                    >
+                      <span className="font-medium truncate mr-2">
+                        {item.productName}
+                        {item.volume && (
+                          <span className="text-muted-foreground ml-1 text-xs">
+                            {item.volume}
+                          </span>
+                        )}
+                      </span>
+                      <span className="shrink-0 font-bold text-primary">
+                        ¥{item.price.toLocaleString()}
+                        {item.unit && (
+                          <span className="font-normal text-muted-foreground text-xs ml-0.5">
+                            /{item.unit}
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -294,7 +308,10 @@ export default function LeafletsPage() {
     fetchLeaflets(activeOnly);
   }, [activeOnly]);
 
-  const hasTodayLeaflets = leaflets.some((l) =>
+  // Only show leaflets that have at least one extracted product
+  const leafletsWithProducts = leaflets.filter((l) => l.pendingItems.length > 0);
+
+  const hasTodayLeaflets = leafletsWithProducts.some((l) =>
     l.pendingItems.some((i) => isTodaySaleDate(i.saleDate))
   );
 
@@ -332,19 +349,19 @@ export default function LeafletsPage() {
           <div className="flex justify-center items-center h-48">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
-        ) : leaflets.length === 0 ? (
+        ) : leafletsWithProducts.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-48 text-muted-foreground gap-3">
             <Tag className="h-10 w-10" />
-            <p className="text-sm">チラシが見つかりません</p>
+            <p className="text-sm">商品情報があるチラシが見つかりません</p>
             <p className="text-xs">
               {activeOnly
-                ? "現在有効なチラシがありません。フィルターを解除してみてください。"
-                : "まだチラシが収集されていません。店舗を登録してスクレイピングを実行してください。"}
+                ? "現在有効な対象チラシがありません。フィルターを解除してみてください。"
+                : "チラシはありますが、商品情報が抽出されていません。スクレイピングを実行してください。"}
             </p>
           </div>
         ) : (
           <div className="space-y-6">
-            {leaflets.map((leaflet) => (
+            {leafletsWithProducts.map((leaflet) => (
               <LeafletCard key={leaflet.id} leaflet={leaflet} />
             ))}
           </div>
