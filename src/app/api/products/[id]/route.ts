@@ -96,7 +96,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
   const { id } = await params;
   const body = await request.json();
-  const { categoryId } = body as { categoryId: string | null };
+  const { categoryId, name } = body as { categoryId?: string | null; name?: string };
 
   // Validate product exists
   const product = await prisma.product.findUnique({ where: { id } });
@@ -117,9 +117,28 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     }
   }
 
+  // Validate name if provided
+  if (name !== undefined) {
+    const trimmed = name.trim();
+    if (trimmed.length === 0) {
+      return NextResponse.json({ error: "商品名は必須です" }, { status: 400 });
+    }
+    if (trimmed.length > 200) {
+      return NextResponse.json({ error: "商品名は200文字以内にしてください" }, { status: 400 });
+    }
+  }
+
+  const updateData: Record<string, unknown> = {};
+  if (categoryId !== undefined) updateData.categoryId = categoryId ?? null;
+  if (name !== undefined) {
+    const { normalizeProductName } = await import("@/lib/product-matcher");
+    updateData.name = name.trim();
+    updateData.normalizedName = normalizeProductName(name.trim());
+  }
+
   const updated = await prisma.product.update({
     where: { id },
-    data: { categoryId: categoryId ?? null },
+    data: updateData,
     include: { category: true },
   });
 

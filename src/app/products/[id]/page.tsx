@@ -114,6 +114,9 @@ export default function ProductDetailPage({
   const [isWatching, setIsWatching] = useState(false);
   const [watchId, setWatchId] = useState<string | null>(null);
   const [mergeSource, setMergeSource] = useState<{ id: string; name: string; recordCount: number } | null>(null);
+  const [editingName, setEditingName] = useState(false);
+  const [editNameValue, setEditNameValue] = useState("");
+  const [isSavingName, setIsSavingName] = useState(false);
   const { addProduct } = useRecentlyViewed();
 
   useEffect(() => {
@@ -224,6 +227,28 @@ export default function ProductDetailPage({
       console.error("Failed to update category:", error);
     } finally {
       setEditingCategory(false);
+    }
+  }
+
+  async function handleSaveName() {
+    const trimmed = editNameValue.trim();
+    if (!trimmed || !product) return;
+    setIsSavingName(true);
+    try {
+      const res = await fetch(`/api/products/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: trimmed }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setProduct((prev) => prev ? { ...prev, name: updated.name } : prev);
+        setEditingName(false);
+      }
+    } catch (error) {
+      console.error("Failed to update name:", error);
+    } finally {
+      setIsSavingName(false);
     }
   }
 
@@ -366,7 +391,43 @@ export default function ProductDetailPage({
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <div className="min-w-0">
-              <h1 className="text-lg sm:text-2xl font-bold break-words">{product.name}</h1>
+              {editingName ? (
+                <div className="flex items-center gap-1">
+                  <Input
+                    autoFocus
+                    value={editNameValue}
+                    onChange={(e) => setEditNameValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleSaveName();
+                      if (e.key === "Escape") setEditingName(false);
+                    }}
+                    className="text-lg font-bold h-9 max-w-sm"
+                    maxLength={200}
+                  />
+                  <Button
+                    variant="ghost" size="icon" className="h-8 w-8 shrink-0"
+                    onClick={handleSaveName}
+                    disabled={isSavingName || !editNameValue.trim()}
+                  >
+                    {isSavingName ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                  </Button>
+                  <Button
+                    variant="ghost" size="icon" className="h-8 w-8 shrink-0"
+                    onClick={() => setEditingName(false)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <button
+                  className="group flex items-center gap-1.5 text-left"
+                  onClick={() => { setEditNameValue(product.name); setEditingName(true); }}
+                  title="商品名を編集"
+                >
+                  <h1 className="text-lg sm:text-2xl font-bold break-words">{product.name}</h1>
+                  <Pencil className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-1" />
+                </button>
+              )}
               <div className="mt-1 flex items-center gap-2 flex-wrap">
                 {editingCategory ? (
                   <div className="flex items-center gap-1">

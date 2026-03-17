@@ -98,7 +98,8 @@ export async function GET(request: Request) {
         where: {
           storeId: leaflet.storeId,
           sourceType: "auto_flyer",
-          status: { in: ["processed", "no_products"] },
+          // Include all statuses — even failed/pending images may have valid R2 files
+          status: { in: ["processed", "no_products", "pending", "failed"] },
           createdAt: {
             gte: new Date(leaflet.scrapedAt.getTime() - window),
             lte: new Date(leaflet.scrapedAt.getTime() + window),
