@@ -72,6 +72,12 @@ export function Header() {
                 ジョブ
               </Link>
               <Link
+                href="/leaflets"
+                className="text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+              >
+                チラシ
+              </Link>
+              <Link
                 href="/reviews"
                 className="text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
               >
@@ -201,6 +207,13 @@ export function Header() {
               className="block rounded-md px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
             >
               ⚙️ ジョブ
+            </Link>
+            <Link
+              href="/leaflets"
+              onClick={() => setMenuOpen(false)}
+              className="block rounded-md px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            >
+              🗞️ チラシ
             </Link>
             <Link
               href="/reviews"
