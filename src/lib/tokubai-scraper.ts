@@ -190,6 +190,7 @@ export async function downloadAndSaveImage(
   imageUrl: string,
   userId: string,
   storeId: string | null,
+  scrapedLeafletId?: string | null,
 ): Promise<SavedImageResult> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
@@ -236,6 +237,7 @@ export async function downloadAndSaveImage(
     data: {
       userId,
       storeId,
+      scrapedLeafletId: scrapedLeafletId ?? null,
       imageUrl: key,
       sourceType: "auto_flyer",
       status: "pending",

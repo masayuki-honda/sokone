@@ -139,12 +139,20 @@ export async function runScrapingPipeline(
     // campaign banner image that appears in multiple leaflet IDs.
     const seenImageUrls = new Set<string>();
     for (const leaflet of newLeaflets) {
+      // Create ScrapedLeaflet record BEFORE downloading images so we can link them
+      const { validFrom, validTo } = parseLeafletDates(leaflet.title);
+      const scrapedLeafletRecord = await prisma.scrapedLeaflet.upsert({
+        where: { storeId_leafletId: { storeId, leafletId: leaflet.leafletId } },
+        create: { storeId, leafletId: leaflet.leafletId, title: leaflet.title || null, pageCount: 0, validFrom, validTo },
+        update: { title: leaflet.title || undefined, scrapedAt: new Date(), validFrom: validFrom ?? undefined, validTo: validTo ?? undefined },
+      });
+
       let savedCount = 0;
       for (const imageUrl of leaflet.imageUrls) {
         if (seenImageUrls.has(imageUrl)) continue;
         seenImageUrls.add(imageUrl);
         try {
-          const result = await downloadAndSaveImage(imageUrl, userId, storeId);
+          const result = await downloadAndSaveImage(imageUrl, userId, storeId, scrapedLeafletRecord.id);
           imageIds.push(result.uploadedImageId);
           savedCount++;
           imagesScraped++;
@@ -152,12 +160,10 @@ export async function runScrapingPipeline(
           errors.push(`DL: ${err instanceof Error ? err.message : String(err)}`);
         }
       }
-      // Record leaflet as scraped (with parsed validity dates)
-      const { validFrom, validTo } = parseLeafletDates(leaflet.title);
-      await prisma.scrapedLeaflet.upsert({
-        where: { storeId_leafletId: { storeId, leafletId: leaflet.leafletId } },
-        create: { storeId, leafletId: leaflet.leafletId, title: leaflet.title || null, pageCount: savedCount, validFrom, validTo },
-        update: { title: leaflet.title || undefined, pageCount: savedCount, scrapedAt: new Date(), validFrom: validFrom ?? undefined, validTo: validTo ?? undefined },
+      // Update pageCount now that we know how many images were saved
+      await prisma.scrapedLeaflet.update({
+        where: { id: scrapedLeafletRecord.id },
+        data: { pageCount: savedCount },
       });
     }
 

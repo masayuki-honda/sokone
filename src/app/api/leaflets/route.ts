@@ -88,22 +88,14 @@ export async function GET(request: Request) {
   }
 
   // For each leaflet, fetch its images and signing URLs
-  // Images are UploadedImages with sourceType=auto_flyer linked to the store
-  // ordered by createdAt (same as scraping order = flyer page order)
+  // Images are directly linked via scrapedLeafletId (new scrapes),
+  // or found by time window (legacy records before the schema migration).
   const leafletResults = await Promise.all(
     leaflets.map(async (leaflet) => {
-      // Fetch images uploaded around the scraping time (±30 min)
-      const window = 30 * 60 * 1000;
-      const images = await prisma.uploadedImage.findMany({
+      // Try direct relation first (accurate), fall back to time window (legacy)
+      let imageRecords = await prisma.uploadedImage.findMany({
         where: {
-          storeId: leaflet.storeId,
-          sourceType: { in: ["auto_flyer", "flyer"] },
-          // Include all statuses — even failed/pending images may have valid R2 files
-          status: { in: ["processed", "no_products", "pending", "failed"] },
-          createdAt: {
-            gte: new Date(leaflet.scrapedAt.getTime() - window),
-            lte: new Date(leaflet.scrapedAt.getTime() + window),
-          },
+          scrapedLeafletId: leaflet.id,
         },
         orderBy: { createdAt: "asc" },
         select: {
@@ -113,6 +105,32 @@ export async function GET(request: Request) {
           ocrResultJson: true,
         },
       });
+
+      // Legacy fallback: images scraped before scrapedLeafletId existed
+      if (imageRecords.length === 0) {
+        const window = 30 * 60 * 1000;
+        imageRecords = await prisma.uploadedImage.findMany({
+          where: {
+            storeId: leaflet.storeId,
+            sourceType: { in: ["auto_flyer", "flyer"] },
+            status: { in: ["processed", "no_products", "pending", "failed"] },
+            scrapedLeafletId: null,
+            createdAt: {
+              gte: new Date(leaflet.scrapedAt.getTime() - window),
+              lte: new Date(leaflet.scrapedAt.getTime() + window),
+            },
+          },
+          orderBy: { createdAt: "asc" },
+          select: {
+            id: true,
+            imageUrl: true,
+            status: true,
+            ocrResultJson: true,
+          },
+        });
+      }
+
+      const images = imageRecords;
 
       // Generate signed URLs
       const imagesWithUrls = await Promise.all(

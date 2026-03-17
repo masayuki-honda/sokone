@@ -112,7 +112,8 @@ model ScrapedLeaflet {
   validTo   DateTime? @map("valid_to")
   scrapedAt DateTime  @default(now()) @map("scraped_at")
 
-  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  store          Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  uploadedImages UploadedImage[]
 
   @@unique([storeId, leafletId])
   @@map("scraped_leaflets")
@@ -202,23 +203,25 @@ enum ReviewStatus {
 }
 
 model UploadedImage {
-  id             String      @id @default(uuid())
-  userId         String      @map("user_id")
-  storeId        String?     @map("store_id")
-  imageUrl       String      @map("image_url")
-  sourceType     SourceType  @map("source_type")
-  ocrRawText     String?     @map("ocr_raw_text") @db.Text
-  ocrResultJson  Json?       @map("ocr_result_json")
-  status         ImageStatus @default(pending)
-  fileHash       String?     @map("file_hash")
-  takenAt        DateTime?   @map("taken_at")
-  gpsLatitude    Float?      @map("gps_latitude")
-  gpsLongitude   Float?      @map("gps_longitude")
-  createdAt      DateTime    @default(now()) @map("created_at")
+  id                String    @id @default(uuid())
+  userId            String    @map("user_id")
+  storeId           String?   @map("store_id")
+  scrapedLeafletId  String?   @map("scraped_leaflet_id")
+  imageUrl          String    @map("image_url")
+  sourceType        SourceType  @map("source_type")
+  ocrRawText        String?   @map("ocr_raw_text") @db.Text
+  ocrResultJson     Json?     @map("ocr_result_json")
+  status            ImageStatus @default(pending)
+  fileHash          String?   @map("file_hash")
+  takenAt           DateTime? @map("taken_at")
+  gpsLatitude       Float?    @map("gps_latitude")
+  gpsLongitude      Float?    @map("gps_longitude")
+  createdAt         DateTime  @default(now()) @map("created_at")
 
-  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  store        Store?        @relation(fields: [storeId], references: [id])
-  priceRecords PriceRecord[]
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  store          Store?          @relation(fields: [storeId], references: [id])
+  scrapedLeaflet ScrapedLeaflet? @relation(fields: [scrapedLeafletId], references: [id])
+  priceRecords   PriceRecord[]
   pendingReviews PendingReview[]
 
   @@map("uploaded_images")
