@@ -237,7 +237,7 @@ export async function downloadAndSaveImage(
       userId,
       storeId,
       imageUrl: key,
-      sourceType: "flyer",
+      sourceType: "auto_flyer",
       status: "pending",
       fileHash,
     },

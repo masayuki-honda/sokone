@@ -44,22 +44,24 @@ async function run() {
     );
   }
 
-  // Also check all auto_flyer images
-  const allAutoFlyer = await (prisma as any).uploadedImage.count({
-    where: { sourceType: "auto_flyer" },
+  // Check sourceType counts
+  const counts = await (prisma as any).uploadedImage.groupBy({
+    by: ["sourceType"],
+    _count: true,
   });
-  console.log("\n--- Total auto_flyer images in DB:", allAutoFlyer);
+  console.log("\n--- Image sourceType counts:", JSON.stringify(counts));
 
   const recent = await (prisma as any).uploadedImage.findMany({
-    where: { sourceType: "auto_flyer" },
+    where: { sourceType: { in: ["flyer", "auto_flyer"] } },
     orderBy: { createdAt: "desc" },
     take: 5,
-    select: { id: true, status: true, storeId: true, createdAt: true },
+    select: { id: true, status: true, sourceType: true, storeId: true, createdAt: true },
   });
   console.log(
-    "Recent auto_flyer images:",
+    "Recent flyer/auto_flyer images:",
     recent.map((i: any) => ({
       storeId: i.storeId,
+      sourceType: i.sourceType,
       status: i.status,
       createdAt: i.createdAt.toISOString(),
     }))

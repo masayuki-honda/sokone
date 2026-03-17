@@ -97,7 +97,7 @@ export async function GET(request: Request) {
       const images = await prisma.uploadedImage.findMany({
         where: {
           storeId: leaflet.storeId,
-          sourceType: "auto_flyer",
+          sourceType: { in: ["auto_flyer", "flyer"] },
           // Include all statuses — even failed/pending images may have valid R2 files
           status: { in: ["processed", "no_products", "pending", "failed"] },
           createdAt: {
