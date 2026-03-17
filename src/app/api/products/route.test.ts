@@ -111,6 +111,6 @@ describe("GET /api/products", () => {
 
     expect(body.products).toHaveLength(20);
     expect(body.hasMore).toBe(true);
-    expect(body.nextCursor).toBe("prod-19");
+    expect(body.nextCursor).toBe("20"); // offset-based: next page starts at offset 20
   });
 });
