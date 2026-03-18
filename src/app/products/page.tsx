@@ -433,7 +433,11 @@ function ProductsPage() {
                   >
                     <h3 className="font-medium truncate">{product.name}</h3>
                     <div className="mt-1 flex items-center gap-2 flex-wrap">
-                      {product.unit && (
+                      {product.unit && !(
+                        // Hide unit badge if it's ×N already embedded in the product name (as xN or ×N)
+                        /^[×xX]\d+$/.test(product.unit) &&
+                        new RegExp(`[×xX]${product.unit.replace(/^[×xX]/, '')}`, 'i').test(product.name)
+                      ) && (
                         <span className="text-xs text-muted-foreground">
                           {product.unit}
                         </span>

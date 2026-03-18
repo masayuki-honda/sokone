@@ -685,7 +685,11 @@ export default function DashboardPage() {
                             >
                               {item.productName}
                             </Link>
-                            {item.unit && (
+                            {item.unit && !(
+                              // Hide unit if it's ×N already embedded in the product name (as xN or ×N)
+                              /^[×xX]\d+$/.test(item.unit) &&
+                              new RegExp(`[×xX]${item.unit.replace(/^[×xX]/, '')}`, 'i').test(item.productName)
+                            ) && (
                               <span className="text-xs text-muted-foreground ml-1">
                                 ({item.unit})
                               </span>

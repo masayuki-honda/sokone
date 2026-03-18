@@ -110,6 +110,15 @@ export function calculateUnitPrice(
     };
   }
 
+  // 1b. If unit is an ambiguous non-numeric container word ("パック", "ケース", "箱",
+  // "セット" etc.) without an embedded count, skip volume-based calculation.
+  // The price covers an unknown number of items, so dividing by per-item volume
+  // (e.g., 350ml for a single can) would produce a misleading per-100ml result.
+  const unitStr = (unit ?? "").trim();
+  if (/^(パック|ケース|箱|セット|カートン|ボックス)$/i.test(unitStr)) {
+    return null;
+  }
+
   // 2. Check for volume/weight
   const vol = parseVolume(volume) || parseVolume(unit);
   if (vol && vol.value > 0) {

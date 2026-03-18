@@ -477,10 +477,26 @@ export async function findOrCreateProduct(
 
   // Build display name: append volume, pack count, and/or produce unit if not already in the OCR name
   let displayName = name.trim();
-  if (volumeSuffix && volKey && !name.trim().toLowerCase().replace(/\s+/g, "").includes(volKey)) {
+
+  // When the pack count is already captured in options.unit (e.g., "×6"), strip any
+  // count notation embedded in the OCR product name to avoid duplication like:
+  //   "アサヒ スーパードライ x4" + unit "×4" → would display as "アサヒ スーパードライ x4 (×4)"
+  // After stripping, the count will be shown via the unit field in the UI.
+  const packQtyFromUnit = parseQuantity(options?.unit);
+  const packCountFromUnit = !!(packQtyFromUnit && packQtyFromUnit.value > 1);
+  if (packCountFromUnit) {
+    displayName = displayName
+      .replace(/\s*[×xX]\s*\d+/g, "")  // ×4, x6, X24
+      .replace(/\s*\d+\s*(?:缶|本|個|袋|枚|パック|入り?)\s*(?:パック|セット|入り?)?/g, "")  // 6缶パック, 6本入
+      .trim();
+  }
+
+  if (volumeSuffix && volKey && !displayName.toLowerCase().replace(/\s+/g, "").includes(volKey)) {
     displayName += volumeSuffix;
   }
-  if (packSuffix && !name.trim().toLowerCase().includes(packSuffix.trim())) {
+  // Append pack suffix to display name only when count is NOT already in the unit field.
+  // When packCountFromUnit is true, the unit field shows the count — no need to embed it in the name.
+  if (packSuffix && !packCountFromUnit && !normalized.includes(packSuffix.trim())) {
     displayName += packSuffix;
   }
   if (unitSuffix) {
