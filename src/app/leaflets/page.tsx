@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Header } from "@/components/header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
   CalendarDays,
+  Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -30,6 +31,7 @@ interface PendingItem {
   confidence: number;
   saleDate: string | null;
   categoryHint: string | null;
+  status: "pending" | "approved";
 }
 
 interface LeafletImage {
@@ -245,10 +247,23 @@ function ImageCarousel({ images }: { images: LeafletImage[] }) {
   );
 }
 
-function SaleItemsSection({ items }: { items: PendingItem[] }) {
+function SaleItemsSection({ items, onRegister }: { items: PendingItem[]; onRegister: (id: string) => Promise<void> }) {
   const [open, setOpen] = useState(false);
+  const [registeringId, setRegisteringId] = useState<string | null>(null);
 
   if (items.length === 0) return null;
+
+  const pendingCount = items.filter((i) => i.status === "pending").length;
+  const approvedCount = items.filter((i) => i.status === "approved").length;
+
+  const handleRegister = async (id: string) => {
+    setRegisteringId(id);
+    try {
+      await onRegister(id);
+    } finally {
+      setRegisteringId(null);
+    }
+  };
 
   const grouped = groupByDate(items);
   const today = new Date().toDateString();
@@ -267,6 +282,16 @@ function SaleItemsSection({ items }: { items: PendingItem[] }) {
       >
         {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         商品一覧（{items.length}件）
+        {approvedCount > 0 && (
+          <span className="ml-1 text-xs text-green-600 font-normal">
+            ✓ {approvedCount}件登録済み
+          </span>
+        )}
+        {pendingCount > 0 && (
+          <span className="ml-1 text-xs text-amber-600 font-normal">
+            {pendingCount}件未登録
+          </span>
+        )}
       </button>
 
       {open && (
@@ -296,7 +321,9 @@ function SaleItemsSection({ items }: { items: PendingItem[] }) {
                     <div
                       key={item.id}
                       className={`flex items-center justify-between px-3 py-2 rounded-md border text-sm ${
-                        isToday
+                        item.status === "approved"
+                          ? "border-green-200 bg-green-50 dark:bg-green-950 dark:border-green-800"
+                          : isToday
                           ? "border-red-300 bg-red-50 dark:bg-red-950 dark:border-red-800"
                           : "border-border bg-muted/40"
                       }`}
@@ -309,14 +336,34 @@ function SaleItemsSection({ items }: { items: PendingItem[] }) {
                           </span>
                         )}
                       </span>
-                      <span className="shrink-0 font-bold text-primary">
-                        ¥{item.price.toLocaleString()}
-                        {item.unit && (
-                          <span className="font-normal text-muted-foreground text-xs ml-0.5">
-                            /{item.unit}
+                      <div className="flex flex-col items-end gap-0.5 shrink-0">
+                        <span className="font-bold text-primary">
+                          ¥{item.price.toLocaleString()}
+                          {item.unit && (
+                            <span className="font-normal text-muted-foreground text-xs ml-0.5">
+                              /{item.unit}
+                            </span>
+                          )}
+                        </span>
+                        {item.status === "approved" ? (
+                          <span className="flex items-center gap-0.5 text-xs text-green-600 dark:text-green-400">
+                            <Check className="h-3 w-3" />
+                            登録済み
                           </span>
+                        ) : (
+                          <button
+                            onClick={() => handleRegister(item.id)}
+                            disabled={registeringId === item.id}
+                            className="text-xs text-primary hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {registeringId === item.id ? (
+                              <Loader2 className="h-3 w-3 animate-spin inline" />
+                            ) : (
+                              "+ 登録"
+                            )}
+                          </button>
                         )}
-                      </span>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -329,7 +376,7 @@ function SaleItemsSection({ items }: { items: PendingItem[] }) {
   );
 }
 
-function LeafletCard({ leaflet, showStore = true }: { leaflet: Leaflet; showStore?: boolean }) {
+function LeafletCard({ leaflet, showStore = true, onRegister }: { leaflet: Leaflet; showStore?: boolean; onRegister: (id: string) => Promise<void> }) {
   const active = isCurrentlyActive(leaflet.validFrom, leaflet.validTo);
   const hasTodayItems = leaflet.pendingItems.some((i) => isTodaySaleDate(i.saleDate));
   const validRange = fmtValidRange(leaflet.validFrom, leaflet.validTo);
@@ -374,7 +421,7 @@ function LeafletCard({ leaflet, showStore = true }: { leaflet: Leaflet; showStor
 
       <CardContent>
         <ImageCarousel images={leaflet.images} />
-        <SaleItemsSection items={leaflet.pendingItems} />
+        <SaleItemsSection items={leaflet.pendingItems} onRegister={onRegister} />
       </CardContent>
     </Card>
   );
@@ -386,7 +433,7 @@ function leafletTabLabel(_leaflet: Leaflet, index: number): string {
   return `チラシ${index + 1}枚目`;
 }
 
-function StoreLeafletGroup({ group }: { group: StoreGroup }) {
+function StoreLeafletGroup({ group, onRegister }: { group: StoreGroup; onRegister: (id: string) => Promise<void> }) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const hasTodayInGroup = group.leaflets.some((l) =>
     l.pendingItems.some((i) => isTodaySaleDate(i.saleDate))
@@ -438,7 +485,7 @@ function StoreLeafletGroup({ group }: { group: StoreGroup }) {
       )}
 
       {/* Selected leaflet card (without store name in header) */}
-      <LeafletCard leaflet={selected} showStore={false} />
+      <LeafletCard leaflet={selected} showStore={false} onRegister={onRegister} />
     </div>
   );
 }
@@ -462,6 +509,24 @@ export default function LeafletsPage() {
       setLoading(false);
     }
   };
+
+  const handleRegisterItem = useCallback(async (reviewId: string) => {
+    const res = await fetch(`/api/reviews/${reviewId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "approve" }),
+    });
+    if (!res.ok) return;
+    // Update local state: mark item as approved
+    setLeaflets((prev) =>
+      prev.map((leaflet) => ({
+        ...leaflet,
+        pendingItems: leaflet.pendingItems.map((item) =>
+          item.id === reviewId ? { ...item, status: "approved" as const } : item
+        ),
+      }))
+    );
+  }, []);
 
   useEffect(() => {
     fetchLeaflets(activeOnly);
@@ -522,7 +587,7 @@ export default function LeafletsPage() {
         ) : (
           <div className="space-y-8">
             {storeGroups.map((group) => (
-              <StoreLeafletGroup key={group.storeId} group={group} />
+              <StoreLeafletGroup key={group.storeId} group={group} onRegister={handleRegisterItem} />
             ))}
           </div>
         )}

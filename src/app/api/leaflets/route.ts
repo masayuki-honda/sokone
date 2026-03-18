@@ -151,7 +151,7 @@ export async function GET(request: Request) {
         ? await prisma.pendingReview.findMany({
             where: {
               sourceImageId: { in: imageIds },
-              status: "pending",
+              status: { in: ["pending", "approved"] },
             },
             orderBy: { saleDate: "asc" },
             select: {
@@ -163,6 +163,7 @@ export async function GET(request: Request) {
               confidence: true,
               saleDate: true,
               categoryHint: true,
+              status: true,
             },
           })
         : [];
