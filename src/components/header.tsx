@@ -9,6 +9,7 @@ import { NotificationBell } from "@/components/notification-bell";
 // Items always visible in desktop nav
 const PRIMARY_LINKS = [
   { href: "/products", label: "商品一覧" },
+  { href: "/leaflets", label: "チラシ" },
   { href: "/upload", label: "アップロード" },
   { href: "/watches", label: "ウォッチ" },
   { href: "/reviews", label: "確認待ち" },
@@ -21,7 +22,6 @@ const MANAGE_LINKS = [
   { href: "/categories", label: "📂 カテゴリ" },
   { href: "/uploads", label: "🖼️ アップロード履歴" },
   { href: "/records", label: "📝 登録履歴" },
-  { href: "/leaflets", label: "🗞️ チラシ" },
   { href: "/jobs", label: "⚙️ ジョブ" },
 ];
 
