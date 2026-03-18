@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Header } from "@/components/header";
 import { toast } from "sonner";
+import { X } from "lucide-react";
 
 interface ReviewItem {
   id: string;
@@ -16,7 +17,7 @@ interface ReviewItem {
   saleDate: string | null;
   createdAt: string;
   store: { id: string; name: string };
-  sourceImage: { id: string; imageUrl: string };
+  sourceImage: { id: string; imageUrl: string; signedUrl: string | null };
 }
 
 export default function ReviewsPage() {
@@ -30,6 +31,16 @@ export default function ReviewsPage() {
   const [editedValues, setEditedValues] = useState<
     Record<string, { productName?: string; price?: number }>
   >({});
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!lightboxUrl) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setLightboxUrl(null);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [lightboxUrl]);
 
   const fetchReviews = useCallback(async () => {
     try {
@@ -330,6 +341,15 @@ export default function ReviewsPage() {
                     </div>
 
                     <div className="flex gap-2">
+                      {review.sourceImage?.signedUrl && (
+                        <button
+                          onClick={() => setLightboxUrl(review.sourceImage.signedUrl)}
+                          className="rounded-md bg-zinc-100 px-3 py-1.5 text-sm hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700"
+                          title="画像を開く"
+                        >
+                          🖼️
+                        </button>
+                      )}
                       <button
                         onClick={() => handleAction(review.id, "approve")}
                         disabled={processingId === review.id || bulkProcessing}
@@ -357,6 +377,28 @@ export default function ReviewsPage() {
           </div>
         )}
       </main>
+
+      {/* Lightbox */}
+      {lightboxUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4"
+          onClick={() => setLightboxUrl(null)}
+        >
+          <button
+            className="absolute right-4 top-4 rounded-full bg-white/20 p-2 text-white hover:bg-white/30"
+            onClick={() => setLightboxUrl(null)}
+            aria-label="閉じる"
+          >
+            <X className="h-6 w-6" />
+          </button>
+          <img
+            src={lightboxUrl}
+            alt="元画像"
+            className="max-h-full max-w-full rounded-lg object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </div>
   );
 }

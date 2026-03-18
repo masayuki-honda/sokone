@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getR2SignedUrl } from "@/lib/r2";
 
 /**
  * GET /api/reviews — List pending review items for current user
@@ -33,5 +34,17 @@ export async function GET(request: NextRequest) {
     where: { userId: session.user.id, status: "pending" },
   });
 
-  return NextResponse.json({ reviews, pendingCount });
+  const reviewsWithSignedUrls = await Promise.all(
+    reviews.map(async (review) => ({
+      ...review,
+      sourceImage: {
+        ...review.sourceImage,
+        signedUrl: review.sourceImage?.imageUrl
+          ? await getR2SignedUrl(review.sourceImage.imageUrl, 3600)
+          : null,
+      },
+    }))
+  );
+
+  return NextResponse.json({ reviews: reviewsWithSignedUrls, pendingCount });
 }
