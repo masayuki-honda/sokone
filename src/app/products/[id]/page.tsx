@@ -117,6 +117,10 @@ export default function ProductDetailPage({
   const [editingName, setEditingName] = useState(false);
   const [editNameValue, setEditNameValue] = useState("");
   const [isSavingName, setIsSavingName] = useState(false);
+  const [editingMeta, setEditingMeta] = useState(false);
+  const [editUnitValue, setEditUnitValue] = useState("");
+  const [editVolumeValue, setEditVolumeValue] = useState("");
+  const [isSavingMeta, setIsSavingMeta] = useState(false);
   const { addProduct } = useRecentlyViewed();
 
   useEffect(() => {
@@ -249,6 +253,32 @@ export default function ProductDetailPage({
       console.error("Failed to update name:", error);
     } finally {
       setIsSavingName(false);
+    }
+  }
+
+  async function handleSaveMeta() {
+    if (!product) return;
+    setIsSavingMeta(true);
+    try {
+      const res = await fetch(`/api/products/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          unit: editUnitValue.trim() || null,
+          volume: editVolumeValue.trim() || null,
+        }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setProduct((prev) =>
+          prev ? { ...prev, unit: updated.unit, volume: updated.volume } : prev
+        );
+        setEditingMeta(false);
+      }
+    } catch (error) {
+      console.error("Failed to update unit/volume:", error);
+    } finally {
+      setIsSavingMeta(false);
     }
   }
 
@@ -479,15 +509,57 @@ export default function ProductDetailPage({
                     <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                   </button>
                 )}
-                {product.unit && (
-                  <span className="text-sm text-muted-foreground">
-                    {product.unit}
-                  </span>
-                )}
-                {product.volume && (
-                  <span className="text-sm text-muted-foreground">
-                    {product.volume}
-                  </span>
+                {editingMeta ? (
+                  <div className="flex items-center gap-1 flex-wrap">
+                    <Input
+                      placeholder="単位（×6 など）"
+                      value={editUnitValue}
+                      onChange={(e) => setEditUnitValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleSaveMeta();
+                        if (e.key === "Escape") setEditingMeta(false);
+                      }}
+                      className="h-7 w-28 text-sm"
+                    />
+                    <Input
+                      placeholder="容量（350ml など）"
+                      value={editVolumeValue}
+                      onChange={(e) => setEditVolumeValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleSaveMeta();
+                        if (e.key === "Escape") setEditingMeta(false);
+                      }}
+                      className="h-7 w-28 text-sm"
+                    />
+                    <Button
+                      variant="ghost" size="icon" className="h-6 w-6"
+                      onClick={handleSaveMeta}
+                      disabled={isSavingMeta}
+                    >
+                      {isSavingMeta ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                    </Button>
+                    <Button
+                      variant="ghost" size="icon" className="h-6 w-6"
+                      onClick={() => setEditingMeta(false)}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ) : (
+                  <button
+                    className="group flex items-center gap-1"
+                    onClick={() => {
+                      setEditUnitValue(product.unit ?? "");
+                      setEditVolumeValue(product.volume ?? "");
+                      setEditingMeta(true);
+                    }}
+                    title="単位・容量を編集"
+                  >
+                    <span className="text-sm text-muted-foreground">
+                      {[product.unit, product.volume].filter(Boolean).join(" / ") || "単位・容量なし"}
+                    </span>
+                    <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </button>
                 )}
               </div>
             </div>

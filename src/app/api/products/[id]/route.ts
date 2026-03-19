@@ -96,7 +96,12 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
   const { id } = await params;
   const body = await request.json();
-  const { categoryId, name } = body as { categoryId?: string | null; name?: string };
+  const { categoryId, name, unit, volume } = body as {
+    categoryId?: string | null;
+    name?: string;
+    unit?: string | null;
+    volume?: string | null;
+  };
 
   // Validate product exists
   const product = await prisma.product.findUnique({ where: { id } });
@@ -135,6 +140,8 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     updateData.name = name.trim();
     updateData.normalizedName = normalizeProductName(name.trim());
   }
+  if (unit !== undefined) updateData.unit = unit?.trim() || null;
+  if (volume !== undefined) updateData.volume = volume?.trim() || null;
 
   const updated = await prisma.product.update({
     where: { id },
