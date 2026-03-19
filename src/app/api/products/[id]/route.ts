@@ -135,13 +135,35 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
   const updateData: Record<string, unknown> = {};
   if (categoryId !== undefined) updateData.categoryId = categoryId ?? null;
-  if (name !== undefined) {
+
+  // When name OR unit/volume changes, recalculate normalizedName so the lookup key
+  // stays consistent and duplicate products are not created on subsequent OCR runs.
+  const needsRenormalize = name !== undefined || unit !== undefined || volume !== undefined;
+  if (needsRenormalize) {
     const { normalizeProductName } = await import("@/lib/product-matcher");
-    updateData.name = name.trim();
-    updateData.normalizedName = normalizeProductName(name.trim());
+    const baseName = name !== undefined ? name.trim() : product.name;
+    const newUnit  = unit  !== undefined ? (unit?.trim()   || null) : product.unit;
+    const newVolume = volume !== undefined ? (volume?.trim() || null) : product.volume;
+
+    if (name !== undefined) {
+      updateData.name = baseName;
+    }
+    updateData.unit   = newUnit;
+    updateData.volume = newVolume;
+
+    // Build normalizedName that mirrors the logic in resolveLookupKeys
+    const { parseQuantity } = await import("@/lib/unit-price");
+    const packQty = parseQuantity(newUnit) ?? parseQuantity(newVolume);
+    const packSuffix = packQty && packQty.value > 1 ? ` ×${packQty.value}` : "";
+    const hasPackCount = !!(packQty && packQty.value > 1);
+    const volKey = newVolume ? newVolume.toLowerCase().replace(/\s+/g, "") : null;
+    const baseNorm = normalizeProductName(baseName);
+    const normNoSpaces = baseNorm.replace(/\s/g, "");
+    const volumeSuffix = !hasPackCount && volKey && !normNoSpaces.includes(volKey) ? ` ${newVolume}` : "";
+    const alreadyHasPack = !packSuffix || baseNorm.includes(packSuffix.trim());
+    const packPart = alreadyHasPack ? "" : packSuffix;
+    updateData.normalizedName = `${baseNorm}${volumeSuffix}${packPart}`.trim();
   }
-  if (unit !== undefined) updateData.unit = unit?.trim() || null;
-  if (volume !== undefined) updateData.volume = volume?.trim() || null;
 
   const updated = await prisma.product.update({
     where: { id },

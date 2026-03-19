@@ -511,16 +511,40 @@ export default function ProductDetailPage({
                 )}
                 {editingMeta ? (
                   <div className="flex items-center gap-1 flex-wrap">
-                    <Input
-                      placeholder="単位（×6 など）"
+                    {/* Unit: dropdown with presets + free input */}
+                    <select
+                      className="h-7 rounded border border-input bg-background px-2 text-sm"
                       value={editUnitValue}
                       onChange={(e) => setEditUnitValue(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") handleSaveMeta();
-                        if (e.key === "Escape") setEditingMeta(false);
-                      }}
-                      className="h-7 w-28 text-sm"
-                    />
+                    >
+                      <option value="">単位なし</option>
+                      <optgroup label="パック数">
+                        <option value="×2">×2</option>
+                        <option value="×4">×4</option>
+                        <option value="×6">×6</option>
+                        <option value="×8">×8</option>
+                        <option value="×12">×12</option>
+                        <option value="×24">×24</option>
+                        <option value="×48">×48</option>
+                      </optgroup>
+                      <optgroup label="生鮮単位">
+                        <option value="本">本</option>
+                        <option value="個">個</option>
+                        <option value="袋">袋</option>
+                        <option value="玉">玉</option>
+                        <option value="束">束</option>
+                        <option value="パック">パック</option>
+                        <option value="房">房</option>
+                        <option value="切れ">切れ</option>
+                        <option value="丁">丁</option>
+                      </optgroup>
+                      {/* Keep current value selectable even if not in presets */}
+                      {editUnitValue &&
+                        !["", "×2", "×4", "×6", "×8", "×12", "×24", "×48",
+                          "本", "個", "袋", "玉", "束", "パック", "房", "切れ", "丁"].includes(editUnitValue) && (
+                        <option value={editUnitValue}>{editUnitValue}(現在値)</option>
+                      )}
+                    </select>
                     <Input
                       placeholder="容量（350ml など）"
                       value={editVolumeValue}
