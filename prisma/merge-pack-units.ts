@@ -17,14 +17,26 @@
  */
 
 import { PrismaClient } from "@prisma/client";
-import { neonConfig } from "@neondatabase/serverless";
+import { PrismaNeon } from "@prisma/adapter-neon";
+import { neonConfig, neon } from "@neondatabase/serverless";
 import ws from "ws";
 
+// Use WebSocket so this script works when TCP port 5432 is blocked (e.g. VPN, Neon free tier)
 neonConfig.webSocketConstructor = ws;
 
-const prisma = new PrismaClient();
+const sql = neon(process.env.DATABASE_URL!);
+
+const adapter = new PrismaNeon({
+  connectionString: process.env.DATABASE_URL,
+});
+const prisma = new PrismaClient({ adapter });
 
 async function main() {
+  // Ensure pack_unit column exists before running (idempotent)
+  console.log("🔧 Applying schema migration (pack_unit column)...");
+  await sql`ALTER TABLE price_records ADD COLUMN IF NOT EXISTS pack_unit TEXT`;
+  console.log("   ✓ pack_unit column ready\n");
+
   console.log("🔍 Scanning for products with pack notation in normalizedName...");
 
   // Find all products that have ×N in their normalizedName
