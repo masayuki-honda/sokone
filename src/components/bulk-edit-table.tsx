@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useRef, useCallback, KeyboardEvent } from "react";
+import { useState, useEffect, useRef, useCallback, KeyboardEvent } from "react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Trash2, Plus, AlertTriangle } from "lucide-react";
+import { Trash2, Plus, AlertTriangle, Check } from "lucide-react";
 
 interface OcrItem {
   name: string;
@@ -196,7 +196,23 @@ function EditableRow({
   const [name, setName] = useState(item.name);
   const [price, setPrice] = useState(String(item.price));
   const [unit, setUnit] = useState(item.unit || "");
+  const [linkedProductId, setLinkedProductId] = useState<string | null>(item.productId ?? null);
+  const [suggestions, setSuggestions] = useState<Array<{ id: string; name: string }>>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const nameContainerRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Close suggestions on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (nameContainerRef.current && !nameContainerRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const commitUpdate = useCallback(
     (updates: Partial<OcrItem>) => {
@@ -207,6 +223,42 @@ function EditableRow({
     },
     [item, resultIndex, itemIndex, onUpdate]
   );
+
+  function handleNameChange(value: string) {
+    setName(value);
+    // Clear product link when user types manually
+    if (linkedProductId) setLinkedProductId(null);
+    commitUpdate({ name: value, productId: null });
+
+    // Debounced product search for autocomplete
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    if (value.length >= 2) {
+      searchDebounceRef.current = setTimeout(async () => {
+        try {
+          const res = await fetch(`/api/products?q=${encodeURIComponent(value)}&limit=5`);
+          if (res.ok) {
+            const data = await res.json();
+            const products = (data.products || []) as Array<{ id: string; name: string }>;
+            setSuggestions(products);
+            if (products.length > 0) setShowSuggestions(true);
+          }
+        } catch { /* ignore */ }
+      }, 300);
+    } else {
+      setSuggestions([]);
+      setShowSuggestions(false);
+    }
+  }
+
+  function handleSelectSuggestion(p: { id: string; name: string }) {
+    setName(p.name);
+    setLinkedProductId(p.id);
+    setShowSuggestions(false);
+    setSuggestions([]);
+    // Immediate update — cancel any pending debounce first
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    onUpdate(resultIndex, itemIndex, { ...item, name: p.name, productId: p.id });
+  }
 
   const excluded = item.excluded ?? false;
   const pct = Math.round(item.confidence * 100);
@@ -222,18 +274,36 @@ function EditableRow({
         />
       </td>
       <td className="px-2 py-1.5">
-        <Input
-          data-row={globalRowIndex}
-          data-col="name"
-          value={name}
-          onChange={(e) => {
-            setName(e.target.value);
-            commitUpdate({ name: e.target.value });
-          }}
-          onKeyDown={(e) => onKeyDown(e, globalRowIndex, "name")}
-          className="h-8 text-sm"
-          placeholder="商品名"
-        />
+        <div className="relative" ref={nameContainerRef}>
+          <Input
+            data-row={globalRowIndex}
+            data-col="name"
+            value={name}
+            onChange={(e) => handleNameChange(e.target.value)}
+            onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+            onKeyDown={(e) => onKeyDown(e, globalRowIndex, "name")}
+            className={`h-8 text-sm ${linkedProductId ? "pr-7 border-blue-400 dark:border-blue-500" : ""}`}
+            placeholder="商品名"
+          />
+          {linkedProductId && (
+            <Check className="absolute right-2 top-2 h-4 w-4 text-blue-500 pointer-events-none" />
+          )}
+          {showSuggestions && suggestions.length > 0 && (
+            <div className="absolute top-full left-0 z-20 mt-0.5 w-full min-w-[200px] rounded-md border bg-background shadow-lg">
+              {suggestions.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-muted transition-colors"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => handleSelectSuggestion(s)}
+                >
+                  {s.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </td>
       <td className="px-2 py-1.5">
         <div className="relative">

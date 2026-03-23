@@ -976,8 +976,8 @@ export default function ProductDetailPage({
         source={mergeSource}
         onClose={() => setMergeSource(null)}
         onMerged={(_sourceId) => {
-          // Source product was merged and deleted, navigate away
-          router.push("/products");
+          // Use back() to preserve product list filters/search
+          router.back();
         }}
       />
 
