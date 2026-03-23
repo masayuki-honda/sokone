@@ -141,6 +141,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   const needsRenormalize = name !== undefined || unit !== undefined || volume !== undefined;
   if (needsRenormalize) {
     const { normalizeProductName } = await import("@/lib/product-matcher");
+    const { parseQuantity } = await import("@/lib/unit-price");
     const baseName = name !== undefined ? name.trim() : product.name;
     const newUnit  = unit  !== undefined ? (unit?.trim()   || null) : product.unit;
     const newVolume = volume !== undefined ? (volume?.trim() || null) : product.volume;
@@ -151,18 +152,17 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     updateData.unit   = newUnit;
     updateData.volume = newVolume;
 
-    // Build normalizedName that mirrors the logic in resolveLookupKeys
-    const { parseQuantity } = await import("@/lib/unit-price");
+    // Rebuild normalizedName using the same convention as resolveLookupKeys:
+    // pack count (×N) is NOT embedded — it lives in PriceRecord.packUnit.
     const packQty = parseQuantity(newUnit) ?? parseQuantity(newVolume);
-    const packSuffix = packQty && packQty.value > 1 ? ` ×${packQty.value}` : "";
-    const hasPackCount = !!(packQty && packQty.value > 1);
+    const packUnit = packQty && packQty.value > 1 ? `×${packQty.value}` : null;
     const volKey = newVolume ? newVolume.toLowerCase().replace(/\s+/g, "") : null;
     const baseNorm = normalizeProductName(baseName);
     const normNoSpaces = baseNorm.replace(/\s/g, "");
-    const volumeSuffix = !hasPackCount && volKey && !normNoSpaces.includes(volKey) ? ` ${newVolume}` : "";
-    const alreadyHasPack = !packSuffix || baseNorm.includes(packSuffix.trim());
-    const packPart = alreadyHasPack ? "" : packSuffix;
-    updateData.normalizedName = `${baseNorm}${volumeSuffix}${packPart}`.trim();
+    const volumeSuffix = volKey && !normNoSpaces.includes(volKey) ? ` ${newVolume}` : "";
+    updateData.normalizedName = `${baseNorm}${volumeSuffix}`.trim();
+    // Product.unit stores produce unit only, not pack size
+    updateData.unit = packUnit ? null : newUnit;
   }
 
   const updated = await prisma.product.update({

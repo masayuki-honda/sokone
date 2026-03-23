@@ -63,6 +63,7 @@ export async function PUT(
       storeId: review.storeId,
       userId: session.user.id,
       price: finalPrice,
+      packUnit: product.packUnit ?? null,
       taxIncluded: true,
       sourceType: "auto_flyer",
       sourceImageId: review.sourceImageId,

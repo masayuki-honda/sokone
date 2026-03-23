@@ -233,6 +233,7 @@ model PriceRecord {
   storeId       String     @map("store_id")
   userId        String     @map("user_id")
   price         Int
+  packUnit      String?    @map("pack_unit")  // e.g. "×6", "×24" — null means single item
   unitPrice     Float?     @map("unit_price")
   taxIncluded   Boolean    @default(true) @map("tax_included")
   sourceType    SourceType @map("source_type")

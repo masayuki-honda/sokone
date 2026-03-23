@@ -36,9 +36,10 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     price?: number;
     storeId?: string;
     recordedAt?: string;
+    packUnit?: string | null;
   };
 
-  const { price, storeId, recordedAt } = body;
+  const { price, storeId, recordedAt, packUnit } = body;
 
   if (price !== undefined && (typeof price !== "number" || price <= 0 || !Number.isInteger(price))) {
     return NextResponse.json({ error: "価格は1以上の整数で入力してください" }, { status: 400 });
@@ -50,6 +51,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       ...(price !== undefined ? { price } : {}),
       ...(storeId !== undefined ? { storeId } : {}),
       ...(recordedAt !== undefined ? { recordedAt: new Date(recordedAt) } : {}),
+      ...(packUnit !== undefined ? { packUnit } : {}),
     },
     include: {
       store: { select: { id: true, name: true } },

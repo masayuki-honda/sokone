@@ -305,26 +305,27 @@ export async function matchProduct(
 function resolveLookupKeys(
   name: string,
   options?: { unit?: string | null; volume?: string | null },
-): { lookupNormalized: string; lookupLegacy: string; hasNewKey: boolean; unitSuffix: string } {
+): { lookupNormalized: string; lookupLegacy: string; hasLegacyKey: boolean; unitSuffix: string; packUnit: string | null } {
   const normalized = normalizeProductName(name);
   const rawUnit = options?.unit?.trim() ?? null;
   const packQty = parseQuantity(rawUnit) ?? parseQuantity(options?.volume);
-  const packSuffix = packQty && packQty.value > 1 ? ` ×${packQty.value}` : "";
-  const hasPackCount = !!(packQty && packQty.value > 1);
+  // Pack size (×6, ×24 etc.) goes to PriceRecord.packUnit — NOT embedded in normalizedName.
+  const packUnit = packQty && packQty.value > 1 ? `×${packQty.value}` : null;
+  const hasPackCount = !!packUnit;
+
   const rawVolume = options?.volume?.trim() ?? null;
   const volKey = rawVolume ? rawVolume.toLowerCase().replace(/\s+/g, "") : null;
   const normNoSpaces = normalized.replace(/\s/g, "");
-  const volumeSuffix =
-    !hasPackCount && volKey && !normNoSpaces.includes(volKey) ? ` ${rawVolume}` : "";
+  // Volume IS always included in normalizedName (distinguishes 350ml from 500ml).
+  // We no longer skip it for multi-packs because we want all pack sizes to share
+  // the same Product and only differ by PriceRecord.packUnit.
+  const volumeSuffix = volKey && !normNoSpaces.includes(volKey) ? ` ${rawVolume}` : "";
 
   // Produce/selling unit suffix: "1袋", "1本", "1パック", "1個", ...
-  // Strip leading "1" from "1袋" → "袋", "1パック" → "パック"
   const strippedUnit = rawUnit ? rawUnit.replace(/^1\s*/, "").trim() : null;
-  // Metric volume (ml/g/L/kg) means it's a branded packaged good — skip unit suffix
   const hasMetricVolume = rawVolume ? /\d+\s*(ml|g|l|kg)/i.test(rawVolume) : false;
   const alreadyHasMultipackInName = normalized.includes("×");
   const isProduceUnit = strippedUnit !== null && PRODUCE_SELLING_UNITS.has(strippedUnit);
-  // Check against name + volumeSuffix to avoid double-appending (e.g., volume="大入り・1パック")
   const normWithVolNoSpaces = `${normalized}${volumeSuffix}`.replace(/\s/g, "");
   const unitSuffix =
     !hasPackCount &&
@@ -336,19 +337,15 @@ function resolveLookupKeys(
       ? ` 1${strippedUnit}`
       : "";
 
-  const alreadyHasPack = !packSuffix || normalized.includes(packSuffix.trim());
-  const packPart = alreadyHasPack ? "" : packSuffix;
-  const lookupNormalized = `${normalized}${volumeSuffix}${packPart}${unitSuffix}`.trim();
+  // normalizedName = base name + volume + produce-unit suffix (NO pack count)
+  const lookupNormalized = `${normalized}${volumeSuffix}${unitSuffix}`.trim();
 
-  // Legacy key: existing products stored before this naming convention was adopted
-  const baseWithoutUnitSuffix = `${normalized}${volumeSuffix}${packPart}`.trim();
-  const lookupLegacy = unitSuffix
-    ? baseWithoutUnitSuffix
-    : normalized.includes(packSuffix.trim()) || !packSuffix
-      ? normalized
-      : `${normalized}${packSuffix}`;
+  // Legacy: before this change, ×N was embedded in normalizedName.
+  // Used as fallback to find and upgrade pre-migration products.
+  const packSuffix = packUnit ? ` ${packUnit}` : "";
+  const lookupLegacy = `${normalized}${volumeSuffix}${unitSuffix}${packSuffix}`.trim();
 
-  return { lookupNormalized, lookupLegacy, hasNewKey: lookupNormalized !== lookupLegacy, unitSuffix };
+  return { lookupNormalized, lookupLegacy, hasLegacyKey: !!packSuffix, unitSuffix, packUnit };
 }
 
 /**
@@ -364,8 +361,8 @@ export async function findProductOnly(
     unit?: string | null;
     volume?: string | null;
   },
-): Promise<{ id: string; name: string; unit: string | null; volume: string | null } | null> {
-  const { lookupNormalized, lookupLegacy, hasNewKey } = resolveLookupKeys(name, options);
+): Promise<{ id: string; name: string; unit: string | null; volume: string | null; packUnit: string | null } | null> {
+  const { lookupNormalized, lookupLegacy, hasLegacyKey, packUnit } = resolveLookupKeys(name, options);
 
   let existing = await prisma.product.findFirst({
     where: {
@@ -376,7 +373,9 @@ export async function findProductOnly(
     },
   });
 
-  if (!existing && hasNewKey) {
+  // Backward compat: pre-migration products still have ×N embedded in normalizedName.
+  // Find them and upgrade normalizedName on the fly (strip the pack suffix out).
+  if (!existing && hasLegacyKey) {
     existing = await prisma.product.findFirst({
       where: {
         OR: [
@@ -394,7 +393,7 @@ export async function findProductOnly(
   }
 
   if (!existing) return null;
-  return { id: existing.id, name: existing.name, unit: existing.unit, volume: existing.volume };
+  return { id: existing.id, name: existing.name, unit: existing.unit, volume: existing.volume, packUnit };
 }
 
 export async function findOrCreateProduct(
@@ -404,19 +403,16 @@ export async function findOrCreateProduct(
     unit?: string | null;
     volume?: string | null;
   },
-): Promise<{ id: string; name: string; isNew: boolean; unit: string | null; volume: string | null }> {
+): Promise<{ id: string; name: string; isNew: boolean; unit: string | null; volume: string | null; packUnit: string | null }> {
   const normalized = normalizeProductName(name);
-  const { lookupNormalized, lookupLegacy, hasNewKey, unitSuffix } = resolveLookupKeys(name, options);
+  const { lookupNormalized, lookupLegacy, hasLegacyKey, unitSuffix, packUnit } = resolveLookupKeys(name, options);
 
   // Re-derive display-name helpers (needed only for new product creation)
-  const packQty = parseQuantity(options?.unit) ?? parseQuantity(options?.volume);
-  const packSuffix = packQty && packQty.value > 1 ? ` ×${packQty.value}` : "";
-  const hasPackCount = !!(packQty && packQty.value > 1);
   const rawVolume = options?.volume?.trim() ?? null;
   const volKey = rawVolume ? rawVolume.toLowerCase().replace(/\s+/g, "") : null;
   const normNoSpaces = normalized.replace(/\s/g, "");
-  const volumeSuffix =
-    !hasPackCount && volKey && !normNoSpaces.includes(volKey) ? ` ${rawVolume}` : "";
+  // Always include volume in display name (same logic as resolveLookupKeys)
+  const volumeSuffix = volKey && !normNoSpaces.includes(volKey) ? ` ${rawVolume}` : "";
 
   // Try exact match on full key first
   let existing = await prisma.product.findFirst({
@@ -434,8 +430,8 @@ export async function findOrCreateProduct(
     },
   });
 
-  // Lazy migration: fall back to legacy key and upgrade normalizedName on the fly
-  if (!existing && hasNewKey) {
+  // Backward compat: find pre-migration products with ×N in normalizedName and upgrade
+  if (!existing && hasLegacyKey) {
     existing = await prisma.product.findFirst({
       where: {
         OR: [
@@ -451,7 +447,6 @@ export async function findOrCreateProduct(
       },
     });
     if (existing) {
-      // Upgrade this product to the new key format (idempotent)
       await prisma.product.update({
         where: { id: existing.id },
         data: { normalizedName: lookupNormalized },
@@ -461,7 +456,7 @@ export async function findOrCreateProduct(
   }
 
   if (existing) {
-    return { id: existing.id, name: existing.name, isNew: false, unit: existing.unit, volume: existing.volume };
+    return { id: existing.id, name: existing.name, isNew: false, unit: existing.unit, volume: existing.volume, packUnit };
   }
 
   // Resolve category
@@ -475,46 +470,41 @@ export async function findOrCreateProduct(
     }
   }
 
-  // Build display name: append volume, pack count, and/or produce unit if not already in the OCR name
+  // Build display name: append volume and/or produce unit if not already in the OCR name.
+  // Pack count (×6 etc.) is intentionally NOT added to the display name —
+  // it is stored in PriceRecord.packUnit instead.
   let displayName = name.trim();
 
-  // When the pack count is already captured in options.unit (e.g., "×6"), strip any
-  // count notation embedded in the OCR product name to avoid duplication like:
-  //   "アサヒ スーパードライ x4" + unit "×4" → would display as "アサヒ スーパードライ x4 (×4)"
-  // After stripping, the count will be shown via the unit field in the UI.
+  // Strip any ×N / "6缶パック" notation the OCR may have embedded in the name
   const packQtyFromUnit = parseQuantity(options?.unit);
   const packCountFromUnit = !!(packQtyFromUnit && packQtyFromUnit.value > 1);
   if (packCountFromUnit) {
     displayName = displayName
-      .replace(/\s*[×xX]\s*\d+/g, "")  // ×4, x6, X24
-      .replace(/\s*\d+\s*(?:缶|本|個|袋|枚|パック|入り?)\s*(?:パック|セット|入り?)?/g, "")  // 6缶パック, 6本入
+      .replace(/\s*[×xX]\s*\d+/g, "")
+      .replace(/\s*\d+\s*(?:缶|本|個|袋|枚|パック|入り?)\s*(?:パック|セット|入り?)?/g, "")
       .trim();
   }
 
   if (volumeSuffix && volKey && !displayName.toLowerCase().replace(/\s+/g, "").includes(volKey)) {
     displayName += volumeSuffix;
   }
-  // Append pack suffix to display name only when count is NOT already in the unit field.
-  // When packCountFromUnit is true, the unit field shows the count — no need to embed it in the name.
-  if (packSuffix && !packCountFromUnit && !normalized.includes(packSuffix.trim())) {
-    displayName += packSuffix;
-  }
   if (unitSuffix) {
     displayName += unitSuffix;
   }
 
-  // Create new product
+  // Create new product.
+  // Product.unit stores produce unit (袋, 本, …) only — NOT pack size.
   const product = await prisma.product.create({
     data: {
       name: displayName,
       normalizedName: lookupNormalized,
       categoryId,
-      unit: options?.unit || null,
+      unit: packUnit ? null : (options?.unit || null),
       volume: options?.volume || null,
     },
   });
 
-  return { id: product.id, name: product.name, isNew: true, unit: product.unit, volume: product.volume };
+  return { id: product.id, name: product.name, isNew: true, unit: product.unit, volume: product.volume, packUnit };
 }
 
 /**

@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { findOrCreateProduct, normalizeProductName } from "@/lib/product-matcher";
 import { SourceType } from "@prisma/client";
 import { createNotification } from "@/lib/notification";
-import { calculateUnitPriceForStorage } from "@/lib/unit-price";
+import { calculateUnitPriceForStorage, parseQuantity } from "@/lib/unit-price";
 
 interface PriceItem {
   name: string;
@@ -109,6 +109,7 @@ export async function POST(request: NextRequest) {
         // Find or create product
         let productId = item.productId;
         let isNewProduct = false;
+        let itemPackUnit: string | null = null;
 
         if (!productId) {
           const product = await findOrCreateProduct(item.name, {
@@ -118,7 +119,15 @@ export async function POST(request: NextRequest) {
           });
           productId = product.id;
           isNewProduct = product.isNew;
+          itemPackUnit = product.packUnit;
         } else {
+          // Derive packUnit from the OCR item's unit field when product is manually linked
+          const packQtyFromItem =
+            parseQuantity(item.unit?.trim()) ?? parseQuantity(item.volume?.trim());
+          itemPackUnit =
+            packQtyFromItem && packQtyFromItem.value > 1
+              ? `×${packQtyFromItem.value}`
+              : null;
           // User manually linked an OCR-extracted name to an existing product.
           // Auto-register the OCR name as an alias so future scans match automatically.
           const aliasName = normalizeProductName(item.name);
@@ -152,7 +161,7 @@ export async function POST(request: NextRequest) {
         const unitPrice = calculateUnitPriceForStorage(
           finalPrice,
           productForUnit?.volume ?? item.volume,
-          productForUnit?.unit ?? item.unit,
+          itemPackUnit ?? productForUnit?.unit ?? item.unit,
         );
 
         // Create price record
@@ -162,6 +171,7 @@ export async function POST(request: NextRequest) {
             storeId,
             userId: session.user.id,
             price: finalPrice,
+            packUnit: itemPackUnit,
             unitPrice,
             taxIncluded: true,
             sourceType,

@@ -46,6 +46,7 @@ interface ProductDetail {
     sourceImageId: string | null;
     recordedAt: string;
     createdAt: string;
+    packUnit: string | null;
     store: { id: string; name: string };
   }>;
   stats: {
@@ -894,10 +895,13 @@ export default function ProductDetailPage({
                           <td className="py-2 pr-4">{record.store.name}</td>
                           <td className={`py-2 pr-4 text-right font-medium ${isBottomPrice ? "text-green-600 font-bold" : ""}`}>
                             ¥{record.price.toLocaleString()}
+                            {record.packUnit && (
+                              <span className="ml-1.5 text-xs font-normal text-muted-foreground">{record.packUnit}</span>
+                            )}
                             {isBottomPrice && <span className="ml-1 text-xs">🏆</span>}
                           </td>
                           <td className="py-2 pr-4 text-right text-xs text-muted-foreground">
-                            {formatUnitPrice(record.price, product.volume, product.unit) || "—"}
+                            {formatUnitPrice(record.price, product.volume, record.packUnit ?? product.unit) || "—"}
                           </td>
                           <td className="py-2">
                             {record.sourceImageId ? (

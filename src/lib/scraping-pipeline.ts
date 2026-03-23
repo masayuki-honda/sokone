@@ -278,7 +278,7 @@ export async function runScrapingPipeline(
             const unitPrice = calculateUnitPriceForStorage(
               finalPrice,
               product.volume ?? item.volume,
-              product.unit ?? item.unit,
+              product.packUnit ?? product.unit ?? item.unit,
             );
 
             await prisma.priceRecord.create({
@@ -287,6 +287,7 @@ export async function runScrapingPipeline(
                 storeId,
                 userId,
                 price: finalPrice,
+                packUnit: product.packUnit ?? null,
                 unitPrice,
                 taxIncluded: true,
                 sourceType: "auto_flyer",
