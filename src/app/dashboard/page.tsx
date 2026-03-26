@@ -14,12 +14,27 @@ import {
   Loader2,
   StarOff,
   Database,
+  ArrowUpDown,
+  Trash2,
+  GitMerge,
 } from "lucide-react";
 import { Header } from "@/components/header";
+import { WatchKeywordsManager } from "@/components/watch-keywords-manager";
+import { useRecentlyViewed } from "@/hooks/use-recently-viewed";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { MergeProductDialog } from "@/components/merge-product-dialog";
+import { formatUnitPrice } from "@/lib/unit-price";
 
 interface DashboardStats {
   productCount: number;
@@ -58,8 +73,10 @@ interface FavoriteItem {
 interface BottomPriceItem {
   productId: string;
   productName: string;
+  categoryId: string | null;
   categoryName: string | null;
   unit: string | null;
+  volume: string | null;
   bottomPrice: number;
   bottomDate: string;
   bottomStoreName: string;
@@ -82,18 +99,52 @@ interface DbStorage {
   status: "ok" | "warning" | "critical";
 }
 
+interface StoreItem {
+  id: string;
+  name: string;
+}
+
+interface DealItem {
+  priceRecordId: string;
+  product: {
+    id: string;
+    name: string;
+    unit: string | null;
+    category: { id: string; name: string } | null;
+  };
+  store: { id: string; name: string };
+  price: number;
+  bottomPrice: number;
+  isBottomPrice: boolean;
+  discount: number;
+  recordedAt: string;
+}
+
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [recentPrices, setRecentPrices] = useState<RecentPrice[]>([]);
+  const [_recentPrices, setRecentPrices] = useState<RecentPrice[]>([]);
   const [favorites, setFavorites] = useState<FavoriteItem[]>([]);
   const [bottomPrices, setBottomPrices] = useState<BottomPriceItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [stores, setStores] = useState<StoreItem[]>([]);
   const [dbStorage, setDbStorage] = useState<DbStorage | null>(null);
+  const [deals, setDeals] = useState<DealItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>("");
+  const [selectedStore, setSelectedStore] = useState<string>("");
+  const [sortBy, setSortBy] = useState<string>("name");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSearching, setIsSearching] = useState(false);
+
+  // Delete state
+  const [deleteTarget, setDeleteTarget] = useState<{ productId: string; productName: string; recordCount: number } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Merge state
+  const [mergeSource, setMergeSource] = useState<{ id: string; name: string; recordCount: number } | null>(null);
 
   // Debounce search query
   useEffect(() => {
@@ -108,11 +159,13 @@ export default function DashboardPage() {
     async function fetchAll() {
       setIsLoading(true);
       try {
-        const [dashRes, favsRes, catsRes, storageRes] = await Promise.all([
+        const [dashRes, favsRes, catsRes, storageRes, storesRes, dealsRes] = await Promise.all([
           fetch("/api/dashboard"),
           fetch("/api/favorites"),
           fetch("/api/categories"),
           fetch("/api/admin/db-storage"),
+          fetch("/api/stores"),
+          fetch("/api/deals"),
         ]);
 
         if (dashRes.ok) {
@@ -135,6 +188,16 @@ export default function DashboardPage() {
           const data = await storageRes.json();
           setDbStorage(data);
         }
+
+        if (storesRes.ok) {
+          const data = await storesRes.json();
+          setStores(Array.isArray(data) ? data : []);
+        }
+
+        if (dealsRes.ok) {
+          const data = await dealsRes.json();
+          setDeals(data.deals || []);
+        }
       } catch (error) {
         console.error("Failed to load dashboard:", error);
       } finally {
@@ -144,13 +207,16 @@ export default function DashboardPage() {
     fetchAll();
   }, []);
 
-  // Fetch bottom prices (with search/filter)
+  // Fetch bottom prices (with search/filter/sort)
   const fetchBottomPrices = useCallback(async () => {
     setIsSearching(true);
     try {
       const params = new URLSearchParams();
       if (selectedCategory) params.set("categoryId", selectedCategory);
       if (debouncedQuery) params.set("q", debouncedQuery);
+      if (selectedStore) params.set("storeId", selectedStore);
+      if (sortBy !== "name") params.set("sortBy", sortBy);
+      if (sortOrder !== "asc") params.set("sortOrder", sortOrder);
       params.set("limit", "20");
 
       const res = await fetch(`/api/dashboard/products?${params}`);
@@ -163,11 +229,54 @@ export default function DashboardPage() {
     } finally {
       setIsSearching(false);
     }
-  }, [selectedCategory, debouncedQuery]);
+  }, [selectedCategory, debouncedQuery, selectedStore, sortBy, sortOrder]);
 
   useEffect(() => {
     fetchBottomPrices();
   }, [fetchBottomPrices]);
+
+  async function handleCategoryChange(productId: string, categoryId: string | null) {
+    try {
+      const res = await fetch(`/api/products/${productId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ categoryId }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setBottomPrices((prev) =>
+          prev.map((p) =>
+            p.productId === productId
+              ? { ...p, categoryId: updated.category?.id ?? null, categoryName: updated.category?.name ?? null }
+              : p,
+          ),
+        );
+      }
+    } catch (error) {
+      console.error("Failed to update category:", error);
+    }
+  }
+
+  async function handleDeleteProduct() {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      const res = await fetch(`/api/products/${deleteTarget.productId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json();
+        setDeleteError(data.error || "削除に失敗しました");
+        return;
+      }
+      setBottomPrices((prev) => prev.filter((p) => p.productId !== deleteTarget.productId));
+      setFavorites((prev) => prev.filter((f) => f.productId !== deleteTarget.productId));
+      setDeleteTarget(null);
+    } catch {
+      setDeleteError("削除中にエラーが発生しました");
+    } finally {
+      setIsDeleting(false);
+    }
+  }
 
   // Toggle favorite
   async function handleToggleFavorite(productId: string, isFavorite: boolean) {
@@ -213,12 +322,13 @@ export default function DashboardPage() {
       <Header />
       <main className="mx-auto max-w-6xl px-4 py-8 space-y-8">
         {/* Title + Action */}
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">ダッシュボード</h1>
+        <div className="flex items-center justify-between gap-2">
+          <h1 className="text-xl sm:text-2xl font-bold">ダッシュボード</h1>
           <Link href="/upload">
-            <Button>
-              <Camera className="mr-2 h-4 w-4" />
-              画像をアップロード
+            <Button size="sm" className="sm:size-default">
+              <Camera className="mr-1.5 h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">画像をアップロード</span>
+              <span className="sm:hidden">アップロード</span>
             </Button>
           </Link>
         </div>
@@ -359,62 +469,133 @@ export default function DashboardPage() {
           </section>
         )}
 
-        {/* Recent Prices */}
-        {recentPrices.length > 0 && (
+        {/* Deals Section */}
+        {deals.length > 0 && (
           <section>
-            <h2 className="text-lg font-semibold mb-4">最近の価格登録</h2>
-            <Card>
-              <CardContent className="pt-6">
-                <div className="space-y-3">
-                  {recentPrices.map((record) => (
-                    <div
-                      key={record.id}
-                      className="flex items-center justify-between border-b pb-3 last:border-0 last:pb-0"
+            <div className="flex items-center gap-2 mb-4">
+              <TrendingDown className="h-5 w-5 text-green-600" />
+              <h2 className="text-lg font-semibold">今週のお買い得</h2>
+              <Badge variant="secondary" className="text-xs">
+                {deals.length}件
+              </Badge>
+              <Link
+                href="/deals"
+                className="ml-auto text-sm text-muted-foreground hover:text-foreground flex items-center gap-1"
+              >
+                すべて見る <ArrowRight className="h-3 w-3" />
+              </Link>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {deals.slice(0, 6).map((deal) => {
+                const isFav = favorites.some((f) => f.productId === deal.product.id);
+                return (
+                <Card key={deal.priceRecordId} className="relative">
+                  <button
+                    className={`absolute right-3 top-3 transition-colors ${isFav ? "text-yellow-500 hover:text-yellow-600" : "text-zinc-300 hover:text-yellow-400"}`}
+                    onClick={() => handleToggleFavorite(deal.product.id, isFav)}
+                    title={isFav ? "お気に入り解除" : "お気に入り登録"}
+                  >
+                    <Star className={`h-4 w-4 ${isFav ? "fill-current" : ""}`} />
+                  </button>
+                  <CardContent className="pt-6">
+                    <Link
+                      href={`/products/${deal.product.id}`}
+                      className="block"
                     >
-                      <div className="min-w-0 flex-1">
-                        <Link
-                          href={`/products/${record.product.id}`}
-                          className="font-medium hover:text-primary truncate block"
-                        >
-                          {record.product.name}
-                        </Link>
-                        <p className="text-xs text-muted-foreground">
-                          {record.store.name} ・{" "}
-                          {new Date(record.recordedAt).toLocaleDateString(
-                            "ja-JP",
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1 pr-6">
+                          <h3 className="font-medium truncate">
+                            {deal.product.name}
+                          </h3>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {deal.store.name}
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-lg font-bold text-green-600">
+                            ¥{deal.price.toLocaleString()}
+                          </p>
+                          {deal.isBottomPrice ? (
+                            <Badge className="bg-green-600 text-white text-xs">
+                              🏆 底値
+                            </Badge>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">
+                              底値 ¥{deal.bottomPrice.toLocaleString()}
+                            </span>
                           )}
-                        </p>
+                        </div>
                       </div>
-                      <span className="font-bold ml-4">
-                        ¥{record.price.toLocaleString()}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+                    </Link>
+                  </CardContent>
+                </Card>
+                );
+              })}
+            </div>
           </section>
         )}
+
+        {/* Recently Viewed Products */}
+        <RecentlyViewedSection />
 
         {/* Bottom Prices Table */}
         <section>
           <h2 className="text-lg font-semibold mb-4">底値一覧</h2>
 
-          {/* Search + Category Filter */}
-          <div className="flex flex-col gap-3 mb-4 sm:flex-row">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="商品名で検索..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
-              />
+          {/* Search + Category Filter + Sort + Store */}
+          <div className="flex flex-col gap-3 mb-4">
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="商品名で検索..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <div className="flex gap-2">
+                <div className="flex items-center gap-1">
+                  <ArrowUpDown className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <select
+                    className="text-sm border rounded px-2 py-1.5 bg-background"
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                  >
+                    <option value="name">名前順</option>
+                    <option value="price">底値順</option>
+                    <option value="recordCount">記録数順</option>
+                  </select>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="px-2 text-xs"
+                    onClick={() => setSortOrder((v) => (v === "asc" ? "desc" : "asc"))}
+                  >
+                    {sortOrder === "asc" ? "↑" : "↓"}
+                  </Button>
+                </div>
+                {stores.length > 0 && (
+                  <select
+                    className="text-sm border rounded px-2 py-1.5 bg-background"
+                    value={selectedStore}
+                    onChange={(e) => setSelectedStore(e.target.value)}
+                  >
+                    <option value="">全店舗</option>
+                    {stores.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
             </div>
-            <div className="flex gap-2 flex-wrap">
+            <div className="flex gap-2 overflow-x-auto pb-1 -mb-1 scrollbar-none">
               <Button
                 variant={selectedCategory === "" ? "default" : "outline"}
                 size="sm"
+                className="shrink-0"
                 onClick={() => setSelectedCategory("")}
               >
                 すべて
@@ -426,6 +607,7 @@ export default function DashboardPage() {
                     selectedCategory === cat.id ? "default" : "outline"
                   }
                   size="sm"
+                  className="shrink-0"
                   onClick={() => setSelectedCategory(cat.id)}
                 >
                   {cat.name}
@@ -482,6 +664,8 @@ export default function DashboardPage() {
                       <th className="pb-3 font-medium text-center w-10">
                         ☆
                       </th>
+                      <th className="pb-3 font-medium text-center w-8"></th>
+                      <th className="pb-3 font-medium text-center w-8"></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -501,24 +685,35 @@ export default function DashboardPage() {
                             >
                               {item.productName}
                             </Link>
-                            {item.unit && (
+                            {item.unit && !(
+                              // Hide unit if it's ×N already embedded in the product name (as xN or ×N)
+                              /^[×xX]\d+$/.test(item.unit) &&
+                              new RegExp(`[×xX]${item.unit.replace(/^[×xX]/, '')}`, 'i').test(item.productName)
+                            ) && (
                               <span className="text-xs text-muted-foreground ml-1">
                                 ({item.unit})
                               </span>
                             )}
                           </td>
                           <td className="py-3 pr-4 hidden sm:table-cell">
-                            {item.categoryName && (
-                              <Badge
-                                variant="outline"
-                                className="text-xs"
-                              >
-                                {item.categoryName}
-                              </Badge>
-                            )}
+                            <select
+                              className="text-xs border rounded px-1.5 py-0.5 bg-background text-foreground max-w-[110px]"
+                              value={item.categoryId ?? ""}
+                              onChange={(e) => handleCategoryChange(item.productId, e.target.value || null)}
+                            >
+                              <option value="">未分類</option>
+                              {categories.map((cat) => (
+                                <option key={cat.id} value={cat.id}>{cat.name}</option>
+                              ))}
+                            </select>
                           </td>
                           <td className="py-3 pr-4 text-right font-bold text-green-600">
                             ¥{item.bottomPrice.toLocaleString()}
+                            {formatUnitPrice(item.bottomPrice, item.volume, item.unit) && (
+                              <div className="text-[10px] font-normal text-muted-foreground">
+                                {formatUnitPrice(item.bottomPrice, item.volume, item.unit)}
+                              </div>
+                            )}
                           </td>
                           <td className="py-3 pr-4 text-xs hidden md:table-cell">
                             {item.bottomStoreName}
@@ -551,6 +746,29 @@ export default function DashboardPage() {
                               )}
                             </button>
                           </td>
+                          <td className="py-3 text-center">
+                            <button
+                              onClick={() => {
+                                setDeleteTarget({ productId: item.productId, productName: item.productName, recordCount: item.recordCount });
+                                setDeleteError(null);
+                              }}
+                              className="hover:text-destructive transition-colors text-muted-foreground"
+                              title="削除"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </td>
+                          <td className="py-3 text-center">
+                            <button
+                              onClick={() => {
+                                setMergeSource({ id: item.productId, name: item.productName, recordCount: item.recordCount });
+                              }}
+                              className="hover:text-primary transition-colors text-muted-foreground"
+                              title="統合"
+                            >
+                              <GitMerge className="h-4 w-4" />
+                            </button>
+                          </td>
                         </tr>
                       );
                     })}
@@ -559,6 +777,19 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
           )}
+        </section>
+
+        {/* Watch Keywords Section */}
+        <section>
+          <div className="flex items-center gap-2 mb-4">
+            <span className="text-lg">🏷️</span>
+            <h2 className="text-lg font-semibold">登録フィルタ（ウォッチキーワード）</h2>
+          </div>
+          <Card>
+            <CardContent className="pt-6">
+              <WatchKeywordsManager />
+            </CardContent>
+          </Card>
         </section>
 
         {/* Quick Links */}
@@ -583,6 +814,51 @@ export default function DashboardPage() {
           />
         </div>
       </main>
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>商品を削除</DialogTitle>
+            <DialogDescription>
+              「{deleteTarget?.productName}」を削除します。この操作は取り消せません。
+              <br />
+              関連する{deleteTarget?.recordCount}件の価格記録もすべて削除されます。
+            </DialogDescription>
+          </DialogHeader>
+          {deleteError && (
+            <p className="text-sm text-destructive">{deleteError}</p>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={isDeleting}>
+              キャンセル
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteProduct} disabled={isDeleting}>
+              {isDeleting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  削除中...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  削除する
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Merge dialog */}
+      <MergeProductDialog
+        source={mergeSource}
+        onClose={() => setMergeSource(null)}
+        onMerged={(sourceId) => {
+          setBottomPrices((prev) => prev.filter((p) => p.productId !== sourceId));
+          setFavorites((prev) => prev.filter((f) => f.productId !== sourceId));
+        }}
+      />
     </div>
   );
 }
@@ -610,6 +886,30 @@ function StatCard({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function RecentlyViewedSection() {
+  const { recentlyViewed } = useRecentlyViewed();
+  if (recentlyViewed.length === 0) return null;
+  return (
+    <section>
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-lg">🕐</span>
+        <h2 className="text-lg font-semibold">最近見た商品</h2>
+      </div>
+      <div className="flex gap-2 overflow-x-auto pb-2">
+        {recentlyViewed.map((p) => (
+          <Link key={p.id} href={`/products/${p.id}`}>
+            <Card className="min-w-[140px] transition-shadow hover:shadow-md">
+              <CardContent className="p-3">
+                <p className="text-sm font-medium truncate">{p.name}</p>
+              </CardContent>
+            </Card>
+          </Link>
+        ))}
+      </div>
+    </section>
   );
 }
 

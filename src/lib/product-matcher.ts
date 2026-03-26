@@ -1,11 +1,94 @@
 import { prisma } from "@/lib/prisma";
+import { parseQuantity } from "@/lib/unit-price";
+
+// === Synonym dictionary ===
+// Groups of equivalent terms — any term in a group will be normalized to the first entry.
+const SYNONYM_GROUPS: string[][] = [
+  // Poultry
+  ["鶏もも", "とりもも", "鶏モモ", "とりモモ", "チキンもも"],
+  ["鶏むね", "とりむね", "鶏ムネ", "とりムネ", "チキンむね"],
+  ["鶏手羽先", "とり手羽先", "手羽先"],
+  ["鶏手羽元", "とり手羽元", "手羽元"],
+  ["ささみ", "ささ身", "鶏ささみ", "とりささみ"],
+  // Pork
+  ["豚バラ", "ぶたバラ", "豚ばら", "ぶたばら"],
+  ["豚ロース", "ぶたロース"],
+  ["豚こま", "豚こま切れ", "豚小間", "豚小間切れ", "ぶたこま"],
+  ["豚ひき肉", "ぶたひき肉", "豚挽き肉", "ぶた挽肉", "豚ミンチ"],
+  // Beef
+  ["牛バラ", "牛ばら"],
+  ["牛ひき肉", "牛挽き肉", "牛挽肉", "牛ミンチ"],
+  ["合びき肉", "合挽き肉", "合挽肉", "合いびき肉", "合ミンチ"],
+  // Eggs / Dairy
+  ["たまご", "卵", "タマゴ", "玉子"],
+  ["牛乳", "ぎゅうにゅう", "ミルク"],
+  // Vegetables
+  ["じゃがいも", "ジャガイモ", "馬鈴薯", "ばれいしょ"],
+  ["にんじん", "ニンジン", "人参"],
+  ["たまねぎ", "タマネギ", "玉ねぎ", "玉葱", "玉ネギ"],
+  ["きゅうり", "キュウリ", "胡瓜"],
+  ["トマト", "とまと"],
+  ["ピーマン", "ぴーまん"],
+  ["キャベツ", "きゃべつ"],
+  ["レタス", "れたす"],
+  ["ほうれん草", "ほうれんそう", "ホウレンソウ", "ホウレン草"],
+  ["ブロッコリー", "ぶろっこりー"],
+  ["もやし", "モヤシ"],
+  ["大根", "だいこん", "ダイコン"],
+  ["白菜", "はくさい", "ハクサイ"],
+  ["ねぎ", "ネギ", "葱", "長ねぎ", "長ネギ"],
+  // Fruits
+  ["りんご", "リンゴ", "林檎"],
+  ["みかん", "ミカン", "蜜柑"],
+  ["バナナ", "ばなな"],
+  ["いちご", "イチゴ", "苺"],
+  // Tofu / Soy
+  ["豆腐", "とうふ", "トウフ"],
+  ["納豆", "なっとう", "ナットウ"],
+  // Rice
+  ["米", "こめ", "お米"],
+  // Fish
+  ["さけ", "サケ", "鮭", "シャケ", "しゃけ"],
+  ["さば", "サバ", "鯖"],
+  ["いわし", "イワシ", "鰯"],
+  ["まぐろ", "マグロ", "鮪"],
+  ["えび", "エビ", "海老", "蝦"],
+  // Common groceries
+  ["食パン", "しょくパン"],
+  ["ヨーグルト", "よーぐると"],
+  ["マヨネーズ", "まよねーず", "マヨ"],
+  ["ケチャップ", "けちゃっぷ"],
+  ["しょうゆ", "醤油", "しょう油", "正油"],
+  ["みそ", "ミソ", "味噌"],
+  ["砂糖", "さとう", "シュガー"],
+  ["食塩", "塩", "しお"],
+];
+
+// Units that represent the SELLING FORMAT for produce/vegetables/fruit/fish/meat
+// (e.g., 1本 = 1 cucumber stick, 1袋 = 1 bag, 1パック = 1 pack).
+// These are incorporated into normalizedName so different selling formats are separate products.
+// Condition: only added when no metric volume (ml/g/L/kg) is present.
+const PRODUCE_SELLING_UNITS = new Set([
+  "本", "個", "玉", "球", "袋", "束", "房", "パック",
+]);
+
+// Build fast lookup: normalized synonym → canonical form
+const synonymMap = new Map<string, string>();
+for (const group of SYNONYM_GROUPS) {
+  const canonical = group[0].toLowerCase();
+  for (const term of group) {
+    synonymMap.set(term.toLowerCase(), canonical);
+  }
+}
 
 /**
  * Normalize a product name for matching:
  * - Full-width to half-width conversion
  * - Lowercase
  * - Normalize spaces and symbols
- * - Normalize volume notation
+ * - Normalize volume notation (e.g., "350ＭＬ" → "350ml")
+ * - Normalize pack notation (e.g., "6缶パック" → "×6")
+ * - Apply synonym dictionary
  */
 export function normalizeProductName(name: string): string {
   let normalized = name;
@@ -23,11 +106,33 @@ export function normalizeProductName(name: string): string {
   normalized = normalized.replace(/\uff4c/g, "L");
   normalized = normalized.replace(/\uff47/g, "g");
 
-  // Remove extra spaces
-  normalized = normalized.replace(/\s+/g, " ").trim();
-
   // Lowercase
   normalized = normalized.toLowerCase();
+
+  // Strip bread slice-cut notation (e.g., "6枚切り", "8枚切") before multipack normalization.
+  // Different slice counts of the same bread are identical products at the same price.
+  // Must run before the multipack regex to prevent "6枚切り" → "×6切り" misparse.
+  normalized = normalized.replace(/\d+\s*枚切り?/g, "");
+
+  // Normalize pack/multipack notation: "6缶パック", "6本パック", "6個入" etc.
+  // Only normalize when count >= 2 (count of 1 is a single item, not a multi-pack)
+  normalized = normalized.replace(
+    /(\d+)\s*(?:缶|本|個|袋|枚|パック|入り?|p)\s*(?:パック|セット|入り?)?/g,
+    (_match, count) => (parseInt(count, 10) > 1 ? `×${count}` : _match),
+  );
+
+  // Normalize "×" variants
+  normalized = normalized.replace(/\s*[xX]\s*/g, "×");
+
+  // Apply synonym dictionary
+  for (const [term, canonical] of synonymMap) {
+    if (normalized.includes(term)) {
+      normalized = normalized.replace(term, canonical);
+    }
+  }
+
+  // Remove extra spaces
+  normalized = normalized.replace(/\s+/g, " ").trim();
 
   return normalized;
 }
@@ -141,16 +246,32 @@ export async function matchProduct(
     take: 50,
   });
 
+  // Extract pack quantity from the query name to avoid cross-pack matching
+  const queryPackQty = parseQuantity(normalized);
+
   const candidates = recentProducts
-    .map((product) => ({
-      productId: product.id,
-      productName: product.name,
-      similarity: Math.max(
-        similarity(normalized, product.normalizedName),
-        similarity(name.toLowerCase(), product.name.toLowerCase()),
-      ),
-    }))
-    .filter((c) => c.similarity > 0.5)
+    .map((product) => {
+      // Also normalize the DB product name with synonyms for better matching
+      const dbNormalized = normalizeProductName(product.name);
+
+      // Prevent matching across different pack sizes:
+      // e.g., single can vs 6-pack should never be auto-matched.
+      const dbPackQty = parseQuantity(dbNormalized) ?? parseQuantity(product.unit);
+      const queryPack = queryPackQty?.value ?? 1;
+      const dbPack = dbPackQty?.value ?? 1;
+      if (queryPack !== dbPack) return null;
+
+      return {
+        productId: product.id,
+        productName: product.name,
+        similarity: Math.max(
+          similarity(normalized, product.normalizedName),
+          similarity(normalized, dbNormalized),
+          similarity(name.toLowerCase(), product.name.toLowerCase()),
+        ),
+      };
+    })
+    .filter((c): c is NonNullable<typeof c> => c !== null && c.similarity > 0.5)
     .sort((a, b) => b.similarity - a.similarity)
     .slice(0, 5);
 
@@ -177,6 +298,104 @@ export async function matchProduct(
 /**
  * Find or create a product by name
  */
+/**
+ * Shared helper: resolve the lookup keys (normalizedName variants) for a product name + options.
+ * Used by both findOrCreateProduct and findProductOnly.
+ */
+function resolveLookupKeys(
+  name: string,
+  options?: { unit?: string | null; volume?: string | null },
+): { lookupNormalized: string; lookupLegacy: string; hasLegacyKey: boolean; unitSuffix: string; packUnit: string | null } {
+  const normalized = normalizeProductName(name);
+  const rawUnit = options?.unit?.trim() ?? null;
+  const packQty = parseQuantity(rawUnit) ?? parseQuantity(options?.volume);
+  // Pack size (×6, ×24 etc.) goes to PriceRecord.packUnit — NOT embedded in normalizedName.
+  const packUnit = packQty && packQty.value > 1 ? `×${packQty.value}` : null;
+  const hasPackCount = !!packUnit;
+
+  const rawVolume = options?.volume?.trim() ?? null;
+  const volKey = rawVolume ? rawVolume.toLowerCase().replace(/\s+/g, "") : null;
+  const normNoSpaces = normalized.replace(/\s/g, "");
+  // Volume IS always included in normalizedName (distinguishes 350ml from 500ml).
+  // We no longer skip it for multi-packs because we want all pack sizes to share
+  // the same Product and only differ by PriceRecord.packUnit.
+  const volumeSuffix = volKey && !normNoSpaces.includes(volKey) ? ` ${rawVolume}` : "";
+
+  // Produce/selling unit suffix: "1袋", "1本", "1パック", "1個", ...
+  const strippedUnit = rawUnit ? rawUnit.replace(/^1\s*/, "").trim() : null;
+  const hasMetricVolume = rawVolume ? /\d+\s*(ml|g|l|kg)/i.test(rawVolume) : false;
+  const alreadyHasMultipackInName = normalized.includes("×");
+  const isProduceUnit = strippedUnit !== null && PRODUCE_SELLING_UNITS.has(strippedUnit);
+  const normWithVolNoSpaces = `${normalized}${volumeSuffix}`.replace(/\s/g, "");
+  const unitSuffix =
+    !hasPackCount &&
+    !alreadyHasMultipackInName &&
+    !hasMetricVolume &&
+    isProduceUnit &&
+    !normNoSpaces.includes(strippedUnit!) &&
+    !normWithVolNoSpaces.includes(strippedUnit!)
+      ? ` 1${strippedUnit}`
+      : "";
+
+  // normalizedName = base name + volume + produce-unit suffix (NO pack count)
+  const lookupNormalized = `${normalized}${volumeSuffix}${unitSuffix}`.trim();
+
+  // Legacy: before this change, ×N was embedded in normalizedName.
+  // Used as fallback to find and upgrade pre-migration products.
+  const packSuffix = packUnit ? ` ${packUnit}` : "";
+  const lookupLegacy = `${normalized}${volumeSuffix}${unitSuffix}${packSuffix}`.trim();
+
+  return { lookupNormalized, lookupLegacy, hasLegacyKey: !!packSuffix, unitSuffix, packUnit };
+}
+
+/**
+ * Find an existing product by name without creating a new one.
+ * Used by the auto-flyer pipeline so unknown products go to PendingReview
+ * instead of polluting the catalog.
+ *
+ * Returns the product if found, or null if it does not exist in the catalog.
+ */
+export async function findProductOnly(
+  name: string,
+  options?: {
+    unit?: string | null;
+    volume?: string | null;
+  },
+): Promise<{ id: string; name: string; unit: string | null; volume: string | null; packUnit: string | null } | null> {
+  const { lookupNormalized, lookupLegacy, hasLegacyKey, packUnit } = resolveLookupKeys(name, options);
+
+  let existing = await prisma.product.findFirst({
+    where: {
+      OR: [
+        { normalizedName: lookupNormalized },
+        { aliases: { some: { aliasName: { equals: lookupNormalized, mode: "insensitive" } } } },
+      ],
+    },
+  });
+
+  // Backward compat: pre-migration products still have ×N embedded in normalizedName.
+  // Find them and upgrade normalizedName on the fly (strip the pack suffix out).
+  if (!existing && hasLegacyKey) {
+    existing = await prisma.product.findFirst({
+      where: {
+        OR: [
+          { normalizedName: lookupLegacy },
+          { aliases: { some: { aliasName: { equals: lookupLegacy, mode: "insensitive" } } } },
+        ],
+      },
+    });
+    if (existing) {
+      await prisma.product.update({
+        where: { id: existing.id },
+        data: { normalizedName: lookupNormalized },
+      });
+    }
+  }
+
+  if (!existing) return null;
+  return { id: existing.id, name: existing.name, unit: existing.unit, volume: existing.volume, packUnit };
+}
+
 export async function findOrCreateProduct(
   name: string,
   options?: {
@@ -184,18 +403,26 @@ export async function findOrCreateProduct(
     unit?: string | null;
     volume?: string | null;
   },
-): Promise<{ id: string; name: string; isNew: boolean }> {
+): Promise<{ id: string; name: string; isNew: boolean; unit: string | null; volume: string | null; packUnit: string | null }> {
   const normalized = normalizeProductName(name);
+  const { lookupNormalized, lookupLegacy, hasLegacyKey, unitSuffix, packUnit } = resolveLookupKeys(name, options);
 
-  // Try exact match first
-  const existing = await prisma.product.findFirst({
+  // Re-derive display-name helpers (needed only for new product creation)
+  const rawVolume = options?.volume?.trim() ?? null;
+  const volKey = rawVolume ? rawVolume.toLowerCase().replace(/\s+/g, "") : null;
+  const normNoSpaces = normalized.replace(/\s/g, "");
+  // Always include volume in display name (same logic as resolveLookupKeys)
+  const volumeSuffix = volKey && !normNoSpaces.includes(volKey) ? ` ${rawVolume}` : "";
+
+  // Try exact match on full key first
+  let existing = await prisma.product.findFirst({
     where: {
       OR: [
-        { normalizedName: normalized },
+        { normalizedName: lookupNormalized },
         {
           aliases: {
             some: {
-              aliasName: { equals: normalized, mode: "insensitive" },
+              aliasName: { equals: lookupNormalized, mode: "insensitive" },
             },
           },
         },
@@ -203,8 +430,33 @@ export async function findOrCreateProduct(
     },
   });
 
+  // Backward compat: find pre-migration products with ×N in normalizedName and upgrade
+  if (!existing && hasLegacyKey) {
+    existing = await prisma.product.findFirst({
+      where: {
+        OR: [
+          { normalizedName: lookupLegacy },
+          {
+            aliases: {
+              some: {
+                aliasName: { equals: lookupLegacy, mode: "insensitive" },
+              },
+            },
+          },
+        ],
+      },
+    });
+    if (existing) {
+      await prisma.product.update({
+        where: { id: existing.id },
+        data: { normalizedName: lookupNormalized },
+      });
+      existing = { ...existing, normalizedName: lookupNormalized };
+    }
+  }
+
   if (existing) {
-    return { id: existing.id, name: existing.name, isNew: false };
+    return { id: existing.id, name: existing.name, isNew: false, unit: existing.unit, volume: existing.volume, packUnit };
   }
 
   // Resolve category
@@ -218,18 +470,41 @@ export async function findOrCreateProduct(
     }
   }
 
-  // Create new product
+  // Build display name: append volume and/or produce unit if not already in the OCR name.
+  // Pack count (×6 etc.) is intentionally NOT added to the display name —
+  // it is stored in PriceRecord.packUnit instead.
+  let displayName = name.trim();
+
+  // Strip any ×N / "6缶パック" notation the OCR may have embedded in the name
+  const packQtyFromUnit = parseQuantity(options?.unit);
+  const packCountFromUnit = !!(packQtyFromUnit && packQtyFromUnit.value > 1);
+  if (packCountFromUnit) {
+    displayName = displayName
+      .replace(/\s*[×xX]\s*\d+/g, "")
+      .replace(/\s*\d+\s*(?:缶|本|個|袋|枚|パック|入り?)\s*(?:パック|セット|入り?)?/g, "")
+      .trim();
+  }
+
+  if (volumeSuffix && volKey && !displayName.toLowerCase().replace(/\s+/g, "").includes(volKey)) {
+    displayName += volumeSuffix;
+  }
+  if (unitSuffix) {
+    displayName += unitSuffix;
+  }
+
+  // Create new product.
+  // Product.unit stores produce unit (袋, 本, …) only — NOT pack size.
   const product = await prisma.product.create({
     data: {
-      name: name.trim(),
-      normalizedName: normalized,
+      name: displayName,
+      normalizedName: lookupNormalized,
       categoryId,
-      unit: options?.unit || null,
+      unit: packUnit ? null : (options?.unit || null),
       volume: options?.volume || null,
     },
   });
 
-  return { id: product.id, name: product.name, isNew: true };
+  return { id: product.id, name: product.name, isNew: true, unit: product.unit, volume: product.volume, packUnit };
 }
 
 /**

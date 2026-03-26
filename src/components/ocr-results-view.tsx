@@ -13,12 +13,16 @@ import {
   Image as ImageIcon,
   Loader2,
   AlertTriangle,
+  LayoutList,
+  Table,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StoreSelect } from "@/components/store-select";
+import { BulkEditTable } from "@/components/bulk-edit-table";
+import { toast } from "sonner";
 
 interface OcrItem {
   name: string;
@@ -31,6 +35,8 @@ interface OcrItem {
   identified_by: string;
   /** If set, this item is linked to an existing product (skips findOrCreate, auto-saves alias) */
   productId?: string | null;
+  /** When true, this item is excluded from registration (watch-keyword filter) */
+  excluded?: boolean;
 }
 
 interface OcrResult {
@@ -104,10 +110,14 @@ function EditableItem({
   item,
   onUpdate,
   onDelete,
+  excluded,
+  onExcludeChange,
 }: {
   item: OcrItem;
   onUpdate: (updated: OcrItem) => void;
   onDelete: () => void;
+  excluded: boolean;
+  onExcludeChange: (excluded: boolean) => void;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(item.name);
@@ -258,9 +268,16 @@ function EditableItem({
   }
 
   return (
-    <div className="group rounded-lg border px-3 py-3 transition-colors hover:bg-muted/50">
-      {/* 上段: 商品名 + 操作ボタン */}
+    <div className={`group rounded-lg border px-3 py-3 transition-colors hover:bg-muted/50 ${excluded ? "opacity-50" : ""}`}>
+      {/* 上段: チェックボックス + 商品名 + 操作ボタン */}
       <div className="flex items-start gap-2">
+        <input
+          type="checkbox"
+          checked={!excluded}
+          onChange={(e) => onExcludeChange(!e.target.checked)}
+          className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-primary"
+          aria-label={`${item.name}を登録対象に含める`}
+        />
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-1">
             <span className="font-medium break-words">{item.name}</span>
@@ -311,7 +328,7 @@ function EditableItem({
         </div>
       </div>
       {/* 下段: 価格 */}
-      <div className="mt-1 flex items-center gap-1">
+      <div className="mt-1 pl-6 flex items-center gap-1">
         {item.confidence < 0.6 && (
           <span
             className="flex items-center gap-0.5 text-xs text-amber-600 dark:text-amber-400"
@@ -356,6 +373,76 @@ export function OcrResultsView({
     null,
   );
   const [registrationSuccess, setRegistrationSuccess] = useState(false);
+  const [watchKeywords, setWatchKeywords] = useState<string[]>([]);
+  const [keywordsLoaded, setKeywordsLoaded] = useState(false);
+  const [viewMode, setViewMode] = useState<"card" | "table">("card");
+
+  // Load watch-keywords and apply filter to initial results
+  useEffect(() => {
+    fetch("/api/watch-keywords")
+      .then((r) => r.json())
+      .then((data) => {
+        const kws: string[] = (data.keywords ?? []).map(
+          (k: { keyword: string }) => k.keyword
+        );
+        setWatchKeywords(kws);
+        if (kws.length > 0) {
+          setEditableResults((prev) =>
+            prev.map((r) => ({
+              ...r,
+              items: r.items.map((item) => ({
+                ...item,
+                excluded: !matchesKeywords(item.name, kws),
+              })),
+            }))
+          );
+        }
+        setKeywordsLoaded(true);
+      })
+      .catch(() => setKeywordsLoaded(true));
+  }, []);
+
+  function matchesKeywords(name: string, keywords: string[]): boolean {
+    if (keywords.length === 0) return true;
+    const normalized = name.toLowerCase();
+    return keywords.some((kw) => normalized.includes(kw.toLowerCase()));
+  }
+
+  function handleToggleItem(
+    resultIndex: number,
+    itemIndex: number,
+    excluded: boolean,
+  ) {
+    setEditableResults((prev) =>
+      prev.map((r, ri) => {
+        if (ri !== resultIndex) return r;
+        return {
+          ...r,
+          items: r.items.map((item, ii) =>
+            ii === itemIndex ? { ...item, excluded } : item
+          ),
+        };
+      })
+    );
+  }
+
+  function handleSelectAll() {
+    setEditableResults((prev) =>
+      prev.map((r) => ({
+        ...r,
+        items: r.items.map((item) => ({ ...item, excluded: false })),
+      }))
+    );
+  }
+
+  function handleDeselectAll() {
+    setEditableResults((prev) =>
+      prev.map((r) => ({
+        ...r,
+        items: r.items.map((item) => ({ ...item, excluded: true })),
+      }))
+    );
+  }
 
   function handleUpdateItem(
     resultIndex: number,
@@ -413,9 +500,9 @@ export function OcrResultsView({
 
   // Register prices via API
   async function handleRegisterPrices() {
-    // Validate each image with items has a store selected
+    // Validate each image with active items has a store selected
     const missingStore = editableResults.some(
-      (r) => r.items.length > 0 && !storeIdMap[r.imageId]
+      (r) => r.items.some((item) => !item.excluded) && !storeIdMap[r.imageId]
     );
     if (missingStore) {
       setRegistrationError("各画像の店舗を選択してください");
@@ -423,7 +510,9 @@ export function OcrResultsView({
     }
 
     const allItems = editableResults.flatMap((r) =>
-      r.items.map((item) => ({
+      r.items
+        .filter((item) => !item.excluded)
+        .map((item) => ({
         name: item.name,
         price: item.price,
         unit: item.unit,
@@ -454,13 +543,14 @@ export function OcrResultsView({
       const allErrors = [];
 
       for (const result of editableResults) {
-        if (result.items.length === 0) continue;
+        const activeItems = result.items.filter((item) => !item.excluded);
+        if (activeItems.length === 0) continue;
 
         const res = await fetch("/api/prices", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            items: result.items.map((item) => ({
+            items: activeItems.map((item) => ({
               name: item.name,
               price: item.price,
               unit: item.unit,
@@ -483,7 +573,7 @@ export function OcrResultsView({
           continue;
         }
 
-        allResults.push(...(data.results || []));
+        allResults.push(...(data.registered || []));
         allErrors.push(...(data.errors || []));
       }
 
@@ -491,8 +581,16 @@ export function OcrResultsView({
         setRegistrationError(
           `登録に失敗しました: ${allErrors.map((e: { error?: string } | string) => (typeof e === "string" ? e : e.error)).join(", ")}`,
         );
+        toast.error("価格登録に失敗しました");
       } else {
         setRegistrationSuccess(true);
+        const dealCount = allResults.filter(
+          (r: { isDeal?: boolean }) => r.isDeal
+        ).length;
+        const message = dealCount > 0
+          ? `${allResults.length}件の価格を登録しました（${dealCount}件がお買い得！）`
+          : `${allResults.length}件の価格を登録しました`;
+        toast.success(message);
         // Navigate to dashboard after short delay
         setTimeout(() => {
           router.push("/dashboard");
@@ -501,13 +599,18 @@ export function OcrResultsView({
     } catch (error) {
       console.error("Price registration error:", error);
       setRegistrationError("ネットワークエラーが発生しました");
+      toast.error("ネットワークエラーが発生しました");
     } finally {
       setIsRegistering(false);
     }
   }
 
-  const totalItems = editableResults.reduce(
+  const totalDetected = editableResults.reduce(
     (sum, r) => sum + r.items.length,
+    0,
+  );
+  const totalItems = editableResults.reduce(
+    (sum, r) => sum + r.items.filter((item) => !item.excluded).length,
     0,
   );
 
@@ -522,34 +625,96 @@ export function OcrResultsView({
           <div>
             <h2 className="text-xl font-bold">解析結果</h2>
             <p className="text-sm text-muted-foreground">
-              {editableResults.length}枚の画像から{totalItems}
-              件の商品を検出しました
+              {editableResults.length}枚の画像から{totalDetected}
+              件の商品を検出（{totalItems}件を登録対象）
             </p>
           </div>
         </div>
-        <Button
-          size="lg"
-          disabled={totalItems === 0 || isRegistering || registrationSuccess}
-          onClick={handleRegisterPrices}
-        >
-          {isRegistering ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              登録中...
-            </>
-          ) : registrationSuccess ? (
-            <>
-              <Check className="mr-2 h-4 w-4" />
-              登録完了！
-            </>
-          ) : (
-            <>
-              <Check className="mr-2 h-4 w-4" />
-              すべて確認して登録（{totalItems}件）
-            </>
-          )}
-        </Button>
+        <div className="flex items-center gap-2">
+          <div className="flex rounded-lg border p-0.5">
+            <Button
+              variant={viewMode === "card" ? "secondary" : "ghost"}
+              size="sm"
+              className="h-8 px-2"
+              onClick={() => setViewMode("card")}
+              title="カード表示"
+            >
+              <LayoutList className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={viewMode === "table" ? "secondary" : "ghost"}
+              size="sm"
+              className="h-8 px-2"
+              onClick={() => setViewMode("table")}
+              title="テーブル表示"
+            >
+              <Table className="h-4 w-4" />
+            </Button>
+          </div>
+          <Button
+            size="lg"
+            disabled={totalItems === 0 || isRegistering || registrationSuccess}
+            onClick={handleRegisterPrices}
+          >
+            {isRegistering ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                登録中...
+              </>
+            ) : registrationSuccess ? (
+              <>
+                <Check className="mr-2 h-4 w-4" />
+                登録完了！
+              </>
+            ) : (
+              <>
+                <Check className="mr-2 h-4 w-4" />
+                すべて確認して登録（{totalItems}件）
+              </>
+            )}
+          </Button>
+        </div>
       </div>
+
+      {/* Filter banner + select-all controls */}
+      {keywordsLoaded && (
+        <div className="rounded-lg border bg-muted/40 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {watchKeywords.length > 0 ? (
+                <>
+                  <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                    フィルタ適用中:
+                  </span>
+                  {watchKeywords.map((kw) => (
+                    <Badge key={kw} variant="secondary" className="text-xs">
+                      {kw}
+                    </Badge>
+                  ))}
+                </>
+              ) : (
+                <span className="text-sm text-muted-foreground">
+                  登録フィルタ未設定 — 全{totalDetected}件が登録対象です
+                </span>
+              )}
+            </div>
+            <div className="flex gap-1">
+              <Button variant="outline" size="sm" onClick={handleSelectAll}>
+                全選択
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleDeselectAll}>
+                全解除
+              </Button>
+            </div>
+          </div>
+          {watchKeywords.length > 0 && totalDetected > 0 && (
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              {totalDetected - totalItems}件を除外中 — {totalItems}/{totalDetected}件が登録対象です
+              （チェックボックスで変更可）
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Store selection — apply all convenience (shown when multiple images) */}
       {editableResults.length > 1 && (
@@ -633,93 +798,107 @@ export function OcrResultsView({
       )}
 
       {/* Results per image */}
-      {editableResults.map((result, resultIndex) => (
-        <Card key={result.imageId}>
-          <CardHeader>
-            <div className="flex items-start gap-4">
-              {/* Image preview — click to enlarge */}
-              <div
-                className="relative h-24 w-24 flex-shrink-0 overflow-hidden rounded-lg border bg-muted cursor-zoom-in"
-                onClick={() => result.signedUrl && setLightboxUrl(result.signedUrl)}
-                title="クリックで拡大"
-              >
-                {result.signedUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={result.signedUrl}
-                    alt="アップロード画像"
-                    className="h-full w-full object-cover"
+      {viewMode === "table" ? (
+        <BulkEditTable
+          results={editableResults}
+          onUpdateItem={handleUpdateItem}
+          onDeleteItem={handleDeleteItem}
+          onAddItem={handleAddItem}
+          onToggleItem={handleToggleItem}
+        />
+      ) : (
+        editableResults.map((result, resultIndex) => (
+          <Card key={result.imageId}>
+            <CardHeader>
+              <div className="flex items-start gap-4">
+                {/* Image preview — click to enlarge */}
+                <div
+                  className="relative h-24 w-24 flex-shrink-0 overflow-hidden rounded-lg border bg-muted cursor-zoom-in"
+                  onClick={() => result.signedUrl && setLightboxUrl(result.signedUrl)}
+                  title="クリックで拡大"
+                >
+                  {result.signedUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={result.signedUrl}
+                      alt="アップロード画像"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center">
+                      <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1">
+                  <CardTitle className="text-base">
+                    画像 {resultIndex + 1}
+                  </CardTitle>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {result.items.filter((i) => !i.excluded).length}/{result.items.length}件が登録対象
+                  </p>
+                  {result.store_name && (
+                    <Badge variant="secondary" className="mt-1">
+                      店舗: {result.store_name}
+                    </Badge>
+                  )}
+                </div>
+              </div>
+              {/* Per-image store selector (shown when multiple images) */}
+              {editableResults.length > 1 && (
+                <div className={`mt-3 rounded-lg border p-3 ${
+                  registrationError === "各画像の店舗を選択してください" && !storeIdMap[result.imageId]
+                    ? "border-destructive bg-destructive/5"
+                    : "bg-muted/30"
+                }`}>
+                  <p className="mb-1.5 text-xs font-medium text-muted-foreground">この画像の店舗</p>
+                  <StoreSelect
+                    value={storeIdMap[result.imageId] ?? null}
+                    onChange={(id, name) => {
+                      setStoreIdMap((prev) => ({ ...prev, [result.imageId]: id }));
+                      if (registrationError) setRegistrationError(null);
+                      void name;
+                    }}
                   />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center">
-                    <ImageIcon className="h-8 w-8 text-muted-foreground" />
-                  </div>
-                )}
-              </div>
-              <div className="flex-1">
-                <CardTitle className="text-base">
-                  画像 {resultIndex + 1}
-                </CardTitle>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {result.items.length}件の商品を検出
+                </div>
+              )}
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {result.items.length === 0 ? (
+                <p className="py-4 text-center text-sm text-muted-foreground">
+                  この画像から商品を検出できませんでした
                 </p>
-                {result.store_name && (
-                  <Badge variant="secondary" className="mt-1">
-                    店舗: {result.store_name}
-                  </Badge>
-                )}
-              </div>
-            </div>
-            {/* Per-image store selector (shown when multiple images) */}
-            {editableResults.length > 1 && (
-              <div className={`mt-3 rounded-lg border p-3 ${
-                registrationError === "各画像の店舗を選択してください" && !storeIdMap[result.imageId]
-                  ? "border-destructive bg-destructive/5"
-                  : "bg-muted/30"
-              }`}>
-                <p className="mb-1.5 text-xs font-medium text-muted-foreground">この画像の店舗</p>
-                <StoreSelect
-                  value={storeIdMap[result.imageId] ?? null}
-                  onChange={(id, name) => {
-                    setStoreIdMap((prev) => ({ ...prev, [result.imageId]: id }));
-                    if (registrationError) setRegistrationError(null);
-                    void name;
-                  }}
-                />
-              </div>
-            )}
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {result.items.length === 0 ? (
-              <p className="py-4 text-center text-sm text-muted-foreground">
-                この画像から商品を検出できませんでした
-              </p>
-            ) : (
-              result.items.map((item, itemIndex) => (
-                <EditableItem
-                  key={`${resultIndex}-${itemIndex}`}
-                  item={item}
-                  onUpdate={(updated) =>
-                    handleUpdateItem(resultIndex, itemIndex, updated)
-                  }
-                  onDelete={() =>
-                    handleDeleteItem(resultIndex, itemIndex)
-                  }
-                />
-              ))
-            )}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-full text-muted-foreground"
-              onClick={() => handleAddItem(resultIndex)}
-            >
-              <Plus className="mr-1 h-3 w-3" />
-              商品を手動追加
-            </Button>
-          </CardContent>
-        </Card>
-      ))}
+              ) : (
+                result.items.map((item, itemIndex) => (
+                  <EditableItem
+                    key={`${resultIndex}-${itemIndex}`}
+                    item={item}
+                    onUpdate={(updated) =>
+                      handleUpdateItem(resultIndex, itemIndex, updated)
+                    }
+                    onDelete={() =>
+                      handleDeleteItem(resultIndex, itemIndex)
+                    }
+                    excluded={item.excluded ?? false}
+                    onExcludeChange={(ex) =>
+                      handleToggleItem(resultIndex, itemIndex, ex)
+                    }
+                  />
+                ))
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full text-muted-foreground"
+                onClick={() => handleAddItem(resultIndex)}
+              >
+                <Plus className="mr-1 h-3 w-3" />
+                商品を手動追加
+              </Button>
+            </CardContent>
+          </Card>
+        ))
+      )}
 
       {/* Register button (bottom) */}
       <Button

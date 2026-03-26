@@ -1,22 +1,24 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Search,
   Loader2,
   Package,
   ArrowLeft,
   Merge,
-  X,
-  Check,
   Wand2,
+  ArrowUpDown,
+  SlidersHorizontal,
+  Trash2,
 } from "lucide-react";
 import { Header } from "@/components/header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+
 import {
   Dialog,
   DialogContent,
@@ -25,6 +27,8 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { MergeProductDialog } from "@/components/merge-product-dialog";
+import { parseQuantity, formatUnitPrice } from "@/lib/unit-price";
 
 interface ProductItem {
   id: string;
@@ -33,6 +37,7 @@ interface ProductItem {
   volume: string | null;
   category: { id: string; name: string } | null;
   _count: { priceRecords: number };
+  priceRecords: Array<{ price: number; store: { name: string } | null }>;
 }
 
 interface Category {
@@ -41,32 +46,59 @@ interface Category {
   _count: { products: number };
 }
 
-export default function ProductsPage() {
+interface StoreItem {
+  id: string;
+  name: string;
+}
+
+function ProductsPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [stores, setStores] = useState<StoreItem[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState(() => searchParams.get("categoryId") ?? "");
+  const [selectedStore, setSelectedStore] = useState(() => searchParams.get("storeId") ?? "");
+  const [sortBy, setSortBy] = useState(() => searchParams.get("sortBy") ?? "name");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">(() => (searchParams.get("sortOrder") as "asc" | "desc") ?? "asc");
+  const [searchQuery, setSearchQuery] = useState(() => searchParams.get("q") ?? "");
+  const [debouncedQuery, setDebouncedQuery] = useState(() => searchParams.get("q") ?? "");
   const [isLoading, setIsLoading] = useState(true);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [showFilters, setShowFilters] = useState(() =>
+    !!(searchParams.get("categoryId") || searchParams.get("storeId") || searchParams.get("sortBy"))
+  );
 
   // Merge dialog state
-  const [mergeSource, setMergeSource] = useState<ProductItem | null>(null);
-  const [mergeSearch, setMergeSearch] = useState("");
-  const [mergeSearchResults, setMergeSearchResults] = useState<ProductItem[]>([]);
-  const [mergeTarget, setMergeTarget] = useState<ProductItem | null>(null);
-  const [isMerging, setIsMerging] = useState(false);
-  const [mergeError, setMergeError] = useState<string | null>(null);
+  const [mergeSource, setMergeSource] = useState<{ id: string; name: string; recordCount: number } | null>(null);
 
   // Auto-categorize state
   const [isAutoCategorizing, setIsAutoCategorizing] = useState(false);
   const [autoCategorizeResult, setAutoCategorizeResult] = useState<string | null>(null);
+
+  // Delete state
+  const [deleteTarget, setDeleteTarget] = useState<ProductItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Debounce main search
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(searchQuery), 300);
     return () => clearTimeout(timer);
   }, [searchQuery]);
+
+  // Sync filter state → URL (so back-navigation restores filters)
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (debouncedQuery) params.set("q", debouncedQuery);
+    if (selectedCategory) params.set("categoryId", selectedCategory);
+    if (selectedStore) params.set("storeId", selectedStore);
+    if (sortBy !== "name") params.set("sortBy", sortBy);
+    if (sortOrder !== "asc") params.set("sortOrder", sortOrder);
+    const qs = params.toString();
+    router.replace(qs ? `/products?${qs}` : "/products", { scroll: false });
+  }, [debouncedQuery, selectedCategory, selectedStore, sortBy, sortOrder, router]);
 
   // Fetch categories
   useEffect(() => {
@@ -76,12 +108,23 @@ export default function ProductsPage() {
       .catch(() => {});
   }, []);
 
+  // Fetch stores
+  useEffect(() => {
+    fetch("/api/stores")
+      .then((r) => r.json())
+      .then((data) => setStores(Array.isArray(data) ? data : []))
+      .catch(() => {});
+  }, []);
+
   // Fetch products
   const fetchProducts = useCallback(async () => {
     setIsLoading(true);
     const params = new URLSearchParams();
     if (debouncedQuery) params.set("q", debouncedQuery);
     if (selectedCategory) params.set("categoryId", selectedCategory);
+    if (selectedStore) params.set("storeId", selectedStore);
+    if (sortBy !== "name") params.set("sortBy", sortBy);
+    if (sortOrder !== "asc") params.set("sortOrder", sortOrder);
     params.set("limit", "30");
 
     try {
@@ -96,7 +139,7 @@ export default function ProductsPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [debouncedQuery, selectedCategory]);
+  }, [debouncedQuery, selectedCategory, selectedStore, sortBy, sortOrder]);
 
   useEffect(() => {
     fetchProducts();
@@ -109,6 +152,9 @@ export default function ProductsPage() {
     const params = new URLSearchParams();
     if (debouncedQuery) params.set("q", debouncedQuery);
     if (selectedCategory) params.set("categoryId", selectedCategory);
+    if (selectedStore) params.set("storeId", selectedStore);
+    if (sortBy !== "name") params.set("sortBy", sortBy);
+    if (sortOrder !== "asc") params.set("sortOrder", sortOrder);
     params.set("cursor", nextCursor);
     params.set("limit", "30");
 
@@ -124,76 +170,34 @@ export default function ProductsPage() {
     }
   }
 
-  // Search for merge target
-  useEffect(() => {
-    if (!mergeSearch.trim() || mergeSearch.length < 1) {
-      setMergeSearchResults([]);
-      return;
-    }
-    const timer = setTimeout(async () => {
-      try {
-        const res = await fetch(
-          `/api/products?q=${encodeURIComponent(mergeSearch)}&limit=10`,
-        );
-        if (res.ok) {
-          const data = await res.json();
-          // Exclude the source product from results
-          setMergeSearchResults(
-            (data.products || []).filter(
-              (p: ProductItem) => p.id !== mergeSource?.id,
-            ),
-          );
-        }
-      } catch {
-        // ignore
-      }
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [mergeSearch, mergeSource]);
+  /** Compute per-100g price if volume is in grams (e.g. "300g"). Returns null otherwise. */
+  function computePer100gPrice(price: number, volume: string | null): number | null {
+    if (!volume) return null;
+    const match = volume.match(/^(\d+(?:\.\d+)?)\s*g$/i);
+    if (!match) return null;
+    const grams = parseFloat(match[1]);
+    if (grams <= 0) return null;
+    return Math.round((price * 100) / grams);
+  }
 
-  // Execute merge
-  async function handleMerge() {
-    if (!mergeSource || !mergeTarget) return;
-    setIsMerging(true);
-    setMergeError(null);
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    setDeleteError(null);
     try {
-      const res = await fetch(`/api/products/${mergeSource.id}/merge`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ targetProductId: mergeTarget.id }),
-      });
-      const data = await res.json();
+      const res = await fetch(`/api/products/${deleteTarget.id}`, { method: "DELETE" });
       if (!res.ok) {
-        setMergeError(data.error || "統合に失敗しました");
+        const data = await res.json();
+        setDeleteError(data.error || "削除に失敗しました");
         return;
       }
-      // Remove source from list, close dialog
-      setProducts((prev) => prev.filter((p) => p.id !== mergeSource.id));
-      setMergeSource(null);
-      setMergeTarget(null);
-      setMergeSearch("");
-      setMergeSearchResults([]);
+      setProducts((prev) => prev.filter((p) => p.id !== deleteTarget.id));
+      setDeleteTarget(null);
     } catch {
-      setMergeError("統合中にエラーが発生しました");
+      setDeleteError("削除中にエラーが発生しました");
     } finally {
-      setIsMerging(false);
+      setIsDeleting(false);
     }
-  }
-
-  function openMergeDialog(product: ProductItem) {
-    setMergeSource(product);
-    setMergeTarget(null);
-    setMergeSearch("");
-    setMergeSearchResults([]);
-    setMergeError(null);
-  }
-
-  function closeMergeDialog() {
-    setMergeSource(null);
-    setMergeTarget(null);
-    setMergeSearch("");
-    setMergeSearchResults([]);
-    setMergeError(null);
   }
 
   async function handleAutoCategorize() {
@@ -224,23 +228,51 @@ export default function ProductsPage() {
     }
   }
 
+  async function handleCategoryChange(productId: string, categoryId: string | null) {
+    try {
+      const res = await fetch(`/api/products/${productId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ categoryId }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setProducts((prev) =>
+          prev.map((p) =>
+            p.id === productId ? { ...p, category: updated.category } : p,
+          ),
+        );
+        // Refresh category counts
+        const catRes = await fetch("/api/categories");
+        if (catRes.ok) {
+          const catData = await catRes.json();
+          setCategories(catData.categories || []);
+        }
+      }
+    } catch {
+      // silently fail
+    }
+  }
+
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
       <Header />
       <main className="mx-auto max-w-4xl px-4 py-8 space-y-6">
-        <div className="flex items-center gap-3">
-          <Link href="/dashboard">
-            <Button variant="ghost" size="icon">
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold">商品一覧</h1>
-            <p className="text-sm text-muted-foreground">
-              登録済みの商品を検索・閲覧・統合
-            </p>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <Link href="/dashboard">
+              <Button variant="ghost" size="icon">
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+            </Link>
+            <div>
+              <h1 className="text-xl sm:text-2xl font-bold">商品一覧</h1>
+              <p className="text-sm text-muted-foreground">
+                登録済みの商品を検索・閲覧・統合
+              </p>
+            </div>
           </div>
-          <div className="ml-auto flex flex-col items-end gap-1">
+          <div className="sm:ml-auto flex flex-col items-start sm:items-end gap-1">
             <Button
               variant="outline"
               size="sm"
@@ -260,25 +292,88 @@ export default function ProductsPage() {
           </div>
         </div>
 
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="商品名で検索..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
+        {/* Search + Sort + Filter toggle */}
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="商品名で検索..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <Button
+            variant={showFilters ? "default" : "outline"}
+            size="icon"
+            className="shrink-0"
+            onClick={() => setShowFilters((v) => !v)}
+            title="フィルタ・並び替え"
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+          </Button>
         </div>
 
+        {/* Expandable filters: Sort + Store */}
+        {showFilters && (
+          <div className="flex flex-col sm:flex-row gap-3 rounded-lg border bg-muted/30 p-3">
+            <div className="flex items-center gap-2">
+              <ArrowUpDown className="h-4 w-4 text-muted-foreground shrink-0" />
+              <select
+                className="text-sm border rounded px-2 py-1.5 bg-background flex-1 sm:w-auto"
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+              >
+                <option value="name">名前順</option>
+                <option value="price">底値順</option>
+                <option value="recordCount">記録数順</option>
+              </select>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="px-2 text-xs"
+                onClick={() => setSortOrder((v) => (v === "asc" ? "desc" : "asc"))}
+              >
+                {sortOrder === "asc" ? "↑ 昇順" : "↓ 降順"}
+              </Button>
+            </div>
+            {stores.length > 0 && (
+              <div className="flex items-center gap-2 sm:border-l sm:pl-3">
+                <span className="text-sm text-muted-foreground shrink-0">店舗:</span>
+                <select
+                  className="text-sm border rounded px-2 py-1.5 bg-background flex-1 sm:w-auto"
+                  value={selectedStore}
+                  onChange={(e) => setSelectedStore(e.target.value)}
+                >
+                  <option value="">すべての店舗</option>
+                  {stores.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Category filter */}
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2 overflow-x-auto pb-1 -mb-1 scrollbar-none">
           <Button
             variant={selectedCategory === "" ? "default" : "outline"}
             size="sm"
+            className="shrink-0"
             onClick={() => setSelectedCategory("")}
           >
             すべて
+          </Button>
+          <Button
+            variant={selectedCategory === "uncategorized" ? "default" : "outline"}
+            size="sm"
+            className="shrink-0"
+            onClick={() => setSelectedCategory("uncategorized")}
+          >
+            未分類
           </Button>
           {categories.map((cat) => (
             <Button
@@ -287,6 +382,7 @@ export default function ProductsPage() {
                 selectedCategory === cat.id ? "default" : "outline"
               }
               size="sm"
+              className="shrink-0"
               onClick={() => setSelectedCategory(cat.id)}
             >
               {cat.name}
@@ -317,7 +413,18 @@ export default function ProductsPage() {
           </Card>
         ) : (
           <div className="space-y-2">
-            {products.map((product) => (
+            {products.map((product) => {
+                const bottomRecord = product.priceRecords[0];
+                const isMeat = product.category?.name === "肉類";
+                const per100g = isMeat && bottomRecord
+                  ? computePer100gPrice(bottomRecord.price, product.volume)
+                  : null;
+                const qty = parseQuantity(product.unit);
+                const perItemStr = qty && qty.value > 1 && bottomRecord
+                  ? formatUnitPrice(bottomRecord.price, product.volume, product.unit)
+                  : null;
+
+                return (
               <Card key={product.id} className="transition-shadow hover:shadow-md">
                 <CardContent className="pt-4 pb-4 flex items-center gap-3">
                   <Link
@@ -325,13 +432,12 @@ export default function ProductsPage() {
                     className="flex-1 min-w-0"
                   >
                     <h3 className="font-medium truncate">{product.name}</h3>
-                    <div className="mt-1 flex items-center gap-2">
-                      {product.category && (
-                        <Badge variant="outline" className="text-xs">
-                          {product.category.name}
-                        </Badge>
-                      )}
-                      {product.unit && (
+                    <div className="mt-1 flex items-center gap-2 flex-wrap">
+                      {product.unit && !(
+                        // Hide unit badge if it's ×N already embedded in the product name (as xN or ×N)
+                        /^[×xX]\d+$/.test(product.unit) &&
+                        new RegExp(`[×xX]${product.unit.replace(/^[×xX]/, '')}`, 'i').test(product.name)
+                      ) && (
                         <span className="text-xs text-muted-foreground">
                           {product.unit}
                         </span>
@@ -341,9 +447,29 @@ export default function ProductsPage() {
                           {product.volume}
                         </span>
                       )}
+                      {bottomRecord && (
+                        <span className="text-xs font-semibold text-green-700 dark:text-green-400">
+                          {per100g !== null
+                            ? `¥${per100g.toLocaleString()}/100g`
+                            : `¥${bottomRecord.price.toLocaleString()}`}
+                        </span>
+                      )}
+                      {perItemStr && (
+                        <span className="text-xs text-zinc-500 dark:text-zinc-400">{perItemStr}</span>
+                      )}
                     </div>
                   </Link>
                   <div className="flex items-center gap-3 shrink-0">
+                    <select
+                      className="text-xs border rounded px-1.5 py-0.5 bg-background text-foreground max-w-[100px] hidden sm:block"
+                      value={product.category?.id || ""}
+                      onChange={(e) => handleCategoryChange(product.id, e.target.value || null)}
+                    >
+                      <option value="">未分類</option>
+                      {categories.map((cat) => (
+                        <option key={cat.id} value={cat.id}>{cat.name}</option>
+                      ))}
+                    </select>
                     <span className="text-sm text-muted-foreground">
                       {product._count.priceRecords}件
                     </span>
@@ -351,15 +477,25 @@ export default function ProductsPage() {
                       variant="outline"
                       size="sm"
                       className="h-8 gap-1 text-xs"
-                      onClick={() => openMergeDialog(product)}
+                      onClick={() => setMergeSource({ id: product.id, name: product.name, recordCount: product._count.priceRecords })}
                     >
                       <Merge className="h-3 w-3" />
                       統合
                     </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                      onClick={() => { setDeleteTarget(product); setDeleteError(null); }}
+                      title="削除"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
-            ))}
+                );
+              })}
 
             {nextCursor && (
               <div className="text-center pt-4">
@@ -372,112 +508,56 @@ export default function ProductsPage() {
         )}
       </main>
 
-      {/* Merge dialog */}
-      <Dialog open={!!mergeSource} onOpenChange={(open) => !open && closeMergeDialog()}>
-        <DialogContent className="max-w-lg">
+      {/* Delete confirmation dialog */}
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>商品を統合</DialogTitle>
+            <DialogTitle>商品を削除</DialogTitle>
             <DialogDescription>
-              「{mergeSource?.name}」を別の商品に統合します。
-              価格記録がすべて統合先に移動し、元の商品名は自動的にエイリアスとして保存されます。
+              「{deleteTarget?.name}」を削除します。この操作は取り消せません。
+              <br />
+              関連する{deleteTarget?._count.priceRecords}件の価格記録もすべて削除されます。
             </DialogDescription>
           </DialogHeader>
-
-          <div className="space-y-4 py-2">
-            {/* Source info */}
-            <div className="rounded-lg border bg-muted/40 p-3 text-sm">
-              <p className="text-xs text-muted-foreground mb-1">統合元（削除される）</p>
-              <p className="font-medium">{mergeSource?.name}</p>
-              <p className="text-xs text-muted-foreground">
-                {mergeSource?._count.priceRecords}件の価格記録
-              </p>
-            </div>
-
-            {/* Target search */}
-            <div>
-              <p className="text-sm font-medium mb-2">統合先を検索</p>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="商品名で検索..."
-                  value={mergeSearch}
-                  onChange={(e) => {
-                    setMergeSearch(e.target.value);
-                    setMergeTarget(null);
-                  }}
-                  className="pl-10"
-                />
-              </div>
-              {mergeSearchResults.length > 0 && !mergeTarget && (
-                <div className="mt-1 rounded-md border bg-background shadow-sm max-h-48 overflow-y-auto">
-                  {mergeSearchResults.map((p) => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      className="w-full px-3 py-2 text-left text-sm hover:bg-muted transition-colors flex items-center justify-between"
-                      onClick={() => {
-                        setMergeTarget(p);
-                        setMergeSearch(p.name);
-                        setMergeSearchResults([]);
-                      }}
-                    >
-                      <span>{p.name}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {p._count.priceRecords}件
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Selected target */}
-            {mergeTarget && (
-              <div className="rounded-lg border border-green-400 bg-green-50 dark:bg-green-950 p-3 text-sm flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-muted-foreground mb-0.5">統合先（残る）</p>
-                  <p className="font-medium">{mergeTarget.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {mergeTarget._count.priceRecords}件の価格記録
-                  </p>
-                </div>
-                <button
-                  onClick={() => { setMergeTarget(null); setMergeSearch(""); }}
-                  className="rounded-full p-1 hover:bg-green-100 dark:hover:bg-green-900"
-                >
-                  <X className="h-4 w-4 text-muted-foreground" />
-                </button>
-              </div>
-            )}
-
-            {mergeError && (
-              <p className="text-sm text-destructive">{mergeError}</p>
-            )}
-          </div>
-
+          {deleteError && (
+            <p className="text-sm text-destructive">{deleteError}</p>
+          )}
           <DialogFooter>
-            <Button variant="outline" onClick={closeMergeDialog} disabled={isMerging}>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={isDeleting}>
               キャンセル
             </Button>
-            <Button
-              variant="destructive"
-              disabled={!mergeTarget || isMerging}
-              onClick={handleMerge}
-            >
-              {isMerging ? (
+            <Button variant="destructive" onClick={handleDelete} disabled={isDeleting}>
+              {isDeleting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  統合中...
+                  削除中...
                 </>
               ) : (
                 <>
-                  <Check className="mr-2 h-4 w-4" />
-                  統合する
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  削除する
                 </>
               )}
             </Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>    </div>
+      </Dialog>
+
+      {/* Merge dialog */}
+      <MergeProductDialog
+        source={mergeSource}
+        onClose={() => setMergeSource(null)}
+        onMerged={(sourceId) => {
+          setProducts((prev) => prev.filter((p) => p.id !== sourceId));
+        }}
+      />    </div>
+  );
+}
+
+export default function ProductsPageWrapper() {
+  return (
+    <Suspense>
+      <ProductsPage />
+    </Suspense>
   );
 }

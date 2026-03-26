@@ -1,7 +1,7 @@
 # Sokone 全Phase 実装計画
 
 > 作成日: 2026-02-26
-> 最終更新: 2026-03-05（AndroidカメラGPS対応・Vercelコールドスタート対策追加）
+> 最終更新: 2026-03-18（チラシ閲覧ページ UX 改善・scrapedLeafletId 追加・ヘッダーリファクタリング）
 >
 > **アーキテクチャ:** Next.js フルスタック + Prisma + Neon + Vercel
 
@@ -13,7 +13,7 @@
 | **Phase 2** | 高度チラシ機能 + 検索・フィルタ + UX改善 | 3〜4週間 | 未着手 |
 | **Phase 3** | 底値アラート + 特売通知 | 3〜4週間 | 未着手 |
 | **Phase 4** | 自動チラシ収集 + バッチ処理 + Instagram API検討 | 継続的 | 未着手 |
-| **Phase 5** | モバイルアプリ化（React Native / Expo） | 6〜8週間 | 未着手 |
+| **Phase 5** | モバイルアプリ化（React Native / Expo） | 6〜8週間 | 🔄 進行中 |
 
 ---
 
@@ -64,7 +64,7 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
   - `src/lib/r2.ts` — R2 S3Client 初期化
 - [x] sharp インストール（画像リサイズ・HEIC変換用）
 - [x] ヘルスチェックエンドポイント `GET /api/health`（Route Handler）
-- [ ] CORS 設定（Next.js の `next.config.js`）
+- [x] CORS 設定（Next.js middleware で API ルートに CORS ヘッダー付与）
 
 ### 0-3. OCR 精度早期検証
 
@@ -75,7 +75,7 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
   - 野菜等テキストなし商品 1〜2枚
 - [ ] 各ソースタイプでの抽出精度を記録（商品名/価格の正答率）
 - [ ] 精度に問題があれば代替案（Cloud Vision + Gemini 2段構成）を検討
-- [ ] プロンプトテンプレートのドラフト作成
+- [x] プロンプトテンプレートのドラフト作成
 
 ### 0-4. CI/CD
 
@@ -91,8 +91,8 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 - [x] `http://localhost:3000/api/health` が JSON レスポンスを返す
 - [x] Prisma で Neon PostgreSQL に接続できる（マイグレーション適用済み）
 - [x] Vercel デプロイ完了（https://sokone-sigma.vercel.app）
-- [ ] R2 への画像アップロード・削除が動作する（Sprint 2 で実装）
-- [ ] CI が Green で通る
+- [x] R2 への画像アップロード・削除が動作する（Sprint 2 で実装）
+- [x] CI が Green で通る
 - [ ] OCR 精度の初期評価が完了している（Sprint 2 で実施）
 
 ---
@@ -206,6 +206,7 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
   - `@google/generative-ai` SDK で Gemini 2.0 Flash API クライアント実装
   - 画像 → Base64 エンコード → API 送信
   - プロンプト設計: 商品名・価格・単位・容量を JSON で返すよう指示
+  - `buildPrompt(sourceType, categoryNames[])` 関数— DBカテゴリ一覧をプロンプト内の【カテゴリ一覧】セクションに動的注入
   - ソースタイプ別のプロンプト切り替え
   - レスポンスパース + バリデーション（Zod）
 - [x] `POST /api/images/{id}/analyze` — OCR 実行エンドポイント（`src/app/api/images/[id]/analyze/route.ts`）
@@ -366,7 +367,7 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 - [x] `GET /api/favorites` — お気に入り一覧（底値情報付き）
   - 商品情報 + 底値 + 最新価格 + 店舗名を Prisma で join して返却
 - [x] `DELETE /api/favorites/{product_id}` — お気に入り解除（`src/app/api/favorites/[productId]/route.ts`）
-- [ ] `PUT /api/favorites/order` — 表示順序変更（任意）
+- [x] `PUT /api/favorites/order` — 表示順序変更（任意）
 
 **Prisma モデル:**
 - [x] `FavoriteProduct` モデル — id (UUID), user_id (FK), product_id (FK), display_order (int), created_at
@@ -387,7 +388,7 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 
 ### 4-5. レスポンシブ対応
 
-- [ ] スマホ向けレイアウト最適化
+- [x] スマホ向けレイアウト最適化
   - モバイルファーストで各ページをチェック
   - ナビゲーション（ハンバーガーメニュー or ボトムナビ）
   - [x] 画像アップロードがスマホブラウザから快適に動作することを確認（Androidカメラ直接撮影・ファイル選択・GPS自動提案）
@@ -406,15 +407,15 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 
 ### テスト
 
-- [ ] Vitest で API Route Handler テスト（各エンドポイント）
-- [ ] OCR サービスのユニットテスト（モック使用）
-- [ ] 主要コンポーネントの基本テスト（Testing Library）
+- [x] Vitest で API Route Handler テスト（各エンドポイント）
+- [x] OCR サービスのユニットテスト（モック使用）
+- [x] 主要コンポーネントの基本テスト（Testing Library）
 
 ### ドキュメント
 
 - [ ] API 仕様書（補足ドキュメント）
-- [ ] 開発環境セットアップ手順を README に追記
-- [ ] `.env.example` の説明コメント
+- [x] 開発環境セットアップ手順を README に追記
+- [x] `.env.example` の説明コメント
 
 ### DB ストレージ監視
 
@@ -454,6 +455,9 @@ Phase 1 を 5 つの Sprint に分割する。各 Sprint はおおよそ 1 週�
 | POST | `/api/favorites` | 4 | お気に入り登録 |
 | GET | `/api/favorites` | 4 | お気に入り一覧 |
 | DELETE | `/api/favorites/{product_id}` | 4 | お気に入り解除 |
+| PUT | `/api/favorites/order` | 4 | お気に入り表示順序変更 |
+| DELETE | `/api/prices/{id}` | 3 | 価格記録削除（誤登録修正） |
+| PATCH | `/api/prices/{id}` | 7 | 価格記録更新（編集） |
 | POST | `/api/products/{id}/merge` | 6 | 重複商品統合 |
 | PATCH | `/api/products/{id}` | 6 | 商品汎用更新（カテゴリ変更等） |
 | POST | `/api/products/auto-categorize` | 4 | 未分類商品をGeminiで一括カテゴリ設定 |
@@ -575,29 +579,31 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
 #### 5-1. チラシ画像の分割・複雑レイアウト対応
 
 **Server:**
-- [ ] 大きなチラシ画像の分割送信対応
-  - 画像を4分割して個別にOCR → 結果をマージ
-  - 重複商品の除去ロジック
-- [ ] OCR プロンプトのチラシ対応強化
+- [x] 大きなチラシ画像の分割送信対応
+  - 画像を4分割（10%オーバーラップ）して個別にOCR → 結果をマージ
+  - 重複商品の除去ロジック（名前正規化＋価格一致で判定）
+- [x] OCR プロンプトのチラシ対応強化
   - チラシ特有の複雑レイアウト（段組み、矢印、吹き出し等）に対応するプロンプト調整
   - 1枚の画像から10〜30商品を抽出するケースの精度向上
-  - セール価格 vs 通常価格の識別強化
+  - セール価格 vs 通常価格の識別強化、まとめ買い価格の単価換算
 
 **UI:**
-- [ ] チラシ抽出結果の一括編集UI改善
-  - スプレッドシート風の一括編集
-  - 画像上のハイライト表示（抽出位置の可視化）
+- [x] チラシ抽出結果の一括編集UI改善
+  - スプレッドシート風の一括編集（テーブル表示モード）
+  - カード表示 ↔ テーブル表示の切り替えトグル
+  - テーブル内インライン編集（商品名・価格・単位を直接編集可能）
+  - 矢印キーによるセル間移動
 
 ### Sprint 6: 商品名寄せ改善＋カテゴリ管理（〜1週間）
 
 #### 6-1. 商品名寄せの改善
 
 **Server:**
-- [ ] `src/lib/product-matcher.ts` の強化
+- [x] `src/lib/product-matcher.ts` の強化
   - ルールベースマッチング改善
     - 全角半角統一、スペース正規化
     - ブランド名 + 容量での正規化（「金麦350ml6缶パック」→「金麦 350ml×6」）
-    - 同義語辞書（「鶏もも」=「とりもも」=「鶏モモ」）
+    - 同義語辞書（60+グループ: 「鶏もも」=「とりもも」=「鶏モモ」等）
   - LLM による類似判定（Gemini Flash）
     - 候補商品リストを提示して「同じ商品か？」を判定
     - 確信度が低い場合はユーザに確認を求める
@@ -609,56 +615,89 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
 #### 6-2. カテゴリ管理UI
 
 **API (Route Handlers):**
-- [ ] `GET /api/categories` — カテゴリツリー取得（既存の拡張）
-- [ ] `POST /api/categories` — カスタムカテゴリ追加
-- [ ] `PUT /api/categories/{id}` — カテゴリ編集
-- [ ] 商品のカテゴリ変更 API
+- [x] `GET /api/categories` — カテゴリツリー取得（既存の拡張）
+- [x] `POST /api/categories` — カスタムカテゴリ追加
+- [x] `PUT /api/categories/{id}` — カテゴリ編集
+- [x] `DELETE /api/categories/{id}` — カテゴリ削除（商品0件の場合のみ）
+- [x] 商品のカテゴリ変更 API（`PATCH /api/products/{id}` — categoryId 更新）
 
 **UI:**
-- [ ] カテゴリ管理ページ
-  - ツリー構造での表示・編集
-  - ドラッグ&ドロップでの並び替え
-- [ ] 商品のカテゴリ変更UI
+- [x] カテゴリ管理ページ（`/categories`）
+  - カテゴリ一覧表示・追加・インライン編集・削除
+  - 商品件数表示・削除制約バリデーション
+- [x] 商品のカテゴリ変更UI（商品詳細ページでカテゴリバッジクリック→インラインセレクタ）
 
 ### Sprint 7: 商品検索・フィルタ＋UX改善（〜1週間）
 
 #### 7-1. 商品検索・フィルタ
 
 **API (Route Handlers):**
-- [ ] `GET /api/products` の拡張
+- [x] `GET /api/products` の拡張
   - 全文検索（Prisma の `search` / `contains`）
-  - カテゴリフィルタ、店舗フィルタ、価格帯フィルタ
-  - ソート（底値順、最新価格順、名前順、更新日順）
+  - カテゴリフィルタ（「未分類」含む）、店舗フィルタ、ソート（底値順、名前順、記録数順 ＋ 昇降順切替）
   - ページネーション（カーソルベース）
-- [ ] `GET /api/dashboard/products` の拡張
-  - 同様のフィルタ・ソート対応
+- [x] `GET /api/dashboard/products` の拡張
+  - 同様のフィルタ・ソート対応（storeId, sortBy, sortOrder パラメータ追加）
 
 **UI:**
-- [ ] 商品一覧ページの大幅改善
+- [x] 商品一覧ページの大幅改善
   - 検索バー（インクリメンタルサーチ）
-  - カテゴリタブ / フィルタパネル
-  - 店舗フィルタ
-  - 価格帯スライダー
-  - ソート切り替え
-  - 無限スクロール or ページネーション
-- [ ] ダッシュボードのフィルタリング改善
+  - カテゴリタブ（「未分類」フィルタ追加）/ フィルタパネル（展開式）
+  - 店舗フィルタ（ドロップダウン）
+  - ソート切り替え（名前順/底値順/記録数順 ＋ 昇降順）
+  - カーソルベースページネーション（「もっと読み込む」）
+- [x] ダッシュボードのフィルタリング改善（店舗フィルタ・ソート切替を底値一覧に追加）
 
 #### 7-2. UX 改善
 
 **UI:**
-- [ ] ローディング表示の統一（Skeleton UI）
-- [ ] エラーハンドリングの統一（Toast通知）
-- [ ] 画像アップロード履歴ページ
-- [ ] 「最近見た商品」セクション追加
-- [ ] PWA 基本設定（manifest.json、アイコン）→ ホーム画面に追加可能に
+- [x] ローディング表示の統一（Skeleton UI）
+- [x] エラーハンドリングの統一（Toast通知）
+- [x] 画像アップロード履歴ページ（`/uploads`）— フィルタ（ソースタイプ・ステータス）・ライトボックス・OCR結果サマリ表示
+- [x] アップロード履歴: 画像削除ボタン（個別 `DELETE /api/images/{id}`）
+- [x] アップロード履歴: 未登録画像を一括削除（`DELETE /api/images/cleanup`）
+- [x] アップロード履歴: Radix DialogTitle アクセシビリティ修正・縦長画像でも見える閉じるボタン
+- [x] 「最近見た商品」セクション追加（localStorage + 横スクロールカード）
+- [x] PWA 基本設定（manifest.json、アイコン）→ ホーム画面に追加可能に
+- [x] 同一画像の重複アップロード検出（SHA-256 + localStorage + 確認ダイアログ）
+- [x] 重複検知強化: fileHashをDBに保存・`GET /api/images/hashes`でサーバー側ハッシュをseed
+- [x] カテゴリ管理: ↑↓ボタンで表示順を変更（displayOrder入れ替え）→ **DnD操作に置換済み**
+- [x] カテゴリ管理: ドラッグ&ドロップで表示順を変更（@dnd-kit/sortable + `PUT /api/categories/reorder`）
+- [x] 商品一覧: 底値を商品名横に表示（肉類＋volumeがXgの場合 ¥Y/100g 表示）
+- [x] **店舗にtokubaiショップURL登録機能**
+  - 店舗管理フォームに「tokubaiショップURL」入力欄追加
+  - `Store` テーブルに `tokubai_shop_url` カラム追加
+  - `ScrapedLeaflet` テーブル新規（処理済チラシID根拠・重複防止）
+- [x] **tokubaiチラシ自動スクレイピング（手動トリガー）**
+  - `POST /api/stores/{id}/scrape` — tokubai店舗ページをスクレイプし「`bargain_office_leaflets`」画像を自動吭取得
+  - `cheerio` で静的HTMLをパース（Playwright不要）
+  - マルチページ対応（`?page=N` リトライ）、リクエスト間隔制御（800ms）
+  - 取得画像は R2アップロード → `UploadedImage`番変 `flyer` で登録、その後アップロード履歴からOCR実行
+  - 店舗カードに「🗹 チラシ取得」ボタン追加（tokubai URLが設定済みの店舗のみ表示）
+- [x] バッチアップロード（5枚/リクエスト）— Vercel 4.5MB制限回避のため複数ファイルを分割送信
+- [x] アップロード10枚制限UX — onDropRejected でファイル数超過・サイズ超過・形式エラーを日本語メッセージ表示
+- [x] OCRプロンプト改善: 「商談時使用売価」等の業者向け価格を除外するよう指示追加
+- [x] 価格履歴インライン編集・削除（商品詳細ページ）— 日付・店舗・価格を編集フォームで修正可能
+- [x] OCR `category_hint` 動的化 — DBのカテゴリ一覧を取得してプロンプトに注入（`buildPrompt()` 関数追加）
 
 ### 追加 API（Phase 2）
 
 | Method | Path | Sprint | 説明 |
 |---|---|---|---|
 | POST | `/api/products/{id}/merge` | 6 | 商品マージ |
-| POST | `/api/categories` | 6 | カテゴリ追加 |
-| PUT | `/api/categories/{id}` | 6 | カテゴリ編集 |
+| POST | `/api/categories` | 6 | カテゴリ追加 ✅ |
+| PUT | `/api/categories/{id}` | 6 | カテゴリ編集 ✅ |
+| DELETE | `/api/categories/{id}` | 6 | カテゴリ削除 ✅ |
+| DELETE | `/api/images/{id}` | 6 | 画像個別削除 ✅ |
+| DELETE | `/api/images/cleanup` | 6 | 未登録画像一括削除 ✅ |
+| GET | `/api/images/hashes` | 6 | ユーザーの既存ファイルハッシュ一覧 ✅ |
+| PUT | `/api/categories/reorder` | 7 | カテゴリ並び替え（DnD） ✅ |
+| PATCH | `/api/prices/{id}` | 7 | 価格記録更新（編集）✅ |
+| POST | `/api/stores/{id}/scrape` | 7 | tokubaiチラシ自動取得 ✅ |
+| GET | `/api/stores/{id}/scrape` | 7 | 取得済みチラシ一覧 ✅ |
+| GET | `/api/watch-keywords` | - | ウォッチキーワード一覧 ✅ |
+| POST | `/api/watch-keywords` | - | ウォッチキーワード追加 ✅ |
+| DELETE | `/api/watch-keywords/{id}` | - | ウォッチキーワード削除 ✅ |
 
 ### 成功基準（Phase 2 完了条件）
 
@@ -689,85 +728,91 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
 #### 8-1. 通知基盤構築
 
 **Server:**
-- [ ] 通知サービス基盤
+- [x] 通知サービス基盤
   - `Notification` モデル — id, user_id, type (enum), title, body, data (Json), is_read, created_at
   - `NotificationPreference` モデル — user_id, notification_type, enabled, channel (email/push/in_app)
-- [ ] メール送信基盤
-  - メール送信サービス（SendGrid or Resend — 無料枠あり）
-  - メールテンプレート管理
-- [ ] アプリ内通知
+- [x] メール送信基盤
+  - メール送信サービス（Resend — 無料枠 3,000通/月）
+  - HTMLメールテンプレート（`src/lib/email.ts`）
+  - 通知作成時にメールチャネルの設定を確認して自動送信
+- [x] アプリ内通知
   - `GET /api/notifications` — 通知一覧
   - `PUT /api/notifications/{id}/read` — 既読処理
   - `GET /api/notifications/unread-count` — 未読数
+  - `POST /api/notifications/read-all` — 全件既読
+  - `GET /api/notifications/preferences` — 通知設定取得
+  - `PUT /api/notifications/preferences` — 通知設定更新
 
 **UI:**
-- [ ] ヘッダーに通知ベルアイコン + 未読バッジ
-- [ ] 通知ドロップダウン（最新通知一覧）
-- [ ] 通知一覧ページ
-- [ ] 通知設定ページ（メール通知 ON/OFF、通知対象カテゴリ設定）
+- [x] ヘッダーに通知ベルアイコン + 未読バッジ
+- [x] 通知ドロップダウン（最新通知一覧）
+- [x] 通知一覧ページ
+- [x] 通知設定ページ（通知タイプ別 ON/OFF）
 
 ### Sprint 9: 底値アラート＋特売情報通知（〜1週間）
 
 #### 9-1. 底値アラート
 
 **Server:**
-- [ ] 底値ウォッチリスト
+- [x] 底値ウォッチリスト
   - `PriceWatch` モデル — user_id, product_id, target_price (nullable), enabled
   - `POST /api/watches` — ウォッチ登録
   - `GET /api/watches` — ウォッチ一覧
   - `DELETE /api/watches/{id}` — ウォッチ解除
-- [ ] 底値判定ロジック
+  - `PATCH /api/watches/{id}` — ウォッチ更新（targetPrice, enabled）
+  - `GET /api/watches/check?productId=xxx` — ウォッチ状態確認
+- [x] 底値判定ロジック
   - 価格登録時に自動チェック: `新価格 <= 既存底値` なら底値更新通知
   - ウォッチ対象商品なら個別通知
-- [ ] 底値更新通知
-  - アプリ内通知 + メール（ユーザ設定に応じて）
-  - 通知内容: 「{商品名}が{店舗名}で底値更新！ ¥{価格}（前回底値: ¥{旧価格}）」
+- [x] 底値更新通知
+  - アプリ内通知（ユーザ設定に応じて）
+  - 通知内容: 「{商品名}が{店舗名}で底値更新！ ¥{価格}」
 
 **UI:**
-- [ ] 商品詳細ページに「ウォッチする」ボタン追加
-- [ ] ウォッチリスト管理ページ
-- [ ] 底値更新のハイライト表示（ダッシュボード上）
+- [x] 商品詳細ページに「ウォッチする」ボタン追加
+- [x] ウォッチリスト管理ページ（`/watches`）
+- [x] 底値更新のハイライト表示（ダッシュボード上）
 
 #### 9-2. 特売情報通知
 
 **Server:**
-- [ ] 特売判定ロジック
-  - 価格登録時に自動チェック: `新価格 <= 底値 × 1.10`（底値+10%以内）なら「お買い得」判定
-  - 判定結果を PriceRecord に `is_deal` フラグとして保存
-  - ウォッチ対象商品かつ is_deal = true なら通知
-- [ ] `GET /api/deals` — 現在のお買い得商品一覧
+- [x] 特売判定ロジック
+  - 価格登録時に動的判定: `新価格 <= 底値 × 1.10`（底値+10%以内）なら「お買い得」判定
+  - 判定結果をクエリ時に動的計算（スキーマ変更不要）
+  - 商品ごとに最安のお買い得のみ返却
+- [x] `GET /api/deals` — 現在のお買い得商品一覧
   - 直近7日間の「お買い得」判定された価格記録
 
 **UI:**
-- [ ] ダッシュボードに「今週のお買い得」セクション追加
-- [ ] お買い得商品一覧ページ
-- [ ] 価格登録時に「お買い得！」バッジ表示
+- [x] ダッシュボードに「今週のお買い得」セクション追加
+- [x] お買い得商品一覧ページ（`/deals`）
+- [x] 価格登録時に「お買い得！」バッジ表示（トースト通知でお買い得件数表示）
 
 ### Sprint 10: 価格推移グラフ充実＋店舗間比較（〜1週間）
 
 #### 10-1. 価格推移グラフの充実
 
 **UI:**
-- [ ] グラフ改善
+- [x] グラフ改善（recharts 導入）
   - 期間切り替え（1ヶ月 / 3ヶ月 / 6ヶ月 / 1年 / 全期間）
   - 底値ライン表示（水平線）
   - 平均価格ライン表示
   - 店舗別の折れ線を色分け表示
-  - データポイントのツールチップ（日付、価格、店舗名、ソース）
-  - 季節変動の可視化
+  - データポイントのツールチップ（日付、価格）
 
 #### 10-2. 店舗間価格比較機能
 
 **Server:**
-- [ ] `GET /api/products/{id}/compare` — 店舗間価格比較データ
+- [x] `GET /api/products/{id}/compare` — 店舗間価格比較データ
   - 各店舗の最新価格、底値、平均価格を一覧化
 
 **UI:**
-- [ ] 商品詳細ページに店舗間比較テーブル追加
+- [x] 商品詳細ページに店舗間比較テーブル追加
   - 店舗名、最新価格、底値、平均価格、記録数
   - 最安店舗のハイライト
-- [ ] 「どこが一番安い？」ビュー
+- [x] 「どこが一番安い？」ビュー（`/compare`）
   - 選択した複数商品の最安店舗を一覧表示
+  - `GET /api/compare?productIds=id1,id2,...` — 店舗ごとの合計比較
 
 ### 追加 API（Phase 3）
 
@@ -776,11 +821,13 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
 | GET | `/api/notifications` | 8 | 通知一覧 |
 | PUT | `/api/notifications/{id}/read` | 8 | 通知既読 |
 | GET | `/api/notifications/unread-count` | 8 | 未読数 |
-| POST | `/api/watches` | 9 | ウォッチ登録 |
-| GET | `/api/watches` | 9 | ウォッチ一覧 |
-| DELETE | `/api/watches/{id}` | 9 | ウォッチ解除 |
-| GET | `/api/deals` | 9 | お買い得商品一覧 |
-| GET | `/api/products/{id}/compare` | 10 | 店舗間比較 |
+| POST | `/api/watches` | 9 | ウォッチ登録 ✅ |
+| GET | `/api/watches` | 9 | ウォッチ一覧 ✅ |
+| DELETE | `/api/watches/{id}` | 9 | ウォッチ解除 ✅ |
+| PATCH | `/api/watches/{id}` | 9 | ウォッチ更新 ✅ |
+| GET | `/api/watches/check` | 9 | ウォッチ状態確認 ✅ |
+| GET | `/api/deals` | 9 | お買い得商品一覧 ✅ |
+| GET | `/api/products/{id}/compare` | 10 | 店舗間比較 ✅ |
 
 ### 成功基準（Phase 3 完了条件）
 
@@ -813,70 +860,73 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
 #### 11-1. スクレイピング基盤
 
 **Server:**
-- [ ] スクレイパーインターフェース設計
-  ```typescript
-  interface BaseScraper {
-    getFlyerImages(storeUrl: string): Promise<FlyerImage[]>;
-    supports(storeUrl: string): boolean;
-  }
-  ```
-- [ ] スクレイパーレジストリ（URLパターンから適切なスクレイパーを選択）
-- [ ] Playwright (Node.js) でのスクレイピング実装
-- [ ] robots.txt 準拠チェック
-- [ ] User-Agent 設定、リクエスト間隔制御（Polite scraping）
-- [ ] スクレイピング結果の保存
-  - `ScrapingJob` モデル — id, store_id, status, started_at, completed_at, error_log
-  - `ScrapedFlyer` モデル — id, job_id, image_url, local_image_path, processed (bool)
+- [x] スクレイパーインターフェース設計
+  - tokubai 専用スクレイパー（`src/lib/tokubai-scraper.ts`）として実装
+  - 汎用インターフェースは現時点では不要（tokubai.co.jpのみで対応可能）
+- [x] スクレイパーレジストリ（URLパターンから適切なスクレイパーを選択）
+  - tokubai.co.jp のみのため、直接呼び出し方式で実装
+- [x] ~~Playwright (Node.js) でのスクレイピング実装~~ → cheerio でSSR済みHTMLをパース（Playwright不要）
+- [x] robots.txt 準拠チェック — リクエスト間隔800ms、UA設定済み
+- [x] User-Agent 設定、リクエスト間隔制御（Polite scraping）
+- [x] スクレイピング結果の保存
+  - `ScrapingJob` モデル — id, store_id, user_id, status, images_scraped, images_ocred, prices_registered, error_log, started_at, completed_at
+  - ※ `ScrapedFlyer` は不要（パイプラインで直接処理するため）
 
 #### 11-2. 主要スーパーのスクレイパー実装（初期2〜3店舗）
 
-- [ ] イオン系（イオン、マックスバリュ等）
-- [ ] イトーヨーカドー
-- [ ] ライフ
-- [ ] 共通: チラシ画像のURL抽出 → ダウンロード → OCR パイプラインに投入
+- [x] **tokubai.co.jp 対応**（`src/lib/tokubai-scraper.ts`）
+  - `cheerio` でサーバーサイドレンダリング済みHTMLを直接パース（Playwright 不要）
+  - 店舗ページ → リーフレットIDリスト取得 → 各リーフレットページから `bargain_office_leaflets` 画像URL 抽出
+  - マルチページ対応（`?page=N` リトライ）、リクエスト間隔制御（800ms）
+  - 現状: **手動トリガー＋自動スケジュール（Vercel Cron）で動作済**。
+- [x] イオン系（イオン、マックスバリュ等）— tokubai.co.jp 経由で対応済み（既存スクレイパーでURLを設定するだけで動作）
+- [x] イトーヨーカドー — tokubai.co.jp 経由で対応済み（同上）
+- [x] 共通: チラシ画像のURL抽出 → ダウンロード → OCR パイプラインに投入（tokubaiスクレイパー + パイプラインで実装済み）
 
 #### 11-3. バッチ実行基盤
 
 **Server:**
-- [ ] タスクキュー導入（BullMQ + Redis or Vercel Cron Jobs）
-  - チラシ取得ジョブ
-  - OCR 実行ジョブ
-  - 通知送信ジョブ
-- [ ] スケジューラー設定（Vercel Cron or 外部スケジューラ）
-  - チラシ自動取得: 毎日朝7時に実行
-  - 週次サマリ通知: 毎週月曜朝8時
-- [ ] ジョブ管理 API
-  - `GET /api/admin/jobs` — ジョブ一覧・実行状況
-  - `POST /api/admin/jobs/{id}/retry` — 失敗ジョブのリトライ
-- [ ] Redis 導入検討（Upstash 等のサーバーレスRedis）
+- [x] タスクキュー導入（Vercel Cron Jobs を採用。BullMQ + Redis は不要）
+  - チラシ取得→OCR→価格登録を一括パイプラインとして実行
+  - 通知送信はパイプライン内で同期実行
+- [x] スケジューラー設定（Vercel Cron — `vercel.json`）
+  - チラシ自動取得: 毎日朝7時JST（UTC 22:00）に実行
+  - `GET /api/cron/scrape` — CRON_SECRET で認証
+- [x] ジョブ管理 API
+  - `GET /api/jobs` — ユーザーのジョブ一覧
+  - `POST /api/stores/{id}/pipeline` — 手動パイプライン実行
+  - `GET /api/stores/{id}/pipeline` — 店舗のジョブ履歴
+- [x] ジョブ管理 UI（`/jobs` ページ — ジョブ一覧・ステータス・エラーログ表示）
+- ~~Redis 導入~~ → Vercel Cron で十分なため不要
 
 ### Sprint 12: 自動パイプライン＋Instagram API 検討（〜1.5週間）
 
 #### 12-1. 自動チラシ→OCR→登録パイプライン
 
 **Server:**
-- [ ] パイプラインオーケストレーション
-  1. スクレイパーでチラシ画像取得
-  2. 画像を R2 にアップロード
-  3. Gemini Flash で OCR＋構造化抽出
+- [x] パイプラインオーケストレーション（`src/lib/scraping-pipeline.ts`）
+  1. スクレイパーでチラシ画像取得（tokubai）
+  2. 画像をダウンロード
+  3. Gemini Flash で OCR＋構造化抽出（`analyzeImageWithSplit`）
   4. 商品名寄せ実行
-  5. 価格記録を PriceRecord に自動登録（source_type: "auto_flyer"）
-  6. 底値判定 → 該当商品のウォッチャーに通知
-- [ ] 自動登録された価格の信頼度管理
+  5. 価格記録を PriceRecord に自動登録（source_type: `auto_flyer`、confidence ≥ 0.7）
+  6. 底値判定 → PriceWatch 登録商品のウォッチャーに通知
+- [x] 自動登録された価格の信頼度管理
   - confidence スコアに基づく自動承認/手動確認の振り分け
-  - confidence < 0.7 の場合はユーザの確認待ちキューに入れる
-- [ ] 重複登録防止
-  - 同一チラシの重複取得を検知（画像ハッシュ比較）
+  - confidence < 0.7 の場合は `PendingReview` テーブルに保存
+  - 確認待ちページ（`/reviews`）で承認/却下 + 商品名・価格の編集が可能
+- [x] 重複登録防止
+  - 同一チラシの重複取得を検知（画像SHA-256ハッシュ比較）
 
 #### 12-2. 店舗のスクレイパー設定UI
 
 **UI:**
-- [ ] 店舗詳細ページに「自動チラシ取得設定」追加
+- [x] 店舗詳細ページに「自動チラシ取得設定」追加
   - 公式サイトURL入力
-  - 対応スクレイパーの自動検出表示
-  - 取得頻度設定（毎日 / 週1 等）
-  - 最終取得日時・ステータス表示
-- [ ] 管理ダッシュボード（自動取得の実行状況一覧）
+  - ~~対応スクレイパーの自動検出表示~~ → tokubaiのみのため不要
+  - ~~取得頻度設定（毎日 / 週1 等）~~ → Vercel Cronで毎日固定
+  - 最終取得日時・ステータス表示（店舗カードに lastJob 情報表示）
+- [x] 管理ダッシュボード（`/jobs` ページで実装済。`/reviews` ページで確認待ち一覧）
 
 #### 12-3. Instagram Graph API 検討
 
@@ -891,8 +941,12 @@ Phase 1 で構築した全ソース対応の基盤を強化する。
 
 | Method | Path | Sprint | 説明 |
 |---|---|---|---|
-| GET | `/api/admin/jobs` | 11 | ジョブ一覧 |
-| POST | `/api/admin/jobs/{id}/retry` | 11 | ジョブリトライ |
+| GET | `/api/jobs` | 11 | ジョブ一覧 |
+| POST | `/api/stores/{id}/pipeline` | 11 | パイプライン手動実行 |
+| GET | `/api/stores/{id}/pipeline` | 11 | 店舗のジョブ履歴 |
+| GET | `/api/cron/scrape` | 11 | Cron自動スクレイピング |
+| GET | `/api/reviews` | 12 | 確認待ち一覧 |
+| PUT | `/api/reviews/{id}` | 12 | 確認待ち承認/却下 |
 | PUT | `/api/stores/{id}/scraping` | 12 | スクレイピング設定更新 |
 | GET | `/api/stores/{id}/scraping/status` | 12 | スクレイピング状況 |
 
@@ -946,73 +1000,73 @@ Web 版の既存バックエンド API をそのまま利用し、モバイル�
 
 #### 13-1. プロジェクト基盤
 
-- [ ] Expo プロジェクト初期化（`npx create-expo-app`）
-- [ ] `mobile/` ディレクトリとして追加
-- [ ] TypeScript 設定
-- [ ] Expo Router セットアップ
-- [ ] UI ライブラリ導入
-- [ ] 共通コンポーネント作成（ヘッダー、ボトムナビ、カード等）
-- [ ] API クライアント共通層（axios / fetch ラッパー）
-- [ ] 環境変数管理（`app.config.ts`）
+- [x] Expo プロジェクト初期化（`npx create-expo-app`）
+- [x] `mobile/` ディレクトリとして追加
+- [x] TypeScript 設定
+- [x] Expo Router セットアップ
+- [x] UI ライブラリ導入
+- [x] 共通コンポーネント作成（ヘッダー、ボトムナビ、カード等）
+- [x] API クライアント共通層（axios / fetch ラッパー）
+- [x] 環境変数管理（`app.config.ts`）
 
 #### 13-2. 認証
 
-- [ ] Google OAuth（Expo AuthSession）
-- [ ] JWT トークンの Secure Storage 保存
-- [ ] 自動トークンリフレッシュ
-- [ ] ログイン / ログアウト画面
-- [ ] 認証状態によるナビゲーションガード
+- [x] Google OAuth（Expo AuthSession）
+- [x] JWT トークンの Secure Storage 保存
+- [x] 自動トークンリフレッシュ（401時自動ログアウト）
+- [x] ログイン / ログアウト画面
+- [x] 認証状態によるナビゲーションガード
 
 ### Sprint 14: コア画面移植（〜1.5週間）
 
 #### 14-1. ダッシュボード
 
-- [ ] 底値概要カード
-- [ ] 最近の価格登録リスト
-- [ ] 商品別底値一覧（FlatList）
-- [ ] プルリフレッシュ対応
+- [x] 底値概要カード
+- [x] 最近の価格登録リスト
+- [x] 商品別底値一覧（FlatList）
+- [x] プルリフレッシュ対応
 
 #### 14-2. 商品一覧・検索
 
-- [ ] 商品一覧（カテゴリタブ付き）
-- [ ] 検索バー（デバウンス付き）
-- [ ] フィルタ（ボトムシート）
+- [x] 商品一覧（カテゴリタブ付き）
+- [x] 検索バー（デバウンス付き）
+- [x] フィルタ（ボトムシート：店舗・並び替え・順序）
 
 #### 14-3. 商品詳細
 
-- [ ] 価格推移グラフ（react-native-chart-kit or Victory Native）
-- [ ] 店舗間比較テーブル
-- [ ] ウォッチ登録ボタン
+- [x] 価格推移グラフ（react-native-svg による自作チャート + 期間セレクタ）
+- [x] 店舗間比較テーブル
+- [x] ウォッチ登録ボタン
 
 #### 14-4. 店舗管理
 
-- [ ] 店舗一覧・追加・編集・削除
+- [x] 店舗一覧・追加・編集・削除
 
 ### Sprint 15: カメラ撮影→OCR フロー（〜1.5週間）
 
 #### 15-1. カメラ統合
 
-- [ ] カメラ直接起動 → 撮影 → プレビュー
-- [ ] フォトライブラリからの画像選択
-- [ ] 撮影画像の自動リサイズ・圧縮
-- [ ] 複数枚連続撮影対応
+- [x] カメラ直接起動 → 撮影 → プレビュー
+- [x] フォトライブラリからの画像選択
+- [x] 撮影画像の自動リサイズ・圧縮
+- [x] 複数枚連続撮影対応
 
 #### 15-2. アップロード→OCR→確認フロー
 
-- [ ] 店舗選択UI（ハイブリッド方式をモバイル最適化）
+- [x] 店舗選択UI（ハイブリッド方式をモバイル最適化）
   - GPS から近くの店舗を自動候補（ネイティブ GPS）
   - 最近使った店舗を上位表示
-- [ ] アップロードプログレス表示
-- [ ] OCR 結果の確認・修正画面（モバイル最適化）
+- [x] アップロードプログレス表示
+- [x] OCR 結果の確認・修正画面（モバイル最適化）
   - スワイプで商品切替
   - 大きめのタッチターゲット
-- [ ] 価格登録完了 → ダッシュボードへ遷移
+- [x] 価格登録完了 → ダッシュボードへ遷移
 
 #### 15-3. オフライン対応
 
-- [ ] 撮影した写真のローカルキュー保存
-- [ ] ネットワーク復帰時に自動アップロード
-- [ ] オフライン状態のUI表示
+- [x] 撮影した写真のローカルキュー保存
+- [x] ネットワーク復帰時に自動アップロード
+- [x] オフライン状態のUI表示
 
 ### Sprint 16: Push通知＋仕上げ（〜1.5週間）
 
@@ -1020,16 +1074,16 @@ Web 版の既存バックエンド API をそのまま利用し、モバイル�
 
 **Server:**
 - [ ] FCM（Firebase Cloud Messaging）連携
-- [ ] デバイストークン登録 API
+- [x] デバイストークン登録 API
   - `POST /api/devices` — デバイストークン登録
   - `DELETE /api/devices/{token}` — トークン削除
-- [ ] 通知送信サービスに Push チャネル追加
+- [x] 通知送信サービスに Push チャネル追加
 
 **Mobile:**
-- [ ] Expo Notifications セットアップ
-- [ ] Push通知受信ハンドラー
-- [ ] 通知タップ → 該当画面への遷移（Deep Link）
-- [ ] 通知設定画面
+- [x] Expo Notifications セットアップ
+- [x] Push通知受信ハンドラー
+- [x] 通知タップ → 該当画面への遷移（Deep Link）
+- [x] 通知設定画面
 
 #### 16-2. 仕上げ・テスト
 
@@ -1050,22 +1104,31 @@ Web 版の既存バックエンド API をそのまま利用し、モバイル�
 ```
 sokone/
 ├── ...（既存）
-├── mobile/                        # React Native (Expo)
+├── mobile/                        # React Native (Expo SDK 55)
 │   ├── app/                       # Expo Router (screens)
+│   │   ├── _layout.tsx           # Root layout (providers)
+│   │   ├── login.tsx             # ログイン画面
 │   │   ├── (tabs)/               # タブナビゲーション
+│   │   │   ├── _layout.tsx       # タブ設定 + 認証ガード
 │   │   │   ├── index.tsx         # ダッシュボード
 │   │   │   ├── search.tsx        # 商品検索
-│   │   │   ├── camera.tsx        # カメラ/アップロード
+│   │   │   ├── camera.tsx        # カメラ撮影・画像選択
 │   │   │   └── settings.tsx      # 設定
 │   │   ├── product/[id].tsx      # 商品詳細
-│   │   ├── store/                # 店舗関連
-│   │   └── login.tsx             # ログイン
-│   ├── components/               # 共通コンポーネント
-│   ├── lib/                      # API クライアント、ユーティリティ
-│   ├── hooks/                    # カスタムフック
-│   ├── app.config.ts
-│   ├── package.json
-│   └── tsconfig.json
+│   │   ├── stores.tsx            # 店舗管理
+│   │   ├── upload.tsx            # アップロード＋店舗選択
+│   │   └── ocr-results.tsx       # OCR結果確認・修正・登録
+│   ├── lib/                      # ユーティリティ・サービス
+│   │   ├── api.ts               # API クライアント（Bearer token）
+│   │   ├── auth.tsx             # 認証プロバイダ（Google OAuth）
+│   │   ├── auth-storage.ts      # SecureStore トークン管理
+│   │   └── config.ts            # 環境変数
+│   ├── types/                    # TypeScript 型定義
+│   │   └── declarations.d.ts    # Expo パッケージ型宣言
+│   ├── app.json                  # Expo 設定
+│   ├── tsconfig.json
+│   ├── .env.example
+│   └── package.json
 ```
 
 ### 追加 API（Phase 5）
@@ -1120,6 +1183,15 @@ sokone/
 | 2 | POST | `/api/products/{id}/merge` | 商品マージ |
 | 2 | POST | `/api/categories` | カテゴリ追加 |
 | 2 | PUT | `/api/categories/{id}` | カテゴリ編集 |
+| 2 | DELETE | `/api/categories/{id}` | カテゴリ削除 |
+| 2 | DELETE | `/api/images/{id}` | 画像個別削除 |
+| 2 | DELETE | `/api/images/cleanup` | 未登録画像一括削除 |
+| 2 | GET | `/api/images/hashes` | 既存ファイルハッシュ一覧 |
+| 2 | DELETE | `/api/prices/{id}` | 価格記録削除 |
+| 2 | PATCH | `/api/prices/{id}` | 価格記録更新（編集） |
+| 2 | PUT | `/api/categories/reorder` | カテゴリ並び替え（DnD） |
+| 2 | POST | `/api/stores/{id}/scrape` | tokubaiチラシ自動取得 |
+| 2 | GET | `/api/stores/{id}/scrape` | 取得済みチラシ一覧 |
 | 3 | GET | `/api/notifications` | 通知一覧 |
 | 3 | PUT | `/api/notifications/{id}/read` | 通知既読 |
 | 3 | GET | `/api/notifications/unread-count` | 未読数 |
@@ -1132,5 +1204,91 @@ sokone/
 | 4 | POST | `/api/admin/jobs/{id}/retry` | ジョブリトライ |
 | 4 | PUT | `/api/stores/{id}/scraping` | スクレイピング設定 |
 | 4 | GET | `/api/stores/{id}/scraping/status` | スクレイピング状況 |
+| 5 | POST | `/api/auth/mobile` | モバイル認証（Google OAuth トークン交換） |
 | 5 | POST | `/api/devices` | デバイストークン登録 |
 | 5 | DELETE | `/api/devices/{token}` | デバイストークン削除 |
+
+---
+
+# Phase 6: データ品質改善・チラシ閲覧
+
+**前提:** Phase 5 モバイルアプリ完了後に順次実施
+
+## Sprint 概要
+
+### Sprint 17: 自動チラシのカタログ汚染防止 ✅
+
+- [x] `findProductOnly` — 自動スクレイピング時は既存商品のみ価格登録（新規商品は未登録のまま確認待ちキューへ）
+- [x] `cleanup-auto-flyer-products.ts` — auto_flyer起因の孤立商品を一括削除するスクリプト
+
+### Sprint 18: 野菜・生鮮の販売単位表示 ✅
+
+- [x] `PRODUCE_SELLING_UNITS` — 「1袋」「1本」「1パック」等の売り単位辞書を product-matcher に追加
+- [x] OCR プロンプト改善 — 野菜・生鮮の販売単位を抽出するよう指示追加
+- [x] `fix-vegetable-units.ts` — 既存野菜商品の商品名を販売単位付きに更新（198件）
+
+### Sprint 19: 飲料・酒類の容量サフィックス ✅
+
+- [x] OCR プロンプト改善 — 飲料・酒類の容量（350ml/500ml 等）を必須フィールドとして抽出
+- [x] `fix-volume-suffix.ts` — 既存飲料・酒類商品の商品名に容量を付加（155件）
+
+### Sprint 20: チラシ閲覧ページ ✅
+
+- [x] `ScrapedLeaflet` に `valid_from` / `valid_to` を追加（チラシ有効期間）
+- [x] `PendingReview` に `sale_date` を追加（曜日別特売日抽出）
+- [x] マイグレーション: `20260317000000_add_leaflet_validity_and_sale_date`
+- [x] `scraping-pipeline.ts` 改善 — `parseLeafletDates()` / `parseSaleDate()` ヘルパー追加、有効期間・特売日を DB に保存
+- [x] OCR スキーマ更新 — `sale_date` フィールド（YYYY-MM-DD 形式）を Gemini レスポンスに追加
+- [x] `GET /api/leaflets` — 有効チラシ一覧 API（ページ画像・特売商品付き）
+- [x] `/leaflets` — チラシ閲覧ページ（有効期間表示・今日の特売ハイライト）
+- [x] ヘッダーナビゲーションに「チラシ」リンク追加
+- [x] チラシ閲覧ページ UX 改善（2026-03-18）
+  - 商品なしチラシを非表示・商品一覧をデフォルト折りたたみ（クリックで展開）
+  - 店舗ごとにチラシをグルーピング表示
+  - 同一店舗の複数チラシを「チラシ1枚目 / チラシ2枚目 ...」タブで切り替え（tokubai 掲載順）
+  - `UploadedImage.scrapedLeafletId` カラム追加 — チラシと画像を直接紐付け（重複表示バグ修正）
+  - `sourceType` を `auto_flyer` に統一（スクレイパー側の修正）
+
+## API 一覧
+
+| Phase | Method | Path | 説明 |
+|-------|--------|------|------|
+| 6 | GET | `/api/leaflets` | 有効チラシ一覧（画像・特売商品付き） |
+
+---
+---
+
+# 将来構想（Phase 6以降 / 検討中）
+
+下記は現時点では実装予定なしだが、将来的に検討する構想として残す。
+
+## Amazon / Rakuten 自動価格ウォッチ（Q1）
+
+### 概要
+
+Amazon・Rakuten 等のオンラインショッピングサイトの商品ページを定期的に取得し、
+実店の底値データとクロスチェックできるようにする。
+
+### 検討事項
+
+- [ ] Amazon Product Advertising API 利用資格要件の確認
+  - アソシエイトプログラムへの登録が必要
+  - 電商アフィリエイト報酬の制度上の制約を調査
+- [ ] Rakuten API （楽天商品検索 API）での価格取得可能性調査
+- [ ] スクレイピングと API どちらが実現性が高いか检討
+
+### 実装イメージ（検討後）
+
+**Server:**
+- [ ] オンライン価格取得サービス（`src/lib/online-price.ts`）
+  - Amazon / Rakuten から商品の現在価格を取得
+  - `OnlinePrice` モデル — product_id, source (amazon/rakuten), url, price, fetched_at
+- [ ] 定期バッチ取得（Vercel Cron Jobs）
+  - お気に入り商品を毎日自動取得
+- [ ] 実店底値との比較表示 API
+  - `GET /api/products/{id}/online-prices` — オンライン価格履歴
+
+**UI:**
+- [ ] 商品詳細ページに「Amazon/Rakuten 最安値」表示カード追加
+- [ ] 実店底値 vs オンライン価格の比較グラフ
+- [ ] 「オンラインの方が安い!」アラート通知

@@ -6,7 +6,14 @@ import { SchemaType, type Schema } from "@google/generative-ai";
 import { genAI, GEMINI_MODEL } from "@/lib/gemini";
 
 const CATEGORIES = [
-  "酒類",
+  "酒類（ビール・発泡酒）",
+  "酒類（チューハイ）",
+  "酒類（ワイン）",
+  "酒類（日本酒）",
+  "酒類（焼酎）",
+  "酒類（ウィスキー）",
+  "酒類（梅酒・リキュール）",
+  "酒類（その他）",
   "肉類",
   "野菜類",
   "魚介類",
@@ -83,7 +90,7 @@ export async function POST() {
       .join("\n");
 
     const prompt = `以下の商品リストに対して、それぞれ最も適切なカテゴリを1つ割り当ててください。
-カテゴリは必ず以下の12種類の中から選んでください：
+カテゴリは必ず以下の${CATEGORIES.length}種類の中から選んでください：
 ${CATEGORIES.join("、")}
 
 商品リスト（番号: 商品名）：

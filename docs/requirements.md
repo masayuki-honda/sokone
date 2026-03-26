@@ -264,9 +264,31 @@ Gemini 2.5 Flash はマルチモーダルモデルであり、テキストの読
 | **ホスティング** | Vercel (Hobby) | **無料** | Next.js最適、非商用個人利用に限る |
 | **データベース** | Neon (Free) | **無料** | PostgreSQL 16、0.5GB、サーバーレス |
 | **画像ストレージ** | Cloudflare R2 | **無料枠あり** | 10GB/月、Phase 1から使用 |
+| **スケジューラ** | Vercel Cron Jobs | **無料** | Hobbyプランは1つまで。毎日7時JST自動スクレイピング |
+| **メール送信** | Resend | **無料枠あり** | 3,000通/月、1日100通。通知メール送信 |
 | **CI/CD** | GitHub Actions | **無料** | テスト・デプロイ自動化 |
 
 > **月額コスト: $0（完全無料）** — Vercel (Hobby) + Neon (Free) + Cloudflare R2 (無料枠) + GitHub Actions (無料) の構成。バックエンドサーバー不要（Next.js Route Handlers で API を実装）。
+
+### 7.4 環境変数一覧
+
+| 変数名 | 用途 | 必須 | 設定場所 |
+|---|---|---|---|
+| `DATABASE_URL` | Neon PostgreSQL 接続文字列（pooler） | ✅ | `.env.local`, Vercel |
+| `DIRECT_URL` | Neon PostgreSQL 直接接続（マイグレーション用） | ✅ | `.env.local`, Vercel |
+| `NEXTAUTH_URL` | NextAuth ベースURL | ✅ | `.env.local`, Vercel |
+| `NEXTAUTH_SECRET` | NextAuth セッション暗号化キー | ✅ | `.env.local`, Vercel |
+| `GOOGLE_CLIENT_ID` | Google OAuth クライアントID | ✅ | `.env.local`, Vercel |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth クライアントシークレット | ✅ | `.env.local`, Vercel |
+| `GEMINI_API_KEY` | Google Gemini API キー | ✅ | `.env.local`, Vercel |
+| `R2_ACCOUNT_ID` | Cloudflare R2 アカウントID | ✅ | `.env.local`, Vercel |
+| `R2_ACCESS_KEY_ID` | Cloudflare R2 アクセスキー | ✅ | `.env.local`, Vercel |
+| `R2_SECRET_ACCESS_KEY` | Cloudflare R2 シークレットキー | ✅ | `.env.local`, Vercel |
+| `R2_BUCKET_NAME` | R2 バケット名 | ✅ | `.env.local`, Vercel |
+| `R2_PUBLIC_URL` | R2 パブリックURL | | `.env.local`, Vercel |
+| `CRON_SECRET` | Vercel Cron 認証トークン（`/api/cron/scrape` 保護） | ✅ | `.env.local`, Vercel |
+| `RESEND_API_KEY` | Resend メール送信 API キー | | `.env.local`, Vercel |
+| `EMAIL_FROM` | メール送信元アドレス | | `.env.local`, Vercel |
 
 ---
 

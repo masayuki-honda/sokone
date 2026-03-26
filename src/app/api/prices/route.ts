@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { getSession } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { findOrCreateProduct, normalizeProductName } from "@/lib/product-matcher";
 import { SourceType } from "@prisma/client";
+import { createNotification } from "@/lib/notification";
+import { calculateUnitPriceForStorage, parseQuantity } from "@/lib/unit-price";
 
 interface PriceItem {
   name: string;
@@ -27,7 +28,7 @@ interface BulkPriceRequest {
  * POST /api/prices/bulk — Register prices from OCR results
  */
 export async function POST(request: NextRequest) {
-  const session = await getServerSession(authOptions);
+  const session = await getSession();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -108,6 +109,7 @@ export async function POST(request: NextRequest) {
         // Find or create product
         let productId = item.productId;
         let isNewProduct = false;
+        let itemPackUnit: string | null = null;
 
         if (!productId) {
           const product = await findOrCreateProduct(item.name, {
@@ -117,7 +119,15 @@ export async function POST(request: NextRequest) {
           });
           productId = product.id;
           isNewProduct = product.isNew;
+          itemPackUnit = product.packUnit;
         } else {
+          // Derive packUnit from the OCR item's unit field when product is manually linked
+          const packQtyFromItem =
+            parseQuantity(item.unit?.trim()) ?? parseQuantity(item.volume?.trim());
+          itemPackUnit =
+            packQtyFromItem && packQtyFromItem.value > 1
+              ? `×${packQtyFromItem.value}`
+              : null;
           // User manually linked an OCR-extracted name to an existing product.
           // Auto-register the OCR name as an alias so future scans match automatically.
           const aliasName = normalizeProductName(item.name);
@@ -143,6 +153,17 @@ export async function POST(request: NextRequest) {
           finalPrice = Math.round(item.price * 1.1); // 10% tax
         }
 
+        // Calculate unit price from product's volume/unit info
+        const productForUnit = await prisma.product.findUnique({
+          where: { id: productId },
+          select: { volume: true, unit: true },
+        });
+        const unitPrice = calculateUnitPriceForStorage(
+          finalPrice,
+          productForUnit?.volume ?? item.volume,
+          itemPackUnit ?? productForUnit?.unit ?? item.unit,
+        );
+
         // Create price record
         const priceRecord = await prisma.priceRecord.create({
           data: {
@@ -150,6 +171,8 @@ export async function POST(request: NextRequest) {
             storeId,
             userId: session.user.id,
             price: finalPrice,
+            packUnit: itemPackUnit,
+            unitPrice,
             taxIncluded: true,
             sourceType,
             sourceImageId: sourceImageId || null,
@@ -162,12 +185,68 @@ export async function POST(request: NextRequest) {
           },
         });
 
+        // Check if this price is a deal (near bottom price)
+        const bottomRecord = await prisma.priceRecord.findFirst({
+          where: { productId },
+          orderBy: { price: "asc" },
+          select: { price: true },
+        });
+        const bottomPrice = bottomRecord?.price ?? finalPrice;
+        const isDeal = finalPrice <= bottomPrice * 1.1;
+
+        // --- Notification triggers ---
+        // Check if any user is watching this product
+        const watches = await prisma.priceWatch.findMany({
+          where: { productId, enabled: true },
+          select: { userId: true, targetPrice: true },
+        });
+
+        const productName = priceRecord.product.name;
+        const storeName = store.name;
+
+        for (const watch of watches) {
+          // Bottom price update: current price is the new lowest
+          if (finalPrice === bottomPrice) {
+            await createNotification({
+              userId: watch.userId,
+              type: "bottom_price_update",
+              title: `${productName}の底値更新！`,
+              body: `${storeName}で ¥${finalPrice.toLocaleString()} — 底値が更新されました`,
+              data: { productId, storeId, priceRecordId: priceRecord.id, price: finalPrice },
+            });
+          }
+
+          // Target price reached
+          if (watch.targetPrice && finalPrice <= watch.targetPrice) {
+            await createNotification({
+              userId: watch.userId,
+              type: "watch_target_reached",
+              title: `${productName}が目標価格以下！`,
+              body: `${storeName}で ¥${finalPrice.toLocaleString()}（目標: ¥${watch.targetPrice.toLocaleString()}）`,
+              data: { productId, storeId, priceRecordId: priceRecord.id, price: finalPrice, targetPrice: watch.targetPrice },
+            });
+          }
+
+          // Deal alert (only if not already covered by bottom price or target)
+          if (isDeal && finalPrice !== bottomPrice && (!watch.targetPrice || finalPrice > watch.targetPrice)) {
+            await createNotification({
+              userId: watch.userId,
+              type: "deal_alert",
+              title: `${productName}がお買い得！`,
+              body: `${storeName}で ¥${finalPrice.toLocaleString()}（底値: ¥${bottomPrice.toLocaleString()}）`,
+              data: { productId, storeId, priceRecordId: priceRecord.id, price: finalPrice, bottomPrice },
+            });
+          }
+        }
+
         results.push({
           priceRecordId: priceRecord.id,
           productId: priceRecord.productId,
           productName: priceRecord.product.name,
           price: priceRecord.price,
           isNewProduct,
+          isDeal,
+          bottomPrice,
         });
       } catch (itemError) {
         console.error(`Error processing item ${item.name}:`, itemError);
@@ -176,6 +255,14 @@ export async function POST(request: NextRequest) {
           error: "価格の登録に失敗しました",
         });
       }
+    }
+
+    // Back-fill storeId on the source image so the lightbox shows the store correctly
+    if (sourceImageId && results.length > 0) {
+      await prisma.uploadedImage.updateMany({
+        where: { id: sourceImageId, userId: session.user.id, storeId: null },
+        data: { storeId },
+      });
     }
 
     return NextResponse.json(
@@ -204,7 +291,7 @@ export async function POST(request: NextRequest) {
  * GET /api/prices — List price records with filters
  */
 export async function GET(request: NextRequest) {
-  const session = await getServerSession(authOptions);
+  const session = await getSession();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

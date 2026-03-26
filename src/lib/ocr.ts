@@ -1,5 +1,6 @@
 import { SchemaType, type Schema } from "@google/generative-ai";
 import { genAI, GEMINI_MODEL } from "@/lib/gemini";
+import sharp from "sharp";
 
 // Note: use-gemini-usage.ts tracks free-tier limits for GEMINI_MODEL
 
@@ -14,6 +15,7 @@ export interface OcrItem {
   is_tax_included: boolean;
   confidence: number;
   identified_by: "text" | "image" | "both";
+  sale_date: string | null; // ISO date "YYYY-MM-DD" if item has a specific sale day, null otherwise
 }
 
 export interface OcrResult {
@@ -53,7 +55,7 @@ const ocrResponseSchema: Schema = {
           },
           category_hint: {
             type: SchemaType.STRING,
-            description: "推定カテゴリ（酒類/肉類/野菜類/魚介類/卵/乳製品/飲料/調味料/冷凍食品/お菓子/日用品/その他）",
+            description: "推定カテゴリ名。リストの中から最も近いものを選択してください。該当なしの場合はnull",
             nullable: true,
           },
           is_tax_included: {
@@ -69,6 +71,11 @@ const ocrResponseSchema: Schema = {
             description: "テキストから識別: text / 画像から識別: image / 両方: both",
             format: "enum",
             enum: ["text", "image", "both"],
+          },
+          sale_date: {
+            type: SchemaType.STRING,
+            description: "この商品の特売日（YYYY-MM-DD形式）。チラシに曜日や日付限定の表記がある場合のみ設定。不明・非限定の場合はnull",
+            nullable: true,
           },
         },
         required: [
@@ -95,6 +102,16 @@ const BASE_PROMPT = `以下の画像はスーパーマーケットの商品価�
 画像から読み取れるすべての商品について、JSON形式で出力してください。
 価格は税込価格で統一してください。税抜表示の場合は×1.10で計算してください。
 
+【最重要: 実売価格のみを抽出すること】
+価格タグに複数の金額が表示されている場合は、実際にレジで支払う「実売価格（販売価格）」のみを使用してください。
+以下のような参考価格・比較価格は除外し、絶対に採用しないでください:
+- 「商談時使用売価」「参考価格」「通常価格」「定価」「メーカー希望小売価格」と記載された金額
+- 打ち消し線（取消線）が引かれた金額
+- 「より」「→」などで示された値引き前の元の金額
+特にロピア（Lopia）は価格タグに「商談時使用売価」という補足表示とともに参考価格を記載し、
+大きく目立つ数字が実際の販売価格です。必ず大きく表示されている実売価格（販売価格）を採用し、
+「商談時使用売価」と記載された金額は絶対に使用しないでください。
+
 【重要】テキストだけでなく、写っている商品の見た目からも商品名を推定してください。
 例えば、野菜や果物など商品名のテキストラベルがない場合でも、
 画像に写っている商品の外見から「大根」「トマト」「りんご」等を識別し、
@@ -112,48 +129,116 @@ const BASE_PROMPT = `以下の画像はスーパーマーケットの商品価�
 各商品について以下の情報を抽出してください：
 - name: 商品名
 - price: 税込価格（数値）
-- unit: 単位（個/袋/本/パック/100g等）
-- volume: 容量（350ml/1L等）
-- category_hint: 推定カテゴリ（酒類/肉類/野菜類/魚介類/卵/乳製品/飲料/調味料/冷凍食品/お菓子/日用品/その他）
+- unit: 単位（個/袋/本/パック/100g等）。箱入り・ケース売りの場合は入数を「×24」「×6」のように記載してください
+- volume: 容量（350ml/1L/500g/1kg等）。内容量が記載されていれば必ず抽出してください
+- category_hint: 推定カテゴリ名（後述のリストから選択）
 - is_tax_included: 元の表示が税込かどうか
 - confidence: 読み取り確信度（0.0-1.0）
-- identified_by: text（テキストから識別）/ image（画像から識別）/ both（両方）`;
+- identified_by: text（テキストから識別）/ image（画像から識別）/ both（両方）
 
-const SOURCE_TYPE_PROMPTS: Record<OcrSourceType, string> = {
-  photo: BASE_PROMPT,
-  flyer: `${BASE_PROMPT}
+【商品名への個数表記禁止（重要）】
+商品名（name フィールド）には個数・入数の表記を絶対に含めないこと。
+個数情報は必ず unit フィールドにのみ記載してください。
+  ✅ 正しい例: name: "アサヒ スーパードライ",   unit: "×6"
+  ✗ 誤った例: name: "アサヒ スーパードライ x6", unit: "×6"  ← 重複
+  ✗ 誤った例: name: "アサヒ スーパードライ 6本パック", unit: "パック"  ← 個数が不明
+  ✗ 誤った例: name: "キリン 晴れ風",             unit: "ケース"  ← 何本か不明
 
-【補足】この画像はスーパーのチラシです。
-1枚の画像に複数商品が並んでいます。すべての商品を抽出してください。
-セール価格がある場合はセール価格を優先してください。
-元の価格と割引後の価格がある場合は、割引後の価格を使用してください。`,
-  instagram: `${BASE_PROMPT}
+【容量・入数の抽出ルール（重要: 容量違いは別商品として登録されます）】
+- ビール・飲料のケース売り（例: 24缶入、6本パック）→ unit に「×24」「×6」と記載し、volume に1缶/1本あたりの容量（例: 350ml）を記載してください
+- 肉類・食材の重量表示（例: 100gあたり○○円で500g）→ volume に「500g」と記載してください
+- 調味料等の内容量（例: マヨネーズ450g）→ volume に「450g」と記載してください
+- 「○個入」「○本入」の場合 → unit に「×○」と記載してください
 
-【補足】この画像はスーパーのInstagram投稿のスクリーンショットです。
-Instagram UIの要素（いいね数、コメント欄、ユーザ名等）は無視し、
-投稿画像・テキスト内の商品名と価格情報のみを抽出してください。`,
-  receipt: `${BASE_PROMPT}
+【unit フィールドのルール（重要）】
+unit に「パック」「ケース」「箱」「セット」「カートン」のみを記載することは禁止です。
+必ず個数を付けて「×6」「×24」「×4」のように記載してください。
+ビール・飲料のまとめ売りで個数がラベルに書いてある場合は必ず読み取ること。
+  ✅ 正しい: unit: "×6"  （6本パック）
+  ✅ 正しい: unit: "×24" （24缶ケース）
+  ✗ 禁止:   unit: "パック" （何本か不明）
+  ✗ 禁止:   unit: "ケース" （何本か不明）
 
-【補足】この画像は買い物のレシートです。
-レシートに記載されているすべての商品の商品名と購入価格を抽出してください。
-値引き・割引がある場合は割引後の価格を使用してください。
-小計・合計・ポイントなどの合算行は除外してください。
-レシート上部に記載されている店舗名も store_name フィールドに抽出してください。`,
-};
+【飲料・お酒の容量抽出ルール（必須）】
+飲料・酒類の容量は商品を一意に識別するために必須です。サイズが違うと別商品として登録されます。
+- お茶・ジュース・水・コーヒー飲料などのペットボトル・缶・紙パック → volume に容量を必ず記載
+  例: 麦茶 600ml → volume: "600ml"、緑茶 500ml → volume: "500ml"、オレンジジュース 900ml → volume: "900ml"
+- ビール・新ジャンル・チューハイ等の単缶・単本 → volume に「350ml」「500ml」等を必ず記載
+- 日本酒・焼酎・ワイン・梅酒等のボトル → volume に「720ml」「1800ml」「1L」等を必ず記載
+- 牛乳・豆乳・乳飲料 → volume に「200ml」「1000ml」「1L」等を必ず記載
+容量がラベルに記載されているにもかかわらず抽出しないことは禁止です。必ず読み取ってください。
+
+【野菜・果物・鮮魚等の生鮮食品の単位ルール（重要）】
+販売形態が異なると「別商品」として登録されるため、単位を正確に記載してください:
+- 1本売り（きゅうり・なす・ネギ等）→ unit に「本」と記載。複数本入りの場合は「×3」のように入数を記載
+- 1袋売りで本数・個数不明 → unit に「袋」と記載（例: unit: "袋"）
+- 1袋売りで本数・個数が明記されている → unit に「×○」と記載（例: 3本入り袋 → unit: "×3"）
+- 1個売り（トマト・レモン等）→ unit に「個」と記載
+- 1パック売り（ミニトマト・きのこ・刺身等）→ unit に「パック」と記載
+- 1束売り（ほうれん草・小松菜・三つ葉等）→ unit に「束」と記載
+- 1玉売り（キャベツ・白菜・たまねぎ等）→ unit に「玉」と記載
+- 1房売り（ブドウ・バナナ等）→ unit に「房」と記載
+price タグに「○本入り」「○個入り」等の入数が書いてあれば必ず抽出してください。
+
+【sale_date（特売日）の抽出ルール】
+チラシ内で特定の曜日・日付だけ特売になっている商品がある場合、その日付を sale_date に ISO 形式（YYYY-MM-DD）で記載してください。
+- チラシ上部や商品近くに「土曜限定」「3/17(月)のみ」「本日のみ」等の表記がある場合 → sale_date を設定
+- チラシのカレンダー欄に曜日ごとの商品が並んでいる場合 → 各商品に対応する曜日の日付を設定
+- 特定日不明・期間中ずっと → sale_date は null
+- 「本日のみ」の場合：チラシ上の日付が読み取れる場合はその日付、読み取れない場合は null`;
+
+// Default fallback categories if none are defined in DB
+const DEFAULT_CATEGORIES = [
+  "酒類（ビール・発泡酒）", "酒類（チューハイ）", "酒類（ワイン）", "酒類（日本酒）",
+  "酒類（焼酎）", "酒類（ウィスキー）", "酒類（梅酒・リキュール）", "酒類（その他）",
+  "肉類", "野菜類", "魚介類", "卵", "乳製品", "飲料", "ノンアル飲料",
+  "調味料", "冷凍食品", "お菓子", "パン・ベーカリー", "日用品", "その他",
+];
+
+function buildPrompt(sourceType: OcrSourceType, categoryNames: string[]): string {
+  const categoryList = categoryNames.length > 0 ? categoryNames : DEFAULT_CATEGORIES;
+  const categorySection = `【カテゴリ一覧】category_hint には以下のカテゴリ名のいずれかを使ってください。該当しない場合はnullを指定してください:\n${categoryList.map((c) => `- ${c}`).join("\n")}`;
+
+  const baseWithCategory = `${BASE_PROMPT}\n\n${categorySection}`;
+
+  const suffixes: Record<OcrSourceType, string> = {
+    photo: "",
+    flyer: `\n\n【補足】この画像はスーパーのチラシ（広告）です。
+1枚の画像に多数の商品が並んでいます（10〜30商品の場合があります）。すべての商品を漏れなく抽出してください。
+
+【チラシ特有のレイアウト注意事項】
+- 段組み（2段・3段・4段）、格子状レイアウト、吹き出し、矢印、斜め配置などの複雑なレイアウトに注意
+- 商品名と価格が離れた位置にある場合でも正しく紐付けてください
+- 見出し（「本日の目玉」「お買い得」等）やセクション名は商品名ではありません
+- 装飾テキスト（「驚きの価格！」「限定特価」等）は商品名に含めないでください
+
+【価格の読み取り】
+- セール価格（赤字・太字・大きいフォント）と通常価格が併記されている場合は、セール価格を使用してください
+- 「円」「税込」「税抜」の表示を確認し、税抜の場合は×1.10で税込に換算してください
+- 「2個で○○円」「3パック○○円」等のまとめ買い価格は、1個あたりの単価に換算してunit欄に記載してください
+- 「○○円引き」等の割引表現は元の価格から差し引いた後の価格を使用してください`,
+    instagram: `\n\n【補足】この画像はスーパーのInstagram投稿のスクリーンショットです。\nInstagram UIの要素（いいね数、コメント欄、ユーザ名等）は無視し、\n投稿画像・テキスト内の商品名と価格情報のみを抽出してください。`,
+    receipt: `\n\n【補足】この画像は買い物のレシートです。\nレシートに記載されているすべての商品の商品名と購入価格を抽出してください。\n値引き・割引がある場合は割引後の価格を使用してください。\n小計・合計・ポイントなどの合算行は除外してください。\nレシート上部に記載されている店舗名も store_name フィールドに抽出してください。`,
+  };
+
+  return baseWithCategory + suffixes[sourceType];
+}
 
 // === Main OCR function ===
 
 /**
- * Analyze an image using Gemini 2.0 Flash
+ * Analyze an image using Gemini Flash
  * @param imageBuffer - The image data as a Buffer
  * @param mimeType - The MIME type of the image
  * @param sourceType - The type of source (photo/flyer/instagram/receipt)
+ * @param categoryNames - Category names from DB (injected by caller). Falls back to defaults.
  * @returns OCR result with extracted items
  */
 export async function analyzeImage(
   imageBuffer: Buffer,
   mimeType: string,
   sourceType: OcrSourceType,
+  categoryNames: string[] = [],
 ): Promise<OcrResult> {
   const model = genAI.getGenerativeModel({
     model: GEMINI_MODEL,
@@ -164,7 +249,7 @@ export async function analyzeImage(
     },
   });
 
-  const prompt = SOURCE_TYPE_PROMPTS[sourceType];
+  const prompt = buildPrompt(sourceType, categoryNames);
   const base64Image = imageBuffer.toString("base64");
 
   const result = await model.generateContent([
@@ -259,4 +344,177 @@ export async function analyzeImage(
     console.error("Failed to parse OCR response:", text);
     throw new Error("OCR結果のパースに失敗しました");
   }
+}
+
+// === Flyer image splitting ===
+
+const SPLIT_THRESHOLD = 1200; // Split images larger than this in both dimensions
+const OVERLAP_RATIO = 0.1; // 10% overlap between quadrants
+
+/**
+ * Determine if an image should be split for better OCR accuracy.
+ * Large flyer images benefit from being split into quadrants.
+ */
+export function shouldSplitImage(
+  width: number,
+  height: number,
+  sourceType: OcrSourceType,
+): boolean {
+  return (
+    sourceType === "flyer" &&
+    width >= SPLIT_THRESHOLD &&
+    height >= SPLIT_THRESHOLD
+  );
+}
+
+/**
+ * Split an image buffer into 4 overlapping quadrants.
+ * Overlap prevents items at quadrant boundaries from being missed.
+ */
+async function splitIntoQuadrants(
+  imageBuffer: Buffer,
+): Promise<Buffer[]> {
+  const metadata = await sharp(imageBuffer).metadata();
+  const width = metadata.width!;
+  const height = metadata.height!;
+
+  const midX = Math.floor(width / 2);
+  const midY = Math.floor(height / 2);
+  const overlapX = Math.floor(width * OVERLAP_RATIO);
+  const overlapY = Math.floor(height * OVERLAP_RATIO);
+
+  const regions = [
+    // Top-left
+    { left: 0, top: 0, width: midX + overlapX, height: midY + overlapY },
+    // Top-right
+    { left: Math.max(0, midX - overlapX), top: 0, width: width - midX + overlapX, height: midY + overlapY },
+    // Bottom-left
+    { left: 0, top: Math.max(0, midY - overlapY), width: midX + overlapX, height: height - midY + overlapY },
+    // Bottom-right
+    { left: Math.max(0, midX - overlapX), top: Math.max(0, midY - overlapY), width: width - midX + overlapX, height: height - midY + overlapY },
+  ];
+
+  const quadrants: Buffer[] = [];
+  for (const region of regions) {
+    // Clamp region to image bounds
+    const clampedWidth = Math.min(region.width, width - region.left);
+    const clampedHeight = Math.min(region.height, height - region.top);
+
+    const buf = await sharp(imageBuffer)
+      .extract({
+        left: region.left,
+        top: region.top,
+        width: clampedWidth,
+        height: clampedHeight,
+      })
+      .jpeg({ quality: 85 })
+      .toBuffer();
+    quadrants.push(buf);
+  }
+
+  return quadrants;
+}
+
+/**
+ * Check if two items are duplicates (same product extracted from overlapping regions).
+ * Uses normalized name match + similar price.
+ */
+function isDuplicate(a: OcrItem, b: OcrItem): boolean {
+  const nameA = a.name.toLowerCase().replace(/[\s\u3000]/g, "");
+  const nameB = b.name.toLowerCase().replace(/[\s\u3000]/g, "");
+
+  // Exact name match
+  if (nameA === nameB && a.price === b.price) return true;
+
+  // Substring containment with same price (handles slight variations)
+  if (
+    a.price === b.price &&
+    (nameA.includes(nameB) || nameB.includes(nameA)) &&
+    Math.min(nameA.length, nameB.length) >= 2
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Merge OCR results from multiple quadrants, removing duplicates.
+ * When duplicates are found, keep the one with higher confidence.
+ */
+function mergeResults(results: OcrResult[]): OcrResult {
+  const merged: OcrItem[] = [];
+  let storeName: string | null = null;
+
+  for (const result of results) {
+    if (result.store_name && !storeName) {
+      storeName = result.store_name;
+    }
+
+    for (const item of result.items) {
+      const existingIdx = merged.findIndex((m) => isDuplicate(m, item));
+      if (existingIdx >= 0) {
+        // Keep the higher-confidence version
+        if (item.confidence > merged[existingIdx].confidence) {
+          merged[existingIdx] = item;
+        }
+      } else {
+        merged.push(item);
+      }
+    }
+  }
+
+  return { items: merged, store_name: storeName };
+}
+
+/**
+ * Analyze a flyer image by splitting into quadrants and merging results.
+ * Falls back to single-image analysis for small images.
+ */
+export async function analyzeImageWithSplit(
+  imageBuffer: Buffer,
+  mimeType: string,
+  sourceType: OcrSourceType,
+  categoryNames: string[] = [],
+  imageWidth?: number,
+  imageHeight?: number,
+): Promise<OcrResult> {
+  // Determine dimensions if not provided
+  let width = imageWidth;
+  let height = imageHeight;
+  if (!width || !height) {
+    const metadata = await sharp(imageBuffer).metadata();
+    width = metadata.width ?? 0;
+    height = metadata.height ?? 0;
+  }
+
+  if (!shouldSplitImage(width, height, sourceType)) {
+    return analyzeImage(imageBuffer, mimeType, sourceType, categoryNames);
+  }
+
+  console.log(
+    `[OCR Split] Splitting ${width}x${height} flyer into 4 quadrants`,
+  );
+
+  const quadrants = await splitIntoQuadrants(imageBuffer);
+  const results: OcrResult[] = [];
+
+  // Process quadrants sequentially to respect Gemini rate limits
+  for (let i = 0; i < quadrants.length; i++) {
+    console.log(`[OCR Split] Analyzing quadrant ${i + 1}/4`);
+    const result = await analyzeImage(
+      quadrants[i],
+      "image/jpeg",
+      sourceType,
+      categoryNames,
+    );
+    results.push(result);
+  }
+
+  const merged = mergeResults(results);
+  console.log(
+    `[OCR Split] Merged: ${results.reduce((s, r) => s + r.items.length, 0)} raw → ${merged.items.length} unique items`,
+  );
+
+  return merged;
 }

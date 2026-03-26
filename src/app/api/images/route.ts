@@ -29,7 +29,13 @@ export async function GET(request: NextRequest) {
   const where = {
     userId: session.user.id,
     ...(sourceType && { sourceType: sourceType as "photo" | "flyer" | "instagram" | "receipt" }),
-    ...(status && { status: status as "pending" | "processed" | "failed" }),
+    // When an explicit status filter is given, use it.
+    // Otherwise show only "active" statuses (exclude no_products).
+    // Use `in` rather than `not` so the query works even before the
+    // no_products migration has been applied to the database.
+    ...(status
+      ? { status: status as "pending" | "processed" | "failed" | "no_products" }
+      : { status: { in: ["pending", "processed", "failed"] as ("pending" | "processed" | "failed")[] } }),
     ...(storeId && { storeId }),
   };
 
@@ -45,6 +51,14 @@ export async function GET(request: NextRequest) {
       store: {
         select: { id: true, name: true },
       },
+      _count: {
+        select: { priceRecords: true },
+      },
+      priceRecords: {
+        select: { storeId: true, store: { select: { id: true, name: true } } },
+        take: 1,
+        orderBy: { createdAt: "desc" },
+      },
     },
   });
 
@@ -52,12 +66,19 @@ export async function GET(request: NextRequest) {
   const result = hasMore ? images.slice(0, limit) : images;
   const nextCursor = hasMore ? result[result.length - 1].id : null;
 
-  // Generate signed URLs for each image
+  // Generate signed URLs for each image, and back-fill store from price records if null
   const imagesWithUrls = await Promise.all(
-    result.map(async (image) => ({
-      ...image,
-      signedUrl: await getR2SignedUrl(image.imageUrl),
-    })),
+    result.map(async (image) => {
+      const effectiveStore =
+        image.store ??
+        (image.priceRecords?.[0]?.store ?? null);
+      const { priceRecords: _pr, ...rest } = image;
+      return {
+        ...rest,
+        store: effectiveStore,
+        signedUrl: await getR2SignedUrl(image.imageUrl),
+      };
+    }),
   );
 
   return NextResponse.json({

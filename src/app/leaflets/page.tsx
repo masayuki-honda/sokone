@@ -1,0 +1,597 @@
+"use client";
+
+import { useState, useEffect, useCallback } from "react";
+import { Header } from "@/components/header";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import {
+  CalendarDays,
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  Store,
+  ImageOff,
+  Loader2,
+  Tag,
+  Flame,
+  X,
+  ZoomIn,
+} from "lucide-react";
+// ---- types ------------------------------------------------------------------
+
+interface PendingItem {
+  id: string;
+  productName: string;
+  price: number;
+  unit: string | null;
+  volume: string | null;
+  confidence: number;
+  saleDate: string | null;
+  categoryHint: string | null;
+  status: "pending" | "approved";
+}
+
+interface LeafletImage {
+  id: string;
+  signedUrl: string | null;
+  status: string;
+}
+
+interface Leaflet {
+  id: string;
+  leafletId: string;
+  title: string | null;
+  storeId: string;
+  storeName: string;
+  pageCount: number;
+  validFrom: string | null;
+  validTo: string | null;
+  scrapedAt: string;
+  images: LeafletImage[];
+  pendingItems: PendingItem[];
+}
+
+// ---- helpers ----------------------------------------------------------------
+
+const WEEKDAYS_JA = ["日", "月", "火", "水", "木", "金", "土"];
+
+function fmtDate(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getMonth() + 1}月${d.getDate()}日(${WEEKDAYS_JA[d.getDay()]})`;
+}
+
+function fmtValidRange(from: string | null, to: string | null): string {
+  if (from && to) return `${fmtDate(from)} 〜 ${fmtDate(to)}`;
+  if (from) return `${fmtDate(from)} 〜`;
+  if (to) return `〜 ${fmtDate(to)}`;
+  return "";
+}
+
+function isTodaySaleDate(saleDate: string | null): boolean {
+  if (!saleDate) return false;
+  const today = new Date();
+  const d = new Date(saleDate);
+  return (
+    d.getFullYear() === today.getFullYear() &&
+    d.getMonth() === today.getMonth() &&
+    d.getDate() === today.getDate()
+  );
+}
+
+function isCurrentlyActive(validFrom: string | null, validTo: string | null): boolean {
+  const now = Date.now();
+  if (validFrom && new Date(validFrom).getTime() > now) return false;
+  if (validTo && new Date(validTo).getTime() < now) return false;
+  return true;
+}
+
+// Group leaflets by store
+interface StoreGroup {
+  storeId: string;
+  storeName: string;
+  leaflets: Leaflet[]; // in scrapedAt asc order (= tokubai page order)
+}
+
+function groupLeafletsByStore(leaflets: Leaflet[]): StoreGroup[] {
+  const map = new Map<string, StoreGroup>();
+  // leaflets arrive scrapedAt DESC from API; we reverse per-store to get tokubai order (ASC)
+  for (const l of [...leaflets].reverse()) {
+    if (!map.has(l.storeId)) {
+      map.set(l.storeId, { storeId: l.storeId, storeName: l.storeName, leaflets: [] });
+    }
+    map.get(l.storeId)!.leaflets.push(l);
+  }
+  // Restore store order by first-seen scrapedAt DESC (most recently updated store first)
+  return Array.from(map.values()).reverse();
+}
+
+// Group pending items by saleDate for display
+function groupByDate(items: PendingItem[]): Map<string, PendingItem[]> {
+  const groups = new Map<string, PendingItem[]>();
+  for (const item of items) {
+    const key = item.saleDate ?? "date_unknown";
+    const arr = groups.get(key) ?? [];
+    arr.push(item);
+    groups.set(key, arr);
+  }
+  return groups;
+}
+
+// ---- sub-components ---------------------------------------------------------
+
+function ImageCarousel({ images }: { images: LeafletImage[] }) {
+  const [index, setIndex] = useState(0);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const validImages = images.filter((img) => img.signedUrl);
+
+  // Close lightbox on Escape key
+  useEffect(() => {
+    if (!lightboxOpen) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setLightboxOpen(false);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [lightboxOpen]);
+
+  if (validImages.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-48 bg-muted rounded-lg text-muted-foreground gap-2">
+        <ImageOff className="h-5 w-5" />
+        <span className="text-sm">画像なし</span>
+      </div>
+    );
+  }
+
+  const current = validImages[index];
+
+  return (
+    <>
+      {/* Lightbox overlay */}
+      {lightboxOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4"
+          onClick={() => setLightboxOpen(false)}
+        >
+          {/* Close button */}
+          <button
+            className="absolute top-4 right-4 text-white bg-black/50 rounded-full p-2 hover:bg-black/80 transition-colors"
+            onClick={(e) => { e.stopPropagation(); setLightboxOpen(false); }}
+            aria-label="閉じる"
+          >
+            <X className="h-6 w-6" />
+          </button>
+
+          {/* Prev/Next in lightbox */}
+          {validImages.length > 1 && (
+            <button
+              className="absolute left-4 top-1/2 -translate-y-1/2 text-white bg-black/50 rounded-full p-2 hover:bg-black/80 transition-colors disabled:opacity-30"
+              onClick={(e) => { e.stopPropagation(); setIndex((i) => Math.max(0, i - 1)); }}
+              disabled={index === 0}
+              aria-label="前の画像"
+            >
+              <ChevronLeft className="h-6 w-6" />
+            </button>
+          )}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={current.signedUrl!}
+            alt={`チラシ ${index + 1}ページ目`}
+            className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+          {validImages.length > 1 && (
+            <button
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-white bg-black/50 rounded-full p-2 hover:bg-black/80 transition-colors disabled:opacity-30"
+              onClick={(e) => { e.stopPropagation(); setIndex((i) => Math.min(validImages.length - 1, i + 1)); }}
+              disabled={index === validImages.length - 1}
+              aria-label="次の画像"
+            >
+              <ChevronRight className="h-6 w-6" />
+            </button>
+          )}
+          {validImages.length > 1 && (
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white text-sm bg-black/50 px-3 py-1 rounded-full">
+              {index + 1} / {validImages.length}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Thumbnail carousel */}
+      <div className="relative">
+        <button
+          className="relative w-full aspect-[4/3] overflow-hidden rounded-lg bg-muted group cursor-zoom-in"
+          onClick={() => setLightboxOpen(true)}
+          aria-label="拡大表示"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={current.signedUrl!}
+            alt={`チラシ ${index + 1}ページ目`}
+            className="w-full h-full object-contain transition-transform duration-200 group-hover:scale-[1.02]"
+          />
+          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20 rounded-lg">
+            <ZoomIn className="h-8 w-8 text-white drop-shadow" />
+          </div>
+        </button>
+
+        {validImages.length > 1 && (
+          <div className="flex items-center justify-between mt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIndex((i) => Math.max(0, i - 1))}
+              disabled={index === 0}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              {index + 1} / {validImages.length}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIndex((i) => Math.min(validImages.length - 1, i + 1))}
+              disabled={index === validImages.length - 1}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+function SaleItemsSection({ items, onRegister }: { items: PendingItem[]; onRegister: (id: string) => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  const [registeringId, setRegisteringId] = useState<string | null>(null);
+
+  if (items.length === 0) return null;
+
+  const pendingCount = items.filter((i) => i.status === "pending").length;
+  const approvedCount = items.filter((i) => i.status === "approved").length;
+
+  const handleRegister = async (id: string) => {
+    setRegisteringId(id);
+    try {
+      await onRegister(id);
+    } finally {
+      setRegisteringId(null);
+    }
+  };
+
+  const grouped = groupByDate(items);
+  const today = new Date().toDateString();
+
+  const sortedKeys = Array.from(grouped.keys()).sort((a, b) => {
+    if (a === "date_unknown") return 1;
+    if (b === "date_unknown") return -1;
+    return new Date(a).getTime() - new Date(b).getTime();
+  });
+
+  return (
+    <div className="mt-4">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground mb-2 transition-colors"
+      >
+        {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+        商品一覧（{items.length}件）
+        {approvedCount > 0 && (
+          <span className="ml-1 text-xs text-green-600 font-normal">
+            ✓ {approvedCount}件登録済み
+          </span>
+        )}
+        {pendingCount > 0 && (
+          <span className="ml-1 text-xs text-amber-600 font-normal">
+            {pendingCount}件未登録
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div className="space-y-3">
+          {sortedKeys.map((key) => {
+            const dayItems = grouped.get(key)!;
+            const isToday =
+              key !== "date_unknown" && new Date(key).toDateString() === today;
+
+            return (
+              <div key={key}>
+                <div className="flex items-center gap-2 mb-2">
+                  <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium">
+                    {key === "date_unknown" ? "日付不明" : fmtDate(key)}
+                  </span>
+                  {isToday && (
+                    <Badge className="bg-red-500 text-white text-xs gap-1">
+                      <Flame className="h-3 w-3" />
+                      今日の特売
+                    </Badge>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                  {dayItems.map((item) => (
+                    <div
+                      key={item.id}
+                      className={`flex items-center justify-between px-3 py-2 rounded-md border text-sm ${
+                        item.status === "approved"
+                          ? "border-green-200 bg-green-50 dark:bg-green-950 dark:border-green-800"
+                          : isToday
+                          ? "border-red-300 bg-red-50 dark:bg-red-950 dark:border-red-800"
+                          : "border-border bg-muted/40"
+                      }`}
+                    >
+                      <span className="font-medium truncate mr-2">
+                        {item.productName}
+                        {item.volume && (
+                          <span className="text-muted-foreground ml-1 text-xs">
+                            {item.volume}
+                          </span>
+                        )}
+                      </span>
+                      <div className="flex flex-col items-end gap-0.5 shrink-0">
+                        <span className="font-bold text-primary">
+                          ¥{item.price.toLocaleString()}
+                          {item.unit && (
+                            <span className="font-normal text-muted-foreground text-xs ml-0.5">
+                              /{item.unit}
+                            </span>
+                          )}
+                        </span>
+                        {item.status === "approved" ? (
+                          <span className="flex items-center gap-0.5 text-xs text-green-600 dark:text-green-400">
+                            <Check className="h-3 w-3" />
+                            登録済み
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => handleRegister(item.id)}
+                            disabled={registeringId === item.id}
+                            className="text-xs text-primary hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {registeringId === item.id ? (
+                              <Loader2 className="h-3 w-3 animate-spin inline" />
+                            ) : (
+                              "+ 登録"
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LeafletCard({ leaflet, showStore = true, onRegister }: { leaflet: Leaflet; showStore?: boolean; onRegister: (id: string) => Promise<void> }) {
+  const active = isCurrentlyActive(leaflet.validFrom, leaflet.validTo);
+  const hasTodayItems = leaflet.pendingItems.some((i) => isTodaySaleDate(i.saleDate));
+  const validRange = fmtValidRange(leaflet.validFrom, leaflet.validTo);
+
+  return (
+    <Card className={`${hasTodayItems ? "ring-2 ring-red-400" : ""}`}>
+      <CardHeader className="pb-2">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            {showStore && (
+              <div className="flex items-center gap-2 mb-1">
+                <Store className="h-4 w-4 text-muted-foreground" />
+                <span className="font-semibold">{leaflet.storeName}</span>
+              </div>
+            )}
+            {leaflet.title && (
+              <p className="text-sm text-muted-foreground line-clamp-2">
+                {leaflet.title}
+              </p>
+            )}
+          </div>
+          <div className="flex flex-col items-end gap-1 shrink-0">
+            {active && (
+              <Badge variant="default" className="text-xs">開催中</Badge>
+            )}
+            {hasTodayItems && (
+              <Badge className="bg-red-500 text-white text-xs gap-1">
+                <Flame className="h-3 w-3" />
+                今日の特売あり
+              </Badge>
+            )}
+          </div>
+        </div>
+
+        {validRange && (
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1">
+            <CalendarDays className="h-3.5 w-3.5" />
+            <span>{validRange}</span>
+          </div>
+        )}
+      </CardHeader>
+
+      <CardContent>
+        <ImageCarousel images={leaflet.images} />
+        <SaleItemsSection items={leaflet.pendingItems} onRegister={onRegister} />
+      </CardContent>
+    </Card>
+  );
+}
+
+// ---- store leaflet group with tab selector ---------------------------------
+
+function leafletTabLabel(_leaflet: Leaflet, index: number): string {
+  return `チラシ${index + 1}枚目`;
+}
+
+function StoreLeafletGroup({ group, onRegister }: { group: StoreGroup; onRegister: (id: string) => Promise<void> }) {
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const hasTodayInGroup = group.leaflets.some((l) =>
+    l.pendingItems.some((i) => isTodaySaleDate(i.saleDate))
+  );
+  const safeIndex = Math.min(selectedIndex, group.leaflets.length - 1);
+  const selected = group.leaflets[safeIndex];
+
+  return (
+    <div>
+      {/* Store header */}
+      <div className="flex items-center gap-2 mb-3">
+        <Store className="h-5 w-5 text-muted-foreground" />
+        <h2 className="text-lg font-semibold">{group.storeName}</h2>
+        {hasTodayInGroup && (
+          <Badge className="bg-red-500 text-white text-xs gap-1">
+            <Flame className="h-3 w-3" />
+            今日あり
+          </Badge>
+        )}
+      </div>
+
+      {/* Tab selector — shown only if multiple leaflets */}
+      {group.leaflets.length > 1 && (
+        <div className="flex gap-1.5 flex-wrap mb-3">
+          {group.leaflets.map((leaflet, i) => {
+            const hasTodayItems = leaflet.pendingItems.some((item) =>
+              isTodaySaleDate(item.saleDate)
+            );
+            const isActive = isCurrentlyActive(leaflet.validFrom, leaflet.validTo);
+            return (
+              <button
+                key={leaflet.id}
+                onClick={() => setSelectedIndex(i)}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors whitespace-nowrap ${
+                  safeIndex === i
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-background text-muted-foreground border-border hover:border-primary hover:text-foreground"
+                }`}
+              >
+                {leafletTabLabel(leaflet, i)}
+                {hasTodayItems && " 🔥"}
+                {isActive && safeIndex !== i && (
+                  <span className="ml-1 inline-block w-1.5 h-1.5 rounded-full bg-green-500 align-middle" />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Selected leaflet card (without store name in header) */}
+      <LeafletCard leaflet={selected} showStore={false} onRegister={onRegister} />
+    </div>
+  );
+}
+
+// ---- main page --------------------------------------------------------------
+
+export default function LeafletsPage() {
+  const [leaflets, setLeaflets] = useState<Leaflet[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [activeOnly, setActiveOnly] = useState(false);
+
+  const fetchLeaflets = async (active: boolean) => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/leaflets?limit=20${active ? "&active=1" : ""}`);
+      if (!res.ok) throw new Error("Failed to fetch");
+      setLeaflets(await res.json());
+    } catch {
+      setLeaflets([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRegisterItem = useCallback(async (reviewId: string) => {
+    const res = await fetch(`/api/reviews/${reviewId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "approve" }),
+    });
+    if (!res.ok) return;
+    // Update local state: mark item as approved
+    setLeaflets((prev) =>
+      prev.map((leaflet) => ({
+        ...leaflet,
+        pendingItems: leaflet.pendingItems.map((item) =>
+          item.id === reviewId ? { ...item, status: "approved" as const } : item
+        ),
+      }))
+    );
+  }, []);
+
+  useEffect(() => {
+    fetchLeaflets(activeOnly);
+  }, [activeOnly]);
+
+  // Only show leaflets that have at least one extracted product
+  const leafletsWithProducts = leaflets.filter((l) => l.pendingItems.length > 0);
+  const storeGroups = groupLeafletsByStore(leafletsWithProducts);
+
+  const hasTodayLeaflets = leafletsWithProducts.some((l) =>
+    l.pendingItems.some((i) => isTodaySaleDate(i.saleDate))
+  );
+
+  return (
+    <>
+      <Header />
+      <main className="container mx-auto px-4 py-6 max-w-3xl">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-bold">チラシ一覧</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              自動収集されたチラシを確認できます
+            </p>
+          </div>
+          <Button
+            variant={activeOnly ? "default" : "outline"}
+            size="sm"
+            onClick={() => setActiveOnly((v) => !v)}
+          >
+            <CalendarDays className="h-4 w-4 mr-1.5" />
+            {activeOnly ? "開催中のみ" : "すべて表示"}
+          </Button>
+        </div>
+
+        {hasTodayLeaflets && (
+          <div className="flex items-center gap-2 mb-4 px-3 py-2.5 bg-red-50 dark:bg-red-950 rounded-lg border border-red-200 dark:border-red-800">
+            <Flame className="h-4 w-4 text-red-500 shrink-0" />
+            <p className="text-sm font-medium text-red-700 dark:text-red-300">
+              今日の特売商品があるチラシがあります
+            </p>
+          </div>
+        )}
+
+        {loading ? (
+          <div className="flex justify-center items-center h-48">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : leafletsWithProducts.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-48 text-muted-foreground gap-3">
+            <Tag className="h-10 w-10" />
+            <p className="text-sm">商品情報があるチラシが見つかりません</p>
+            <p className="text-xs">
+              {activeOnly
+                ? "現在有効な対象チラシがありません。フィルターを解除してみてください。"
+                : "チラシはありますが、商品情報が抽出されていません。スクレイピングを実行してください。"}
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-8">
+            {storeGroups.map((group) => (
+              <StoreLeafletGroup key={group.storeId} group={group} onRegister={handleRegisterItem} />
+            ))}
+          </div>
+        )}
+      </main>
+    </>
+  );
+}

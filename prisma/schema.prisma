@@ -70,25 +70,53 @@ model User {
   priceRecords     PriceRecord[]
   uploadedImages   UploadedImage[]
   favoriteProducts FavoriteProduct[]
+  watchKeywords    WatchKeyword[]
+  priceWatches     PriceWatch[]
+  notifications    Notification[]
+  notificationPreferences NotificationPreference[]
+  scrapingJobs     ScrapingJob[]
+  pendingReviews   PendingReview[]
+  deviceTokens     DeviceToken[]
 
   @@map("users")
 }
 
 model Store {
-  id        String   @id @default(uuid())
-  name      String
-  address   String?
-  latitude  Float?
-  longitude Float?
-  userId    String   @map("user_id")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id             String   @id @default(uuid())
+  name           String
+  address        String?
+  latitude       Float?
+  longitude      Float?
+  userId         String   @map("user_id")
+  tokubaiShopUrl String?  @map("tokubai_shop_url")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
-  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  priceRecords   PriceRecord[]
-  uploadedImages UploadedImage[]
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  priceRecords    PriceRecord[]
+  uploadedImages  UploadedImage[]
+  scrapedLeaflets ScrapedLeaflet[]
+  scrapingJobs    ScrapingJob[]
+  pendingReviews  PendingReview[]
 
   @@map("stores")
+}
+
+model ScrapedLeaflet {
+  id        String    @id @default(uuid())
+  storeId   String    @map("store_id")
+  leafletId String    @map("leaflet_id")
+  title     String?
+  pageCount Int       @default(0) @map("page_count")
+  validFrom DateTime? @map("valid_from")
+  validTo   DateTime? @map("valid_to")
+  scrapedAt DateTime  @default(now()) @map("scraped_at")
+
+  store          Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  uploadedImages UploadedImage[]
+
+  @@unique([storeId, leafletId])
+  @@map("scraped_leaflets")
 }
 
 model ProductCategory {
@@ -117,6 +145,7 @@ model Product {
   aliases          ProductAlias[]
   priceRecords     PriceRecord[]
   favoriteProducts FavoriteProduct[]
+  priceWatches     PriceWatch[]
 
   @@map("products")
 }
@@ -138,31 +167,62 @@ enum SourceType {
   flyer
   instagram
   receipt
+  auto_flyer
+}
+
+enum JobStatus {
+  pending
+  running
+  completed
+  failed
+}
+
+enum NotificationType {
+  bottom_price_update
+  deal_alert
+  watch_target_reached
+}
+
+enum NotificationChannel {
+  in_app
+  email
+  push
 }
 
 enum ImageStatus {
   pending
   processed
   failed
+  no_products
+}
+
+enum ReviewStatus {
+  pending
+  approved
+  rejected
 }
 
 model UploadedImage {
-  id             String      @id @default(uuid())
-  userId         String      @map("user_id")
-  storeId        String?     @map("store_id")
-  imageUrl       String      @map("image_url")
-  sourceType     SourceType  @map("source_type")
-  ocrRawText     String?     @map("ocr_raw_text") @db.Text
-  ocrResultJson  Json?       @map("ocr_result_json")
-  status         ImageStatus @default(pending)
-  takenAt        DateTime?   @map("taken_at")
-  gpsLatitude    Float?      @map("gps_latitude")
-  gpsLongitude   Float?      @map("gps_longitude")
-  createdAt      DateTime    @default(now()) @map("created_at")
+  id                String    @id @default(uuid())
+  userId            String    @map("user_id")
+  storeId           String?   @map("store_id")
+  scrapedLeafletId  String?   @map("scraped_leaflet_id")
+  imageUrl          String    @map("image_url")
+  sourceType        SourceType  @map("source_type")
+  ocrRawText        String?   @map("ocr_raw_text") @db.Text
+  ocrResultJson     Json?     @map("ocr_result_json")
+  status            ImageStatus @default(pending)
+  fileHash          String?   @map("file_hash")
+  takenAt           DateTime? @map("taken_at")
+  gpsLatitude       Float?    @map("gps_latitude")
+  gpsLongitude      Float?    @map("gps_longitude")
+  createdAt         DateTime  @default(now()) @map("created_at")
 
-  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  store        Store?        @relation(fields: [storeId], references: [id])
-  priceRecords PriceRecord[]
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  store          Store?          @relation(fields: [storeId], references: [id])
+  scrapedLeaflet ScrapedLeaflet? @relation(fields: [scrapedLeafletId], references: [id])
+  priceRecords   PriceRecord[]
+  pendingReviews PendingReview[]
 
   @@map("uploaded_images")
 }
@@ -173,6 +233,7 @@ model PriceRecord {
   storeId       String     @map("store_id")
   userId        String     @map("user_id")
   price         Int
+  packUnit      String?    @map("pack_unit")  // e.g. "×6", "×24" — null means single item
   unitPrice     Float?     @map("unit_price")
   taxIncluded   Boolean    @default(true) @map("tax_included")
   sourceType    SourceType @map("source_type")
@@ -200,4 +261,123 @@ model FavoriteProduct {
 
   @@unique([userId, productId])
   @@map("favorite_products")
+}
+
+model WatchKeyword {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  keyword   String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, keyword])
+  @@map("watch_keywords")
+}
+
+model PriceWatch {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  productId   String   @map("product_id")
+  targetPrice Int?     @map("target_price")
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@map("price_watches")
+}
+
+model ScrapingJob {
+  id             String    @id @default(uuid())
+  storeId        String    @map("store_id")
+  userId         String    @map("user_id")
+  status         JobStatus @default(pending)
+  imagesScraped  Int       @default(0) @map("images_scraped")
+  imagesOcred    Int       @default(0) @map("images_ocred")
+  pricesRegistered Int     @default(0) @map("prices_registered")
+  errorLog       String?   @map("error_log") @db.Text
+  startedAt      DateTime? @map("started_at")
+  completedAt    DateTime? @map("completed_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pendingReviews PendingReview[]
+
+  @@index([storeId, createdAt])
+  @@map("scraping_jobs")
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String           @map("user_id")
+  type      NotificationType
+  title     String
+  body      String           @db.Text
+  data      Json?
+  isRead    Boolean          @default(false) @map("is_read")
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+model NotificationPreference {
+  id               String              @id @default(uuid())
+  userId           String              @map("user_id")
+  notificationType NotificationType    @map("notification_type")
+  enabled          Boolean             @default(true)
+  channel          NotificationChannel @default(in_app)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, notificationType, channel])
+  @@map("notification_preferences")
+}
+
+model PendingReview {
+  id            String       @id @default(uuid())
+  userId        String       @map("user_id")
+  storeId       String       @map("store_id")
+  sourceImageId String       @map("source_image_id")
+  jobId         String?      @map("job_id")
+  productName   String       @map("product_name")
+  price         Int
+  confidence    Float
+  categoryHint  String?      @map("category_hint")
+  unit          String?
+  volume        String?
+  isTaxIncluded Boolean      @default(true) @map("is_tax_included")
+  saleDate      DateTime?    @map("sale_date")
+  status        ReviewStatus @default(pending)
+  createdAt     DateTime     @default(now()) @map("created_at")
+  resolvedAt    DateTime?    @map("resolved_at")
+
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  store       Store         @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  sourceImage UploadedImage @relation(fields: [sourceImageId], references: [id], onDelete: Cascade)
+  job         ScrapingJob?  @relation(fields: [jobId], references: [id], onDelete: SetNull)
+
+  @@index([userId, status])
+  @@map("pending_reviews")
+}
+
+model DeviceToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  token     String   @unique
+  platform  String   // "android" or "ios"
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("device_tokens")
 }

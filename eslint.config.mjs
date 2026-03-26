@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Internal one-off scripts — not subject to strict linting:
+    "prisma/**",
   ]),
   {
     rules: {

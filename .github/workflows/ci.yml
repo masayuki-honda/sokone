@@ -27,10 +27,14 @@ jobs:
       - name: Type check
         run: npm run type-check
 
+      - name: Test
+        run: npm test
+
       - name: Build
         run: npm run build
         env:
           DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
+          DIRECT_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
           NEXTAUTH_SECRET: "ci-secret"
           GOOGLE_CLIENT_ID: "ci-client-id"
           GOOGLE_CLIENT_SECRET: "ci-client-secret"

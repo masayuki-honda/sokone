@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { getSession } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { uploadToR2 } from "@/lib/r2";
 import {
   processImage,
   isValidImageType,
   generateImageKey,
+  FLYER_IMAGE_OPTIONS,
 } from "@/lib/image-processing";
 import { SourceType } from "@prisma/client";
 
@@ -32,7 +32,7 @@ export async function GET() {
  * - storeId: (optional) store ID to associate
  */
 export async function POST(request: NextRequest) {
-  const session = await getServerSession(authOptions);
+  const session = await getSession();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -114,7 +114,8 @@ export async function POST(request: NextRequest) {
         const inputBuffer = Buffer.from(arrayBuffer);
 
         // Process image (resize, convert to JPEG)
-        const processed = await processImage(inputBuffer, file.type);
+        const imageOptions = sourceType === "flyer" ? FLYER_IMAGE_OPTIONS : undefined;
+        const processed = await processImage(inputBuffer, file.type, imageOptions);
 
         // Generate R2 key and upload
         const key = generateImageKey(session.user.id, file.name);
@@ -138,6 +139,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Save to database (including EXIF metadata)
+        const fileHash = formData.get(`fileHash_${fileIndex}`) as string | null;
         const uploadedImage = await prisma.uploadedImage.create({
           data: {
             userId: session.user.id,
@@ -145,6 +147,7 @@ export async function POST(request: NextRequest) {
             imageUrl: key,
             sourceType: sourceType as SourceType,
             status: "pending",
+            fileHash: fileHash || null,
             takenAt: processed.exif.takenAt,
             gpsLatitude,
             gpsLongitude,

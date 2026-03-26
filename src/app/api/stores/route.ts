@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { getSession } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { geocodeAddress } from "@/lib/geocode";
 
@@ -9,7 +8,7 @@ export const maxDuration = 30;
 
 // GET /api/stores — List user's stores
 export async function GET() {
-  const session = await getServerSession(authOptions);
+  const session = await getSession();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -17,20 +16,40 @@ export async function GET() {
   const stores = await prisma.store.findMany({
     where: { userId: session.user.id },
     orderBy: { updatedAt: "desc" },
+    include: {
+      scrapingJobs: {
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: {
+          id: true,
+          status: true,
+          imagesScraped: true,
+          pricesRegistered: true,
+          completedAt: true,
+          createdAt: true,
+        },
+      },
+    },
   });
 
-  return NextResponse.json(stores);
+  const result = stores.map((store) => ({
+    ...store,
+    lastJob: store.scrapingJobs?.[0] || null,
+    scrapingJobs: undefined,
+  }));
+
+  return NextResponse.json(result);
 }
 
 // POST /api/stores — Create a new store
 export async function POST(request: NextRequest) {
-  const session = await getServerSession(authOptions);
+  const session = await getSession();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const body = await request.json();
-  const { name, address, latitude, longitude } = body;
+  const { name, address, latitude, longitude, tokubaiShopUrl } = body;
 
   if (!name || typeof name !== "string" || name.trim().length === 0) {
     return NextResponse.json(
@@ -64,6 +83,7 @@ export async function POST(request: NextRequest) {
       latitude: resolvedLat,
       longitude: resolvedLng,
       userId: session.user.id,
+      tokubaiShopUrl: tokubaiShopUrl?.trim() || null,
     },
   });
 

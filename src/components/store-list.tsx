@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { toast } from "sonner";
 
 interface Store {
   id: string;
@@ -8,8 +9,25 @@ interface Store {
   address: string | null;
   latitude: number | null;
   longitude: number | null;
+  tokubaiShopUrl: string | null;
   createdAt: string;
   updatedAt: string;
+  lastJob?: {
+    id: string;
+    status: string;
+    imagesScraped: number;
+    pricesRegistered: number;
+    completedAt: string | null;
+    createdAt: string;
+  } | null;
+}
+
+interface ScrapeResult {
+  message: string;
+  scraped: number;
+  alreadyExists: number;
+  imageIds: string[];
+  errors: string[];
 }
 
 export function StoreList() {
@@ -26,8 +44,13 @@ export function StoreList() {
   const [formAddress, setFormAddress] = useState("");
   const [formLatitude, setFormLatitude] = useState("");
   const [formLongitude, setFormLongitude] = useState("");
+  const [formTokubaiShopUrl, setFormTokubaiShopUrl] = useState("");
   const [gettingLocation, setGettingLocation] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [scrapingId, setScrapingId] = useState<string | null>(null);
+  const [pipelineRunningId, setPipelineRunningId] = useState<string | null>(null);
+  const [scrapeResults, setScrapeResults] = useState<Record<string, ScrapeResult>>({});
+  const formRef = useRef<HTMLFormElement>(null);
 
   const fetchStores = useCallback(async () => {
     try {
@@ -52,6 +75,7 @@ export function StoreList() {
     setFormAddress("");
     setFormLatitude("");
     setFormLongitude("");
+    setFormTokubaiShopUrl("");
     setShowForm(true);
   };
 
@@ -61,7 +85,9 @@ export function StoreList() {
     setFormAddress(store.address || "");
     setFormLatitude(store.latitude != null ? String(store.latitude) : "");
     setFormLongitude(store.longitude != null ? String(store.longitude) : "");
+    setFormTokubaiShopUrl(store.tokubaiShopUrl || "");
     setShowForm(true);
+    setTimeout(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
   };
 
   const closeForm = () => {
@@ -71,11 +97,12 @@ export function StoreList() {
     setFormAddress("");
     setFormLatitude("");
     setFormLongitude("");
+    setFormTokubaiShopUrl("");
   };
 
   const handleGetCurrentLocation = () => {
     if (!navigator.geolocation) {
-      alert("このブラウザは位置情報に対応していません");
+      toast.error("このブラウザは位置情報に対応していません");
       return;
     }
     setGettingLocation(true);
@@ -86,7 +113,7 @@ export function StoreList() {
         setGettingLocation(false);
       },
       () => {
-        alert("位置情報の取得に失敗しました。ブラウザの位置情報許可を確認してください。");
+        toast.error("位置情報の取得に失敗しました。ブラウザの位置情報許可を確認してください。");
         setGettingLocation(false);
       },
       { enableHighAccuracy: true, timeout: 10000 }
@@ -115,6 +142,7 @@ export function StoreList() {
           address: formAddress || null,
           latitude: parsedLat != null && isFinite(parsedLat) ? parsedLat : null,
           longitude: parsedLng != null && isFinite(parsedLng) ? parsedLng : null,
+          tokubaiShopUrl: formTokubaiShopUrl.trim() || null,
         }),
       });
 
@@ -125,6 +153,7 @@ export function StoreList() {
 
       closeForm();
       await fetchStores();
+      toast.success(editingStore ? "店舗を更新しました" : "店舗を追加しました");
     } catch (err) {
       setError(err instanceof Error ? err.message : "エラーが発生しました");
     } finally {
@@ -142,6 +171,7 @@ export function StoreList() {
         throw new Error(data.error || "削除に失敗しました");
       }
       await fetchStores();
+      toast.success(`「${store.name}」を削除しました`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "エラーが発生しました");
     }
@@ -164,6 +194,59 @@ export function StoreList() {
       setGeocodeError("通信エラーが発生しました");
     } finally {
       setGeocodingId(null);
+    }
+  };
+
+  const handleScrape = async (store: Store, force = false) => {
+    setScrapingId(store.id);
+    try {
+      const res = await fetch(`/api/stores/${store.id}/scrape`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ force }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "スクレイピングに失敗しました");
+      } else {
+        setScrapeResults((prev) => ({ ...prev, [store.id]: data }));
+        if (data.scraped > 0) {
+          toast.success(`${data.scraped} 枚の画像を取り込みました。アップロード履歴からOCRを実行してください。`);
+        } else {
+          toast.info(data.message || "新しいチラシはありませんでした");
+        }
+      }
+    } catch {
+      toast.error("通信エラーが発生しました");
+    } finally {
+      setScrapingId(null);
+    }
+  };
+
+  const handlePipeline = async (store: Store) => {
+    setPipelineRunningId(store.id);
+    try {
+      const res = await fetch(`/api/stores/${store.id}/pipeline`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "自動取得に失敗しました");
+      } else {
+        const msg = `画像 ${data.imagesScraped} 枚取得 → OCR ${data.imagesOcred} 枚処理 → 価格 ${data.pricesRegistered} 件登録` +
+          (data.pendingReviews > 0 ? ` / 確認待ち ${data.pendingReviews} 件` : "");
+        if (data.pricesRegistered > 0) {
+          toast.success(msg);
+        } else if (data.imagesScraped === 0) {
+          toast.info("新しいチラシはありませんでした");
+        } else {
+          toast.info(msg);
+        }
+      }
+    } catch {
+      toast.error("通信エラーが発生しました");
+    } finally {
+      setPipelineRunningId(null);
     }
   };
 
@@ -216,6 +299,7 @@ export function StoreList() {
       {/* Add/Edit Form */}
       {showForm && (
         <form
+          ref={formRef}
           onSubmit={handleSubmit}
           className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
         >
@@ -303,6 +387,25 @@ export function StoreList() {
                 で右クリック→コピーでも確認できます。
               </p>
             </div>
+            <div>
+              <label
+                htmlFor="store-tokubai-url"
+                className="mb-1 block text-sm font-medium"
+              >
+                チラシ取得URL（トクバイ）
+              </label>
+              <input
+                id="store-tokubai-url"
+                type="text"
+                value={formTokubaiShopUrl}
+                onChange={(e) => setFormTokubaiShopUrl(e.target.value)}
+                placeholder="例: https://tokubai.co.jp/ライフ/2330"
+                className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-zinc-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800"
+              />
+              <p className="mt-1 text-xs text-zinc-500">
+                tokubai.co.jp の店舗ページURLを入力すると「チラシ取得」ボタンでチラシ画像を自動取り込みできます。
+              </p>
+            </div>
           </div>
           <div className="mt-6 flex gap-3">
             <button
@@ -341,28 +444,100 @@ export function StoreList() {
           {stores.map((store) => (
             <div
               key={store.id}
-              className="flex items-center justify-between rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
+              className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
             >
-              <div>
-                <h3 className="font-medium">{store.name}</h3>
-                {store.address && (
-                  <p className="mt-0.5 text-sm text-zinc-500">
-                    {store.address}
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <h3 className="font-medium">{store.name}</h3>
+                  {store.address && (
+                    <p className="mt-0.5 text-sm text-zinc-500 break-words">
+                      {store.address}
+                    </p>
+                  )}
+                  <p className="mt-0.5 text-xs">
+                    {store.latitude != null && store.longitude != null ? (
+                      <span className="text-green-600 dark:text-green-400">
+                        📍 GPS対応済（{store.latitude.toFixed(4)}, {store.longitude.toFixed(4)}）
+                      </span>
+                    ) : (
+                      <span className="text-zinc-400">
+                        GPS座標未設定
+                      </span>
+                    )}
                   </p>
-                )}
-                <p className="mt-0.5 text-xs">
-                  {store.latitude != null && store.longitude != null ? (
-                    <span className="text-green-600 dark:text-green-400">
-                      📍 GPS対応済（{store.latitude.toFixed(4)}, {store.longitude.toFixed(4)}）
-                    </span>
-                  ) : (
+                  {store.tokubaiShopUrl && (
+                    <p className="mt-0.5 text-xs text-blue-600 dark:text-blue-400 break-all">
+                      🗞️{" "}
+                      <a
+                        href={store.tokubaiShopUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline hover:no-underline"
+                      >
+                        {store.tokubaiShopUrl}
+                      </a>
+                    </p>
+                  )}
+                  {scrapeResults[store.id] && (
+                    <p className="mt-1 text-xs text-zinc-500">
+                      前回取得: {scrapeResults[store.id].scraped} 枚
+                      {scrapeResults[store.id].errors.length > 0 && (
+                        <span className="ml-1 text-red-500">
+                          （エラー {scrapeResults[store.id].errors.length} 件）
+                        </span>
+                      )}
+                      {scrapeResults[store.id].scraped === 0 && scrapeResults[store.id].alreadyExists > 0 && (
+                        <button
+                          onClick={() => handleScrape(store, true)}
+                          disabled={scrapingId === store.id}
+                          className="ml-2 text-blue-600 underline hover:no-underline disabled:opacity-50 dark:text-blue-400"
+                        >
+                          🔄 履歴クリアして再取得
+                        </button>
+                      )}
+                    </p>
+                  )}
+                </div>
+              </div>
+              {store.lastJob && (
+                <div className="mt-2 flex items-center gap-2 text-xs text-zinc-500">
+                  <span>
+                    {store.lastJob.status === "completed" ? "✅" :
+                     store.lastJob.status === "failed" ? "❌" :
+                     store.lastJob.status === "running" ? "🔄" : "⏳"}
+                  </span>
+                  <span>
+                    最終自動取得: {new Date(store.lastJob.completedAt || store.lastJob.createdAt).toLocaleDateString("ja-JP", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                  </span>
+                  {store.lastJob.status === "completed" && (
                     <span className="text-zinc-400">
-                      GPS座標未設定
+                      （画像{store.lastJob.imagesScraped} / 価格{store.lastJob.pricesRegistered}件）
                     </span>
                   )}
-                </p>
-              </div>
-              <div className="flex gap-2">
+                  {store.lastJob.status === "failed" && (
+                    <span className="text-red-500">失敗</span>
+                  )}
+                </div>
+              )}
+              <div className="mt-3 flex flex-wrap gap-2">
+                {store.tokubaiShopUrl && (
+                  <button
+                    onClick={() => handleScrape(store)}
+                    disabled={scrapingId === store.id}
+                    className="rounded-md px-3 py-1.5 text-sm text-purple-600 hover:bg-purple-50 disabled:opacity-50 dark:text-purple-400 dark:hover:bg-purple-900/20"
+                  >
+                    {scrapingId === store.id ? "取得中..." : "🗞️ チラシ取得"}
+                  </button>
+                )}
+                {store.tokubaiShopUrl && (
+                  <button
+                    onClick={() => handlePipeline(store)}
+                    disabled={pipelineRunningId === store.id}
+                    className="rounded-md px-3 py-1.5 text-sm text-emerald-600 hover:bg-emerald-50 disabled:opacity-50 dark:text-emerald-400 dark:hover:bg-emerald-900/20"
+                  >
+                    {pipelineRunningId === store.id ? "処理中..." : "🤖 自動取得"}
+                  </button>
+                )}
                 <button
                   onClick={() => openEditForm(store)}
                   className="rounded-md px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"

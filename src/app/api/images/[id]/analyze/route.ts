@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { getSession } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { getR2SignedUrl } from "@/lib/r2";
-import { analyzeImage, OcrSourceType } from "@/lib/ocr";
+import { analyzeImageWithSplit, OcrSourceType } from "@/lib/ocr";
 
-// Allow longer execution on Vercel (Gemini API + R2 fetch can take time)
-// gemini-2.5-flash can be slower than 2.0-flash; bump to 60s to avoid timeouts
-export const maxDuration = 60;
+// Allow longer execution on Vercel (split OCR = up to 4 sequential Gemini calls + R2 fetch)
+export const maxDuration = 120;
 
 interface Params {
   params: Promise<{ id: string }>;
@@ -17,7 +15,7 @@ interface Params {
  * POST /api/images/[id]/analyze — Run OCR on an uploaded image
  */
 export async function POST(_request: NextRequest, { params }: Params) {
-  const session = await getServerSession(authOptions);
+  const session = await getSession();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -57,20 +55,30 @@ export async function POST(_request: NextRequest, { params }: Params) {
 
     const imageBuffer = Buffer.from(await response.arrayBuffer());
 
-    // Run OCR
-    const ocrResult = await analyzeImage(
+    // Fetch user-defined categories from DB to inject into OCR prompt
+    const dbCategories = await prisma.productCategory.findMany({
+      select: { name: true },
+      orderBy: { displayOrder: "asc" },
+    });
+    const categoryNames = dbCategories.map((c) => c.name);
+
+    // Run OCR (auto-splits large flyer images into quadrants)
+    const ocrResult = await analyzeImageWithSplit(
       imageBuffer,
       "image/jpeg", // Images are always converted to JPEG during upload
       image.sourceType as OcrSourceType,
+      categoryNames,
     );
 
     // Update the database with OCR results
+    // Use `no_products` when OCR found nothing (e.g. campaign banner, non-product page)
+    const hasItems = (ocrResult.items?.length ?? 0) > 0;
     const updated = await prisma.uploadedImage.update({
       where: { id },
       data: {
         ocrResultJson: ocrResult as object,
         ocrRawText: JSON.stringify(ocrResult),
-        status: "processed",
+        status: hasItems ? "processed" : "no_products",
       },
     });
 

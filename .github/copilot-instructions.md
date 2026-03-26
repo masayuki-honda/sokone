@@ -2,7 +2,7 @@
 
 ## プロジェクト概要
 
-Sokone（底値）は、チラシ・Instagram・店頭写真から商品価格をAIで読み取り、底値データを蓄積・可視化するWebアプリ。
+Sokone（底値）は、チラシ・Instagram・店頭写真から商品価格をAIで読み取り、底値データを蓄積・可視化するWebアプリ + モバイルアプリ（React Native / Expo）。
 日本語UIの個人向けアプリケーション。
 
 ## ドキュメント
@@ -21,6 +21,7 @@ Sokone（底値）は、チラシ・Instagram・店頭写真から商品価格�
 - **NextAuth.js (Auth.js)** — Google OAuth認証（セッションベース）
 - **@google/generative-ai** — Gemini 2.0 Flash API（OCR + 構造化抽出）
 - **sharp** — 画像リサイズ・HEIC→JPEG変換
+- **resend** — メール送信（通知メール）
 - **shadcn/ui** + **Tailwind CSS**
 - **Node.js 22 LTS**
 - パッケージマネージャ: npm
@@ -34,6 +35,17 @@ Sokone（底値）は、チラシ・Instagram・店頭写真から商品価格�
 
 - **Cloudflare R2** — S3互換API（`@aws-sdk/client-s3`）
 - 無料枠: 10GB ストレージ / 月
+
+### モバイルアプリ（Phase 5）
+
+- **React Native** (Expo SDK 55) + **TypeScript**
+- **Expo Router** ~55.0.4 — ファイルベースルーティング
+- **React Native Paper** ^5.14.5 — Material Design 3 UI
+- **TanStack Query** ^5.75.0 — データフェッチ・キャッシュ
+- **Expo AuthSession** ~55.0.7 — Google OAuth
+- **expo-secure-store** ~55.0.8 — トークン永続化
+- **expo-camera** ~55.0.9 + **expo-image-picker** ~55.0.11 — カメラ撮影・画像選択
+- **expo-image-manipulator** ~55.0.9 — 画像リサイズ・圧縮
 
 ### ホスティング
 
@@ -64,6 +76,21 @@ Sokone（底値）は、チラシ・Instagram・店頭写真から商品価格�
 - ブランチ戦略: `main`（本番）/ `dev`（開発）/ `feature/*`（機能ブランチ）
 - PR マージは **squash を使わない**（`gh pr merge <id> --merge`）— コミット履歴をそのまま保持する
 - **コミット前に必ず `npx tsc --noEmit` を実行**し、TypeScript コンパイルエラーがゼロであることを確認してからコミットする。エラーがある状態でコミットしてはならない
+- **Git pre-commit フック設置済み**（`.git/hooks/pre-commit`）— `tsc --noEmit` が失敗するとコミットが自動中断される。新しいリポジトリでも同様に設置すること:
+
+  ```sh
+  # .git/hooks/pre-commit（実行権限が必要: chmod +x on Mac/Linux）
+  #!/bin/sh
+  echo 'Running TypeScript check...'
+  cd "$(git rev-parse --show-toplevel)"
+  npx tsc --noEmit
+  if [ $? -ne 0 ]; then
+    echo 'TypeScript errors found. Commit aborted.'
+    exit 1
+  fi
+  ```
+
+  Windows では `python -c "open('.git/hooks/pre-commit','wb').write(open('write_hook_template').read())"` などで LF 改行で書き込む（CRLF だと sh が解釈できない）
 
 ### TypeScript / Next.js
 
@@ -128,37 +155,86 @@ sokone/
 ├── src/
 │   ├── app/                   # App Router pages + API Routes
 │   │   ├── api/               # Route Handlers
+│   │   │   ├── auth/mobile/   # モバイルアプリ認証エンドポイント
+│   │   │   ├── cron/scrape/   # Vercel Cron 自動スクレイピング
+│   │   │   ├── devices/       # デバイストークン登録・削除 API
+│   │   │   ├── jobs/          # ジョブ一覧 API
+│   │   │   └── stores/[id]/pipeline/ # パイプライン実行・履歴
 │   │   ├── auth/              # 認証関連ページ (signin/)
+│   │   ├── categories/        # カテゴリ管理
 │   │   ├── dashboard/         # ダッシュボード
+│   │   ├── jobs/              # ジョブ管理ダッシュボード
+│   │   ├── leaflets/          # チラシ閲覧（店舗グルーピング・タブ切り替え）
+│   │   ├── notifications/     # 通知一覧・設定
+│   │   ├── reviews/           # 確認待ちキュー（低信頼度OCR結果）
 │   │   ├── stores/            # 店舗管理
 │   │   ├── products/          # 商品一覧
 │   │   ├── products/[id]/     # 商品詳細
 │   │   ├── upload/            # 画像アップロード
+│   │   ├── uploads/           # アップロード履歴
 │   │   └── layout.tsx
 │   ├── components/            # React components
 │   │   ├── ui/                # shadcn/ui
 │   │   ├── header.tsx
-│   │   ├── ocr-results-view.tsx   │   ├── store-list.tsx│   │   └── session-provider.tsx
+│   │   ├── notification-bell.tsx
+│   │   ├── ocr-results-view.tsx
+│   │   ├── bulk-edit-table.tsx
+│   │   ├── store-list.tsx
+│   │   └── session-provider.tsx
 │   ├── lib/                   # サービスロジック、ユーティリティ
 │   │   ├── prisma.ts          # Prisma client
 │   │   ├── auth.ts            # NextAuth 設定
-   │   ├── gemini.ts          # Geminiクライアント・モデルID一元管理 (GEMINI_MODEL)
-   │   ├── ocr.ts             # OCR処理 (Gemini Flash)
-   │   ├── r2.ts              # Cloudflare R2 クライアント
-   │   ├── product-matcher.ts # 商品名寄せ
-   │   ├── bottom-price.ts    # 底値計算サービス
-   │   ├── geocode.ts         # GPS座標・近辺店舐検索
-   │   ├── image-processing.ts # 画像リサイズ・HEIC変換 (sharp)
-   │   └── utils.ts           # 共通ユーティリティ
+│   │   ├── gemini.ts          # Geminiクライアント・モデルID一元管理 (GEMINI_MODEL)
+│   │   ├── ocr.ts             # OCR処理 (Gemini Flash)
+│   │   ├── notification.ts    # 通知作成サービス（アプリ内 + メール + Push）
+│   │   ├── push.ts            # Push通知送信サービス（Expo Push API）
+│   │   ├── email.ts           # メール送信サービス（Resend）
+│   │   ├── r2.ts              # Cloudflare R2 クライアント
+│   │   ├── product-matcher.ts # 商品名寄せ
+│   │   ├── bottom-price.ts    # 底値計算サービス
+│   │   ├── scraping-pipeline.ts # 自動スクレイプ→OCR→価格登録パイプライン
+│   │   │                      # ・ScrapedLeaflet をDL前に作成し scrapedLeafletId を画像に紐付け
+│   │   │                      # ・画像0件の場合 ScrapedLeaflet を自動リセット
+│   │   ├── geocode.ts         # GPS座標・近辺店舗検索
+│   │   ├── image-processing.ts # 画像リサイズ・HEIC変換 (sharp)
+│   │   ├── session.ts         # デュアル認証（web + mobile）セッション取得
+│   │   └── utils.ts           # 共通ユーティリティ
 │   ├── hooks/                 # Custom hooks
 │   └── types/                 # TypeScript types
 ├── prisma/
 │   ├── schema.prisma          # DB スキーマ定義
 │   └── seed.ts                # 初期カテゴリデータ投入（`npx tsx prisma/seed.ts`）
 ├── public/
+├── vercel.json                # Vercel Cron 設定（毎日7時JST自動スクレイピング）
 ├── package.json
 ├── tsconfig.json
-└── .env.example
+├── .env.example
+└── mobile/                    # React Native (Expo) モバイルアプリ
+    ├── app/                   # Expo Router ページ
+    │   ├── _layout.tsx        # Root layout (providers)
+    │   ├── login.tsx          # ログイン画面
+    │   ├── (tabs)/            # ボトムタブナビゲーション
+    │   │   ├── _layout.tsx    # タブ設定 + 認証ガード
+    │   │   ├── index.tsx      # ダッシュボード
+    │   │   ├── search.tsx     # 商品検索
+    │   │   ├── camera.tsx     # カメラ撮影・画像選択
+    │   │   └── settings.tsx   # 設定
+    │   └── product/[id].tsx   # 商品詳細
+    │   └── stores.tsx         # 店舗管理
+    │   └── upload.tsx         # アップロード＋店舗選択
+    │   └── ocr-results.tsx    # OCR結果確認・修正・登録
+    ├── lib/                   # ユーティリティ・サービス
+    │   ├── api.ts             # API クライアント（Bearer token）
+    │   ├── auth.tsx           # 認証プロバイダ（Google OAuth）
+    │   ├── auth-storage.ts    # SecureStore トークン管理
+    │   └── config.ts          # 環境変数
+    ├── components/            # 共通コンポーネント
+    ├── hooks/                 # カスタムフック
+    ├── types/                 # TypeScript 型定義
+    │   └── declarations.d.ts  # Expo パッケージ型宣言
+    ├── app.json               # Expo 設定
+    ├── tsconfig.json
+    └── .env.example
 ```
 
 ### API 設計方針
